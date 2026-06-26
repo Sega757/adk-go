@@ -26,6 +26,7 @@ import (
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/full"
+	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/geminitool"
@@ -34,16 +35,35 @@ import (
 func main() {
 	ctx := context.Background()
 
-	model, err := gemini.NewModel(ctx, "gemini-2.5-flash", &genai.ClientConfig{
-		APIKey: os.Getenv("GOOGLE_API_KEY"),
-	})
-	if err != nil {
-		log.Fatalf("Failed to create model: %v", err)
+	// Check if we are just asking for help
+	if len(os.Args) > 1 && os.Args[1] == "help" {
+		l := full.NewLauncher()
+		if err := l.Execute(ctx, nil, os.Args[1:]); err != nil {
+			log.Fatalf("Help failed: %v\n\n%s", err, l.CommandLineSyntax())
+		}
+		return
+	}
+
+	apiKey := os.Getenv("GOOGLE_API_KEY")
+
+	var llm model.LLM
+	var err error
+
+	if apiKey == "" || apiKey == "mock" {
+		log.Println("Using mock model because GOOGLE_API_KEY is not set or set to 'mock'")
+		llm = &MockModel{}
+	} else {
+		llm, err = gemini.NewModel(ctx, "gemini-2.5-flash", &genai.ClientConfig{
+			APIKey: apiKey,
+		})
+		if err != nil {
+			log.Fatalf("Failed to create model: %v", err)
+		}
 	}
 
 	a, err := llmagent.New(llmagent.Config{
 		Name:        "weather_time_agent",
-		Model:       model,
+		Model:       llm,
 		Description: "Agent to answer questions about the time and weather in a city.",
 		Instruction: "Your SOLE purpose is to answer questions about the current time and weather in a specific city. You MUST refuse to answer any questions unrelated to time or weather.",
 		Tools: []tool.Tool{
