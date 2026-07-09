@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package validate_test
+package kronos_test
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	validate "google.golang.org/adk/internal/kronos"
+	"google.golang.org/adk/internal/kronos"
 )
 
 func TestValidateIP(t *testing.T) {
@@ -47,7 +47,7 @@ func TestValidateIP(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.ip, func(t *testing.T) {
-			got := validate.ValidateIP(tc.ip)
+			got := kronos.ValidateIP(tc.ip)
 			if got != tc.compliant {
 				t.Errorf("ValidateIP(%q) = %v; want %v", tc.ip, got, tc.compliant)
 			}
@@ -57,7 +57,7 @@ func TestValidateIP(t *testing.T) {
 
 func TestFilterAudit(t *testing.T) {
 	// Standard validation
-	report, err := validate.FilterAudit("South Africa vs Mexico", 1.85, "Wilton Sampaio", false)
+	report, err := kronos.FilterAudit("South Africa vs Mexico", 1.85, "Wilton Sampaio", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,19 +71,19 @@ func TestFilterAudit(t *testing.T) {
 	}
 
 	// Delta-Chi refuse execution check
-	_, err = validate.FilterAudit("South Africa vs Mexico", 1.85, "Wilton Sampaio", true)
+	_, err = kronos.FilterAudit("South Africa vs Mexico", 1.85, "Wilton Sampaio", true)
 	if err == nil {
 		t.Fatal("expected error under Delta-Chi refuse execution conditions, got nil")
 	}
 }
 
 func TestValidateIPHandler(t *testing.T) {
-	h := validate.NewHandler()
+	h := kronos.NewHandler()
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
 	// Post compliant IP
-	bodyBytes, _ := json.Marshal(validate.IPRequest{IP: "8.8.8.8"})
+	bodyBytes, _ := json.Marshal(kronos.IPRequest{IP: "8.8.8.8"})
 	req := httptest.NewRequest(http.MethodPost, "/api/validate-ip", bytes.NewReader(bodyBytes))
 	rec := httptest.NewRecorder()
 
@@ -93,7 +93,7 @@ func TestValidateIPHandler(t *testing.T) {
 		t.Errorf("expected status OK, got %v", rec.Code)
 	}
 
-	var resp validate.IPResponse
+	var resp kronos.IPResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestValidateIPHandler(t *testing.T) {
 	}
 
 	// Post loopback IP
-	bodyBytes, _ = json.Marshal(validate.IPRequest{IP: "127.0.0.1"})
+	bodyBytes, _ = json.Marshal(kronos.IPRequest{IP: "127.0.0.1"})
 	req = httptest.NewRequest(http.MethodPost, "/api/validate-ip", bytes.NewReader(bodyBytes))
 	rec = httptest.NewRecorder()
 
@@ -123,12 +123,12 @@ func TestValidateIPHandler(t *testing.T) {
 }
 
 func TestExecuteAuditHandler(t *testing.T) {
-	h := validate.NewHandler()
+	h := kronos.NewHandler()
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
 	// Standard audit
-	bodyBytes, _ := json.Marshal(validate.AuditRequest{
+	bodyBytes, _ := json.Marshal(kronos.AuditRequest{
 		Event:         "JS Kabylie vs MC Alger",
 		XGAnomaly:     1.17,
 		RefereeName:   "Wilton Sampaio",
@@ -143,7 +143,7 @@ func TestExecuteAuditHandler(t *testing.T) {
 		t.Errorf("expected status OK, got %v", rec.Code)
 	}
 
-	var report validate.AuditReport
+	var report kronos.AuditReport
 	if err := json.NewDecoder(rec.Body).Decode(&report); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestExecuteAuditHandler(t *testing.T) {
 	}
 
 	// Delta-Chi Refusal execution
-	bodyBytes, _ = json.Marshal(validate.AuditRequest{
+	bodyBytes, _ = json.Marshal(kronos.AuditRequest{
 		Event:         "South Africa vs Mexico",
 		XGAnomaly:     1.85,
 		RefereeName:   "Wilton Sampaio",
