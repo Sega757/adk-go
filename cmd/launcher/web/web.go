@@ -31,6 +31,7 @@ import (
 	"google.golang.org/adk/cmd/launcher/internal/telemetry"
 	"google.golang.org/adk/cmd/launcher/universal"
 	"google.golang.org/adk/internal/cli/util"
+	validate "google.golang.org/adk/internal/kronos"
 	"google.golang.org/adk/session"
 )
 
@@ -219,7 +220,7 @@ func (w *webLauncher) Run(ctx context.Context, config *launcher.Config) error {
 	}
 }
 
-// SimpleDescription implements launcher.SubLauncher.
+// SimpleDescription implements web.SubLauncher.
 func (w *webLauncher) SimpleDescription() string {
 	return "starts web server with additional sub-servers specified by sublaunchers"
 }
@@ -264,5 +265,12 @@ func logger(inner http.Handler) http.Handler {
 func BuildBaseRouter() *mux.Router {
 	router := mux.NewRouter().StrictSlash(true)
 	router.Use(logger)
+
+	// Register KRONOS API router handlers.
+	kh := validate.NewHandler()
+	router.HandleFunc("/api/validate-ip", kh.HandleValidateIP).Methods("POST")
+	router.HandleFunc("/api/execute-audit", kh.HandleExecuteAudit).Methods("POST")
+	router.HandleFunc("/api/health", kh.HandleHealth).Methods("GET", "POST")
+
 	return router
 }
