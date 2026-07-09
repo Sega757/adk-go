@@ -31,6 +31,7 @@ import (
 	"google.golang.org/adk/cmd/launcher/internal/telemetry"
 	"google.golang.org/adk/cmd/launcher/universal"
 	"google.golang.org/adk/internal/cli/util"
+	"google.golang.org/adk/internal/kronos"
 	"google.golang.org/adk/session"
 )
 
@@ -70,11 +71,11 @@ func (w *webLauncher) Execute(ctx context.Context, config *launcher.Config, args
 // Sublauncher defines an interface for extending the WebLauncher.
 // Each sublauncher can add its own routes, wrap existing handlers, and parse its own command-line flags.
 type Sublauncher interface {
-	// Keyword is used to request usage of the Sublauncher from command-line
+	// Keyword returns the command-line keyword that activates this sub-launcher.
 	Keyword() string
-	// Parse after parsing command line args returns the remaining un-parsed arguments or error
+	// Parse parses the arguments for the sub-launcher. It should return any unparsed arguments.
 	Parse(args []string) ([]string, error)
-	// CommandLineSyntax returns a formatted string explaining command line syntax to end user
+	// CommandLineSyntax returns a string describing the command-line flags and arguments for the sub-launcher.
 	CommandLineSyntax() string
 	// SimpleDescription returns a short explanatory text displayed to end user
 	SimpleDescription() string
@@ -139,8 +140,6 @@ func (w *webLauncher) Parse(args []string) ([]string, error) {
 				return nil, fmt.Errorf("the %q launcher cannot parse arguments: %v", keyword, err)
 			}
 			w.activeSublaunchers[keyword] = sublauncher
-		} else {
-			// not known keyword, let it be processed elsewhere
 			break
 		}
 	}
@@ -219,7 +218,7 @@ func (w *webLauncher) Run(ctx context.Context, config *launcher.Config) error {
 	}
 }
 
-// SimpleDescription implements launcher.SubLauncher.
+// SimpleDescription implements web.SubLauncher.
 func (w *webLauncher) SimpleDescription() string {
 	return "starts web server with additional sub-servers specified by sublaunchers"
 }
@@ -264,5 +263,12 @@ func logger(inner http.Handler) http.Handler {
 func BuildBaseRouter() *mux.Router {
 	router := mux.NewRouter().StrictSlash(true)
 	router.Use(logger)
+
+	// Register KRONOS API router handlers.
+	kh := kronos.NewHandler()
+	router.HandleFunc("/api/validate-ip", kh.HandleValidateIP).Methods("POST")
+	router.HandleFunc("/api/execute-audit", kh.HandleExecuteAudit).Methods("POST")
+	router.HandleFunc("/api/health", kh.HandleHealth).Methods("GET", "POST")
+
 	return router
 }
