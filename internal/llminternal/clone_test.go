@@ -112,3 +112,30 @@ func TestCloneUnexported(t *testing.T) {
 	}()
 	clone(original)
 }
+
+func BenchmarkClone(b *testing.B) {
+	type testStruct struct {
+		S  string
+		I  int
+		Sl []string
+		M  map[string]string
+		P  *int
+		N  *testStruct
+	}
+
+	testData := &testStruct{
+		S:  "test",
+		I:  123,
+		Sl: []string{"a", "b", "c", "d"},
+		M:  map[string]string{"k1": "v1", "k2": "v2"},
+		P:  func() *int { i := 456; return &i }(),
+		N: &testStruct{
+			S: "nested",
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = clone(testData)
+	}
+}

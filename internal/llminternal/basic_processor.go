@@ -87,6 +87,9 @@ func clone[M any](src M) M {
 }
 
 // deepCopy copies src to dst using reflect.
+// Performance-optimized by Bolt: copies struct fields and slice elements directly
+// into their destination memory (in-place) without allocating a temporary Value via reflect.New.
+// Also skips deep copying key/value of map entries if they are basic/scalar types.
 func deepCopy(src, dst reflect.Value) {
 	switch src.Kind() {
 	case reflect.Struct:
@@ -95,10 +98,8 @@ func deepCopy(src, dst reflect.Value) {
 			if !t.Field(i).IsExported() {
 				panic(fmt.Sprintf("deepCopy: unexported field %q in type %q", t.Field(i).Name, t.Name()))
 			}
-			// Create a copy of the field and set it on the destination struct
-			fieldCopy := reflect.New(src.Field(i).Type()).Elem()
-			deepCopy(src.Field(i), fieldCopy)
-			dst.Field(i).Set(fieldCopy)
+			// Copy directly into the destination field without allocating a temporary copy.
+			deepCopy(src.Field(i), dst.Field(i))
 		}
 	case reflect.Slice:
 		if src.IsNil() {
@@ -106,10 +107,8 @@ func deepCopy(src, dst reflect.Value) {
 		}
 		dst.Set(reflect.MakeSlice(src.Type(), src.Len(), src.Cap()))
 		for i := 0; i < src.Len(); i++ {
-			// Create a copy of each element and set it in the new slice
-			elemCopy := reflect.New(src.Index(i).Type()).Elem()
-			deepCopy(src.Index(i), elemCopy)
-			dst.Index(i).Set(elemCopy)
+			// Copy directly into the destination slice element without allocating a temporary copy.
+			deepCopy(src.Index(i), dst.Index(i))
 		}
 	case reflect.Map:
 		if src.IsNil() {
@@ -117,11 +116,23 @@ func deepCopy(src, dst reflect.Value) {
 		}
 		dst.Set(reflect.MakeMap(src.Type()))
 		for _, key := range src.MapKeys() {
-			// Create copies of the key and value and set them in the new map
-			keyCopy := reflect.New(key.Type()).Elem()
-			deepCopy(key, keyCopy)
-			valCopy := reflect.New(src.MapIndex(key).Type()).Elem()
-			deepCopy(src.MapIndex(key), valCopy)
+			var keyCopy reflect.Value
+			if isCopyRequired(key.Kind()) {
+				keyCopy = reflect.New(key.Type()).Elem()
+				deepCopy(key, keyCopy)
+			} else {
+				keyCopy = key
+			}
+
+			val := src.MapIndex(key)
+			var valCopy reflect.Value
+			if isCopyRequired(val.Kind()) {
+				valCopy = reflect.New(val.Type()).Elem()
+				deepCopy(val, valCopy)
+			} else {
+				valCopy = val
+			}
+
 			dst.SetMapIndex(keyCopy, valCopy)
 		}
 	case reflect.Pointer:
@@ -135,5 +146,16 @@ func deepCopy(src, dst reflect.Value) {
 	default:
 		// For basic types, direct assignment is sufficient
 		dst.Set(src)
+	}
+}
+
+// isCopyRequired returns true if the reflect.Kind might contain pointers
+// or reference types that require recursive deep copying to avoid sharing.
+func isCopyRequired(k reflect.Kind) bool {
+	switch k {
+	case reflect.Struct, reflect.Slice, reflect.Map, reflect.Pointer, reflect.Interface:
+		return true
+	default:
+		return false
 	}
 }
