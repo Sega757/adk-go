@@ -52,9 +52,39 @@ func (a *apiLauncher) CommandLineSyntax() string {
 
 // Adds CORS headers which allow calling ADK REST API from another web app (like ADK WebUI)
 func corsWithArgs(frontendAddress string) func(next http.Handler) http.Handler {
+	frontendAddress = strings.TrimSpace(frontendAddress)
+	var allowedOrigins []string
+	if strings.Contains(frontendAddress, "://") {
+		allowedOrigins = append(allowedOrigins, strings.ToLower(frontendAddress))
+	} else if frontendAddress != "" {
+		allowedOrigins = append(allowedOrigins, "http://"+strings.ToLower(frontendAddress), "https://"+strings.ToLower(frontendAddress))
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendAddress)
+			reqOrigin := r.Header.Get("Origin")
+			var matchedOrigin string
+			if reqOrigin != "" {
+				reqOriginLower := strings.ToLower(reqOrigin)
+				for _, allowed := range allowedOrigins {
+					if reqOriginLower == allowed {
+						matchedOrigin = reqOrigin // keep original casing from the request
+						break
+					}
+				}
+			}
+
+			// If matched, set Access-Control-Allow-Origin to matched request origin.
+			// Set Vary: Origin so that intermediate caches do not poison cache across different origins.
+			if matchedOrigin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", matchedOrigin)
+				w.Header().Set("Vary", "Origin")
+			} else if reqOrigin == "" && len(allowedOrigins) > 0 {
+				// No Origin header in request (e.g., direct API calls, non-CORS).
+				// Fallback to primary allowed origin for standard/expected behavior.
+				w.Header().Set("Access-Control-Allow-Origin", allowedOrigins[0])
+			}
+
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			if r.Method == "OPTIONS" {
