@@ -33,6 +33,17 @@ import (
 	"google.golang.org/adk/session"
 )
 
+// securityHeaders is a middleware that injects security-related HTTP headers to responses.
+func securityHeaders(inner http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		inner.ServeHTTP(w, r)
+	})
+}
+
 // NewServer creates a new ADK REST API server which implements [http.Handler] interface.
 func NewServer(cfg ServerConfig) (*Server, error) {
 	debugTelemetry, err := services.NewDebugTelemetryWithConfig(&services.DebugTelemetryConfig{
@@ -43,6 +54,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	}
 
 	router := mux.NewRouter().StrictSlash(true)
+	router.Use(securityHeaders)
 	// TODO: Allow taking a prefix to allow customizing the path
 	// where the ADK REST API will be served.
 	setupRouter(router,
