@@ -78,7 +78,7 @@ func (w *webUILauncher) SimpleDescription() string {
 // UserMessage implements the web.Sublauncher interface. It prints a message
 // to the user with the URL to access the WebUI.
 func (w *webUILauncher) UserMessage(webURL string, printer func(v ...any)) {
-	printer(fmt.Sprintf("       webui:  you can access API using %s%s", webURL, w.config.pathPrefix))
+	printer(fmt.Sprintf("       webui:  you can access Web UI using %s%s", webURL, w.config.pathPrefix))
 }
 
 // embed web UI files into the executable
