@@ -50,13 +50,52 @@ func (a *apiLauncher) CommandLineSyntax() string {
 	return util.FormatFlagUsage(a.flags)
 }
 
-// Adds CORS headers which allow calling ADK REST API from another web app (like ADK WebUI)
+// Adds CORS headers which allow calling ADK REST API from another web app (like ADK WebUI).
+// It dynamically validates the incoming Origin header, sets Vary: Origin to prevent cache
+// poisoning, and securely rejects unmatched/invalid origins.
 func corsWithArgs(frontendAddress string) func(next http.Handler) http.Handler {
+	// Normalize the frontendAddress and build a list of allowed origins.
+	var allowedOrigins []string
+	addr := strings.TrimRight(strings.TrimSpace(frontendAddress), "/")
+	if addr != "" {
+		if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
+			allowedOrigins = append(allowedOrigins, addr)
+		} else {
+			allowedOrigins = append(allowedOrigins, "http://"+addr, "https://"+addr)
+		}
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendAddress)
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				// Non-CORS requests (without Origin header) are allowed to proceed.
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Validate incoming request Origin.
+			matched := false
+			for _, allowed := range allowedOrigins {
+				if origin == allowed {
+					matched = true
+					break
+				}
+			}
+
+			if !matched {
+				// Securely reject invalid/unmatched origins to prevent CSRF and unauthorized access.
+				http.Error(w, "Forbidden: invalid CORS origin", http.StatusForbidden)
+				return
+			}
+
+			// Set CORS headers for authorized origins.
+			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			// Apply Vary: Origin to mitigate cache poisoning.
+			w.Header().Set("Vary", "Origin")
+
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
 				return
