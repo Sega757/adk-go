@@ -88,9 +88,6 @@ func ValidateMapOnSchema(args map[string]any, schema *genai.Schema, isInput bool
 	}
 
 	properties := schema.Properties
-	if properties == nil {
-		properties = make(map[string]*genai.Schema)
-	}
 
 	argType := "input"
 	if !isInput {

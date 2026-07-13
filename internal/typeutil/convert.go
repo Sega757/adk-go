@@ -25,6 +25,15 @@ import (
 // If non-nil resolvedSchema is provided, validation against the resolvedSchema will run
 // during the conversion.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
+	if resolvedSchema == nil {
+		anyV := any(v)
+		if isJSONSafe(anyV) {
+			if typed, ok := anyV.(To); ok {
+				return typed, nil
+			}
+		}
+	}
+
 	var zero To
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
@@ -47,4 +56,18 @@ func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Re
 		return zero, err
 	}
 	return typed, nil
+}
+
+// isJSONSafe returns true if the value can be safely bypassed during conversion
+// without risking sharing mutable references (preventing data races) or causing
+// incorrect type assertions (e.g., Go ints vs JSON float64).
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v.(type) {
+	case float64, string, bool:
+		return true
+	}
+	return false
 }
