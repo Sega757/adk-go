@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package provides a quickstart ADK agent.
 package main
 
 import (
@@ -24,10 +23,12 @@ import (
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
+	"google.golang.org/adk/artifact"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
+	"google.golang.org/adk/session"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/geminitool"
 )
@@ -35,25 +36,23 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// Check if we are just asking for help
+	// 1. Handle Help
 	if len(os.Args) > 1 && os.Args[1] == "help" {
 		l := full.NewLauncher()
-		if err := l.Execute(ctx, nil, os.Args[1:]); err != nil {
-			log.Fatalf("Help failed: %v\n\n%s", err, l.CommandLineSyntax())
-		}
+		_ = l.Execute(ctx, nil, os.Args[1:])
 		return
 	}
 
+	// 2. Initialize Model (Gemini 2.0 Flash)
 	apiKey := os.Getenv("GOOGLE_API_KEY")
-
 	var llm model.LLM
 	var err error
 
 	if apiKey == "" || apiKey == "mock" {
-		log.Println("Using mock model because GOOGLE_API_KEY is not set or set to 'mock'")
+		log.Println("Starting in MOCK mode. Set GOOGLE_API_KEY for real Gemini 2.0 interaction.")
 		llm = &MockModel{}
 	} else {
-		llm, err = gemini.NewModel(ctx, "gemini-2.5-flash", &genai.ClientConfig{
+		llm, err = gemini.NewModel(ctx, "gemini-2.0-flash", &genai.ClientConfig{
 			APIKey: apiKey,
 		})
 		if err != nil {
@@ -61,23 +60,32 @@ func main() {
 		}
 	}
 
-	a, err := llmagent.New(llmagent.Config{
-		Name:        "weather_time_agent",
+	// 3. Define the Primary Agent
+	primaryAgent, err := llmagent.New(llmagent.Config{
+		Name:        "starter_agent",
 		Model:       llm,
-		Description: "Agent to answer questions about the time and weather in a city.",
-		Instruction: "Your SOLE purpose is to answer questions about the current time and weather in a specific city. You MUST refuse to answer any questions unrelated to time or weather.",
+		Description: "A versatile starter agent built with ADK 2.0 principles.",
+		Instruction: "You are a helpful and precise assistant. Use the available tools to provide accurate information.",
 		Tools: []tool.Tool{
 			geminitool.GoogleSearch{},
 		},
 	})
 	if err != nil {
-		log.Fatalf("Failed to create agent: %v", err)
+		log.Fatalf("Failed to create primary agent: %v", err)
 	}
 
+	// 4. Setup Services
+	sessionService := session.InMemoryService()
+	artifactService := artifact.InMemoryService()
+
+	// 5. Configure Launcher
 	config := &launcher.Config{
-		AgentLoader: agent.NewSingleLoader(a),
+		AgentLoader:     agent.NewSingleLoader(primaryAgent),
+		SessionService:  sessionService,
+		ArtifactService: artifactService,
 	}
 
+	// 6. Launch
 	l := full.NewLauncher()
 	if err = l.Execute(ctx, config, os.Args[1:]); err != nil {
 		log.Fatalf("Run failed: %v\n\n%s", err, l.CommandLineSyntax())

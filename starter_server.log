@@ -1,0 +1,9 @@
+2026/06/26 09:39:11 Starting in MOCK mode. Set GOOGLE_API_KEY for real Gemini 2.0 interaction.
+2026/06/26 09:39:11 Starting the web server: &{port:8080 writeTimeout:15000000000 readTimeout:15000000000 idleTimeout:60000000000 shutdownTimeout:15000000000 otelToCloud:false}
+2026/06/26 09:39:11
+2026/06/26 09:39:11 Web servers starts on http://localhost:8080
+2026/06/26 09:39:11        api:  you can access API using http://localhost:8080/api
+2026/06/26 09:39:11        api:      for instance: http://localhost:8080/api/list-apps
+2026/06/26 09:39:11        webui:  you can access API using http://localhost:8080/ui/
+2026/06/26 09:39:11
+signal: terminated
