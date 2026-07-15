@@ -25,6 +25,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"google.golang.org/genai"
@@ -129,14 +130,23 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	// Print an initial newline to work around PTY/exec buffering issues in some environments.
 	fmt.Println()
 
-	fmt.Print("\nUser -> ")
+	// Heuristic: stdout is a character device.
+	// Avoids adding golang.org/x/term dependency (golangci-lint failed to load its export data in CI).
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+
+	if isTTY {
+		fmt.Print("\n\033[1;32m👤 User -> \033[0m")
+	} else {
+		fmt.Print("\nUser -> ")
+	}
 
 	// Resolve "auto" streaming mode once per session (stdout TTY-ness doesn't change).
 	defaultStreamingMode := l.config.streamingMode
 	if defaultStreamingMode == "" {
-		// Stdlib-only terminal heuristic: stdout is a character device.
-		// Avoids adding golang.org/x/term dependency (golangci-lint failed to load its export data in CI).
-		if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		if isTTY {
 			defaultStreamingMode = agent.StreamingModeSSE
 		} else {
 			defaultStreamingMode = agent.StreamingModeNone
@@ -154,6 +164,14 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			}
 			log.Fatal(err)
 		case userInput := <-inputChan:
+			if strings.TrimSpace(userInput) == "" {
+				if isTTY {
+					fmt.Print("\n\033[1;32m👤 User -> \033[0m")
+				} else {
+					fmt.Print("\nUser -> ")
+				}
+				continue
+			}
 
 			userMsg := genai.NewContentFromText(userInput, genai.RoleUser)
 			streamingMode := l.config.streamingMode
@@ -161,13 +179,21 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				streamingMode = defaultStreamingMode
 			}
 
-			fmt.Print("\nAgent -> ")
+			if isTTY {
+				fmt.Print("\n\033[1;36m🤖 Agent -> \033[0m")
+			} else {
+				fmt.Print("\nAgent -> ")
+			}
 			prevText := ""
 			for event, err := range r.Run(ctx, userID, session.ID(), userMsg, agent.RunConfig{
 				StreamingMode: streamingMode,
 			}) {
 				if err != nil {
-					fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					if isTTY {
+						fmt.Printf("\n\033[1;31m❌ AGENT_ERROR: %v\033[0m\n", err)
+					} else {
+						fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					}
 				} else {
 					if event.LLMResponse.Content == nil {
 						continue
@@ -198,7 +224,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 					prevText = ""
 				}
 			}
-			fmt.Print("\nUser -> ")
+			if isTTY {
+				fmt.Print("\n\033[1;32m👤 User -> \033[0m")
+			} else {
+				fmt.Print("\nUser -> ")
+			}
 		}
 	}
 }
