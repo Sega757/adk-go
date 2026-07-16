@@ -17,6 +17,7 @@ package typeutil
 
 import (
 	"encoding/json"
+	"reflect"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -24,8 +25,17 @@ import (
 // ConvertToWithJSONSchema converts the given value to another type using json marshal/unmarshal.
 // If non-nil resolvedSchema is provided, validation against the resolvedSchema will run
 // during the conversion.
+// Performance-optimized by Bolt: bypasses marshal/unmarshal when converting basic, JSON-safe
+// types (float64, string, bool, and nil) by using direct type assertion if resolvedSchema is nil.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+
+	if resolvedSchema == nil && isJSONSafe(any(v)) {
+		if typed, ok := any(v).(To); ok {
+			return typed, nil
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
@@ -47,4 +57,23 @@ func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Re
 		return zero, err
 	}
 	return typed, nil
+}
+
+// isJSONSafe returns true if the value is a JSON-safe scalar type or nil.
+// To avoid incorrect type assertions (such as Go ints vs JSON float64) or data races
+// from shared map references, we limit bypass checks to float64, string, bool, and nil.
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v.(type) {
+	case float64, string, bool:
+		return true
+	}
+	// Check for typed nil pointer
+	val := reflect.ValueOf(v)
+	if val.Kind() == reflect.Pointer && val.IsNil() {
+		return true
+	}
+	return false
 }
