@@ -25,6 +25,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"google.golang.org/genai"
@@ -121,27 +122,57 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			userInput, err := reader.ReadString('\n')
 			if err != nil {
 				readErrChan <- err
+				close(inputChan)
 				return
 			}
 			inputChan <- userInput
 		}
 	}()
-	// Print an initial newline to work around PTY/exec buffering issues in some environments.
-	fmt.Println()
-
-	fmt.Print("\nUser -> ")
 
 	// Resolve "auto" streaming mode once per session (stdout TTY-ness doesn't change).
 	defaultStreamingMode := l.config.streamingMode
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
 	if defaultStreamingMode == "" {
-		// Stdlib-only terminal heuristic: stdout is a character device.
-		// Avoids adding golang.org/x/term dependency (golangci-lint failed to load its export data in CI).
-		if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		if isTTY {
 			defaultStreamingMode = agent.StreamingModeSSE
 		} else {
 			defaultStreamingMode = agent.StreamingModeNone
 		}
 	}
+
+	// Print an initial newline to work around PTY/exec buffering issues in some environments.
+	fmt.Println()
+
+	if isTTY {
+		fmt.Printf("\033[1;34m==================================================\033[0m\n")
+		fmt.Printf("\033[1;32m   Welcome to the ADK Agent Console Launcher! 🚀  \033[0m\n")
+		fmt.Printf("\033[1;34m==================================================\033[0m\n")
+		fmt.Printf(" Type your messages below and press \033[1mEnter\033[0m.\n")
+		fmt.Printf(" To exit, press \033[1;33mCtrl+C\033[0m or send an \033[1;33mEOF\033[0m.\n")
+		fmt.Printf("\033[1;34m--------------------------------------------------\033[0m\n")
+	} else {
+		fmt.Println("==================================================")
+		fmt.Println("   Welcome to the ADK Agent Console Launcher!")
+		fmt.Println("==================================================")
+		fmt.Println(" Type your messages below and press Enter.")
+		fmt.Println(" To exit, press Ctrl+C or send an EOF.")
+		fmt.Println("--------------------------------------------------")
+	}
+
+	userPrompt := "\nUser -> "
+	agentPrompt := "\nAgent -> "
+	errorPrompt := "\nAGENT_ERROR: "
+
+	if isTTY {
+		userPrompt = "\n\033[1;36m👤 User\033[0m -> "
+		agentPrompt = "\n\033[1;32m🤖 Agent\033[0m -> "
+		errorPrompt = "\n\033[1;31m🚨 AGENT_ERROR:\033[0m "
+	}
+
+	fmt.Print(userPrompt)
 
 	for {
 		select {
@@ -149,11 +180,24 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			return nil
 		case err := <-readErrChan:
 			if errors.Is(err, io.EOF) {
-				fmt.Println("\nEOF detected, exiting...")
+				if isTTY {
+					fmt.Println("\n\033[1;33mEOF detected, exiting...\033[0m")
+				} else {
+					fmt.Println("\nEOF detected, exiting...")
+				}
 				return nil
 			}
 			log.Fatal(err)
-		case userInput := <-inputChan:
+		case userInput, ok := <-inputChan:
+			if !ok {
+				return nil
+			}
+
+			trimmed := strings.TrimSpace(userInput)
+			if trimmed == "" {
+				fmt.Print(userPrompt)
+				continue
+			}
 
 			userMsg := genai.NewContentFromText(userInput, genai.RoleUser)
 			streamingMode := l.config.streamingMode
@@ -161,13 +205,13 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				streamingMode = defaultStreamingMode
 			}
 
-			fmt.Print("\nAgent -> ")
+			fmt.Print(agentPrompt)
 			prevText := ""
 			for event, err := range r.Run(ctx, userID, session.ID(), userMsg, agent.RunConfig{
 				StreamingMode: streamingMode,
 			}) {
 				if err != nil {
-					fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					fmt.Printf("%s%v\n", errorPrompt, err)
 				} else {
 					if event.LLMResponse.Content == nil {
 						continue
@@ -198,7 +242,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 					prevText = ""
 				}
 			}
-			fmt.Print("\nUser -> ")
+			fmt.Print(userPrompt)
 		}
 	}
 }
