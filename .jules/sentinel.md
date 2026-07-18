@@ -1,3 +1,8 @@
 # Sentinel Security Journal
 
 This journal tracks critical security learnings, vulnerability discoveries, and custom prevention guidelines for the ADK Go framework.
+
+## 2025-02-18 - Dynamic CORS Origin Validation, Scheme Enforcement, and Vary: Origin Header
+**Vulnerability:** CORS headers were insecurely configured, setting `Access-Control-Allow-Origin` unconditionally to the configured `webui_address` without checking the request's actual `Origin` header. Moreover, discarding the scheme during address normalization (e.g., matching both `http://my-app.com` and `https://my-app.com`) introduces a cross-scheme CORS bypass risk, allowing an unencrypted MITM attacker on HTTP to make requests against an HTTPS-protected API. Lacking a `Vary: Origin` header could also lead to HTTP cache poisoning.
+**Learning:** Normalizing origins by completely discarding their URL scheme allows potential active network (MITM) attackers to perform cross-origin actions if a secure HTTPS site accepts HTTP requests. Additionally, hardcoded or unchecked reflecting of configured addresses in CORS headers lacks the capability to match and validate dynamic incoming origins, while also exposing the application to cache poisoning risks in the presence of proxy servers.
+**Prevention:** Always parse and dynamically compare incoming request `Origin` headers against a normalized allowed host/port and scheme pattern. If a scheme (like `https://`) is explicitly specified in the configuration, enforce that the incoming request's scheme matches it exactly. Explicitly inject `Vary: Origin` whenever origin matching is applied, and reject mismatched origins with `403 Forbidden` rather than allowing unauthenticated cross-origin access.
