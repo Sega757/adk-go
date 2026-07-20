@@ -21,11 +21,39 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
+// isJSONSafe returns true if the value is a basic JSON type or untyped nil.
+// It limits bypass checks to float64, string, bool, and untyped nil
+// (typed nil pointers fall back to marshal/unmarshal) to avoid incorrect
+// type assertions (such as Go ints vs JSON float64) and to ensure that
+// shared map references do not cause data races.
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v.(type) {
+	case float64, string, bool:
+		return true
+	}
+	return false
+}
+
 // ConvertToWithJSONSchema converts the given value to another type using json marshal/unmarshal.
 // If non-nil resolvedSchema is provided, validation against the resolvedSchema will run
 // during the conversion.
+//
+// Performance optimization by Bolt: For JSON-safe types, if there is no schema validation required,
+// we can bypass marshal/unmarshal and directly type assert the value to the destination type.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+
+	if resolvedSchema == nil {
+		if isJSONSafe(any(v)) {
+			if typed, ok := any(v).(To); ok {
+				return typed, nil
+			}
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
