@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -54,9 +55,55 @@ func (a *apiLauncher) CommandLineSyntax() string {
 func corsWithArgs(frontendAddress string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendAddress)
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				// No Origin header - not a cross-origin request, pass through
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			originURL, err := url.Parse(origin)
+			if err != nil || originURL.Host == "" {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+
+			var expectedHost string
+			var expectedScheme string
+			if strings.Contains(frontendAddress, "://") {
+				u, err := url.Parse(frontendAddress)
+				if err != nil {
+					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				expectedHost = u.Host
+				expectedScheme = u.Scheme
+			} else {
+				expectedHost = frontendAddress
+			}
+
+			if originURL.Host != expectedHost {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+
+			if expectedScheme != "" {
+				if originURL.Scheme != expectedScheme {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+			} else {
+				if originURL.Scheme != "http" && originURL.Scheme != "https" {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+			}
+
+			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Vary", "Origin")
+
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
 				return
