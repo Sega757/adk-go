@@ -26,6 +26,22 @@ import (
 // during the conversion.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+
+	// Performance optimization: bypass marshal/unmarshal for basic types that are already JSON-safe.
+	// Limits bypass checks to float64, string, bool, and untyped nil to avoid incorrect type assertions
+	// (such as Go ints vs JSON float64) and to ensure that shared map references do not cause data races.
+	vAny := any(v)
+	if isJSONSafe(vAny) {
+		if resolvedSchema != nil {
+			if err := resolvedSchema.Validate(vAny); err != nil {
+				return zero, err
+			}
+		}
+		if typed, ok := vAny.(To); ok {
+			return typed, nil
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
@@ -47,4 +63,18 @@ func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Re
 		return zero, err
 	}
 	return typed, nil
+}
+
+// isJSONSafe returns true if the value is a primitive JSON-safe type:
+// float64, string, bool, or untyped nil.
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v.(type) {
+	case float64, string, bool:
+		return true
+	default:
+		return false
+	}
 }
