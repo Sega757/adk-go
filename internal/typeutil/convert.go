@@ -24,8 +24,20 @@ import (
 // ConvertToWithJSONSchema converts the given value to another type using json marshal/unmarshal.
 // If non-nil resolvedSchema is provided, validation against the resolvedSchema will run
 // during the conversion.
+//
+// Performance-optimized by Bolt: bypasses slow json marshal/unmarshal for basic immutable,
+// JSON-safe scalar types (float64, string, bool, and nil) when no schema validation is requested.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+
+	if resolvedSchema == nil {
+		if isJSONSafe(any(v)) {
+			if typed, ok := any(v).(To); ok {
+				return typed, nil
+			}
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
@@ -47,4 +59,18 @@ func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Re
 		return zero, err
 	}
 	return typed, nil
+}
+
+// isJSONSafe returns true if the value is a basic, immutable JSON-safe type (or nil)
+// that can be safely bypassed during conversion without risking data races or incorrect
+// type assertions (such as Go ints being promoted vs float64, or slice/map references).
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v.(type) {
+	case float64, string, bool:
+		return true
+	}
+	return false
 }
