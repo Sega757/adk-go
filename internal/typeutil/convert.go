@@ -24,8 +24,21 @@ import (
 // ConvertToWithJSONSchema converts the given value to another type using json marshal/unmarshal.
 // If non-nil resolvedSchema is provided, validation against the resolvedSchema will run
 // during the conversion.
+// Optimized by Bolt: uses isJSONSafe to bypass expensive json marshal/unmarshal when type
+// is float64, string, bool, or untyped nil and resolvedSchema is nil.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+
+	if resolvedSchema == nil {
+		if isJSONSafe(v) {
+			if typed, ok := any(v).(To); ok {
+				return typed, nil
+			}
+			// If types differ (e.g. converting a custom float64/string type),
+			// fall back to json marshal/unmarshal to do the proper conversion.
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
@@ -47,4 +60,29 @@ func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Re
 		return zero, err
 	}
 	return typed, nil
+}
+
+// isJSONSafe returns true if the value v is of type float64, string, bool,
+// or untyped nil. This is used to safely bypass json marshal/unmarshal.
+// We avoid ints or other types because JSON float64 vs Go int can cause type mismatches,
+// and we also avoid typed nil pointers (which can cause panic or incorrect nil checks
+// in certain type assertion contexts), as well as reference types like maps/slices
+// to prevent data races or incorrect shared references.
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	// Use reflect or fast type assertions. Type assertions are much faster.
+	switch v.(type) {
+	case float64, string, bool:
+		return true
+	default:
+		// We explicitly do not support ints because Go's json unmarshaling unmarshals numbers
+		// to float64 or int depending on target type. To avoid incorrect type assertions
+		// like trying to cast a float64 value to an int target or vice versa, we limit
+		// to float64, string, and bool.
+		// We also avoid typed nil pointers or other reference types to ensure no data races
+		// on shared maps or slices.
+		return false
+	}
 }
