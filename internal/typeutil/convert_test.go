@@ -21,14 +21,24 @@ import (
 )
 
 func mustResolve[T any](t *testing.T) *jsonschema.Resolved {
-	t.Helper()
+	if t != nil {
+		t.Helper()
+	}
 	s, err := jsonschema.For[T](nil)
 	if err != nil {
-		t.Fatalf("jsonschema.For[%T]: %v", *new(T), err)
+		if t != nil {
+			t.Fatalf("jsonschema.For[%T]: %v", *new(T), err)
+		} else {
+			panic(err)
+		}
 	}
 	r, err := s.Resolve(nil)
 	if err != nil {
-		t.Fatalf("Resolve: %v", err)
+		if t != nil {
+			t.Fatalf("Resolve: %v", err)
+		} else {
+			panic(err)
+		}
 	}
 	return r
 }
@@ -108,5 +118,112 @@ func TestConvertToWithJSONSchema_NoSchemaSkipsValidation(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("got %v, want nil", got)
+	}
+}
+
+// TestConvertToWithJSONSchema_JSONSafeBypass verifies that JSON-safe types and untyped nil
+// bypass standard marshal/unmarshal but still validate properly, while other types safely
+// fall back to standard JSON marshal/unmarshal.
+func TestConvertToWithJSONSchema_JSONSafeBypass(t *testing.T) {
+	t.Run("float64", func(t *testing.T) {
+		schema := mustResolve[float64](t)
+		got, err := ConvertToWithJSONSchema[float64, float64](123.45, schema)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 123.45 {
+			t.Errorf("got %v, want 123.45", got)
+		}
+	})
+
+	t.Run("string", func(t *testing.T) {
+		schema := mustResolve[string](t)
+		got, err := ConvertToWithJSONSchema[string, string]("test-str", schema)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "test-str" {
+			t.Errorf("got %v, want test-str", got)
+		}
+	})
+
+	t.Run("bool", func(t *testing.T) {
+		schema := mustResolve[bool](t)
+		got, err := ConvertToWithJSONSchema[bool, bool](true, schema)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !got {
+			t.Errorf("got %v, want true", got)
+		}
+	})
+
+	t.Run("untyped nil", func(t *testing.T) {
+		got, err := ConvertToWithJSONSchema[*string, *string](nil, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != nil {
+			t.Errorf("got %v, want nil", got)
+		}
+	})
+
+	t.Run("typed nil pointer fallback", func(t *testing.T) {
+		schema := mustResolve[*string](t)
+		var p *string
+		got, err := ConvertToWithJSONSchema[*string, *string](p, schema)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != nil {
+			t.Errorf("got %v, want nil", got)
+		}
+	})
+
+	t.Run("fallback int", func(t *testing.T) {
+		schema := mustResolve[int](t)
+		got, err := ConvertToWithJSONSchema[int, int](42, schema)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 42 {
+			t.Errorf("got %v, want 42", got)
+		}
+	})
+}
+
+func BenchmarkConvertToWithJSONSchema_Float64_Optimized(b *testing.B) {
+	schema := mustResolve[float64](nil)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ConvertToWithJSONSchema[float64, float64](12.34, schema)
+	}
+}
+
+func BenchmarkConvertToWithJSONSchema_Int_Fallback(b *testing.B) {
+	schema := mustResolve[int](nil)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ConvertToWithJSONSchema[int, int](42, schema)
+	}
+}
+
+func BenchmarkValidateWithJSONSchema_String_Optimized(b *testing.B) {
+	schema := mustResolve[string](nil)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ValidateWithJSONSchema("hello", schema)
+	}
+}
+
+func BenchmarkValidateWithJSONSchema_Struct_Fallback(b *testing.B) {
+	type simple struct {
+		X int `json:"x"`
+	}
+	schema := mustResolve[simple](nil)
+	val := simple{X: 42}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ValidateWithJSONSchema(val, schema)
 	}
 }
