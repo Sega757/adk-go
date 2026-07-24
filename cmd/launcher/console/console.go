@@ -129,17 +129,21 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			inputChan <- userInput
 		}
 	}()
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+
 	// Print an initial newline to work around PTY/exec buffering issues in some environments.
 	fmt.Println()
 
-	fmt.Print("\nUser -> ")
+	printWelcomeBanner(isTTY)
+	printUserPrompt(isTTY)
 
 	// Resolve "auto" streaming mode once per session (stdout TTY-ness doesn't change).
 	defaultStreamingMode := l.config.streamingMode
 	if defaultStreamingMode == "" {
-		// Stdlib-only terminal heuristic: stdout is a character device.
-		// Avoids adding golang.org/x/term dependency (golangci-lint failed to load its export data in CI).
-		if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		if isTTY {
 			defaultStreamingMode = agent.StreamingModeSSE
 		} else {
 			defaultStreamingMode = agent.StreamingModeNone
@@ -169,6 +173,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
 
+			if strings.TrimSpace(userInput) == "" && len(pendingInterrupts) == 0 {
+				printUserPrompt(isTTY)
+				continue
+			}
+
 			var userMsg *genai.Content
 			if len(pendingInterrupts) > 0 {
 				// Answer the head of the queue; loop back if more
@@ -177,7 +186,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				pendingInterrupts = pendingInterrupts[1:]
 				pendingResponses = append(pendingResponses, buildInterruptResponse(current, userInput))
 				if len(pendingInterrupts) > 0 {
-					renderInterruptPrompt(pendingInterrupts[0])
+					renderInterruptPrompt(pendingInterrupts[0], isTTY)
 					continue
 				}
 				// All answers collected. Bundle every
@@ -201,7 +210,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				streamingMode = defaultStreamingMode
 			}
 
-			fmt.Print("\nAgent -> ")
+			printAgentPrompt(isTTY)
 			prevText := ""
 			printedContent := false
 			var finalOutput any
@@ -210,7 +219,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				StreamingMode: streamingMode,
 			}) {
 				if err != nil {
-					fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					printAgentError(isTTY, err)
 				} else {
 					collectedEvents = append(collectedEvents, event)
 					if event.LLMResponse.Content == nil {
@@ -258,7 +267,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			pendingInterrupts = collectPendingInterrupts(collectedEvents)
 			if len(pendingInterrupts) > 0 {
 				fmt.Println()
-				renderInterruptPrompt(pendingInterrupts[0])
+				renderInterruptPrompt(pendingInterrupts[0], isTTY)
 				continue
 			}
 			// A workflow whose terminal node returns a value rather than
@@ -267,7 +276,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			if !printedContent && finalOutput != nil {
 				fmt.Print(renderOutput(finalOutput))
 			}
-			fmt.Print("\nUser -> ")
+			printUserPrompt(isTTY)
 		}
 	}
 }
@@ -328,4 +337,46 @@ func (l *consoleLauncher) Execute(ctx context.Context, config *launcher.Config, 
 		return fmt.Errorf("cannot parse all the arguments: %w", err)
 	}
 	return l.Run(ctx, config)
+}
+
+func printWelcomeBanner(isTTY bool) {
+	if isTTY {
+		fmt.Println("\033[1;36m==================================================\033[0m")
+		fmt.Println("\033[1;36m   Welcome to the Agent Development Kit Console!  \033[0m")
+		fmt.Println("\033[1;36m==================================================\033[0m")
+		fmt.Println("👉 Type your message and press \033[1mEnter\033[0m to chat with the agent.")
+		fmt.Println("👉 Press \033[1mCtrl+C\033[0m or send an \033[1mEOF\033[0m to exit.")
+		fmt.Println()
+	} else {
+		fmt.Println("==================================================")
+		fmt.Println("   Welcome to the Agent Development Kit Console!  ")
+		fmt.Println("==================================================")
+		fmt.Println("👉 Type your message and press Enter to chat with the agent.")
+		fmt.Println("👉 Press Ctrl+C or send an EOF to exit.")
+		fmt.Println()
+	}
+}
+
+func printUserPrompt(isTTY bool) {
+	if isTTY {
+		fmt.Print("\n👤 \033[1;34mUser\033[0m -> ")
+	} else {
+		fmt.Print("\nUser -> ")
+	}
+}
+
+func printAgentPrompt(isTTY bool) {
+	if isTTY {
+		fmt.Print("\n🤖 \033[1;35mAgent\033[0m -> ")
+	} else {
+		fmt.Print("\nAgent -> ")
+	}
+}
+
+func printAgentError(isTTY bool, err error) {
+	if isTTY {
+		fmt.Printf("\n❌ \033[1;31mAGENT_ERROR\033[0m: %v\n", err)
+	} else {
+		fmt.Printf("\nAGENT_ERROR: %v\n", err)
+	}
 }

@@ -90,7 +90,7 @@ func collectPendingInterrupts(events []*session.Event) []pendingInterrupt {
 // renderInterruptPrompt prints the pending interrupt and a
 // "User -> " input prompt to stdout. The caller reads the user's
 // reply and passes it to buildInterruptResponse.
-func renderInterruptPrompt(p pendingInterrupt) {
+func renderInterruptPrompt(p pendingInterrupt, isTTY bool) {
 	switch p.name {
 	case workflow.WorkflowInputFunctionCallName:
 		renderWorkflowInputPrompt(p.args)
@@ -99,7 +99,11 @@ func renderInterruptPrompt(p pendingInterrupt) {
 	default:
 		renderGenericInterruptPrompt(p.name, p.args)
 	}
-	fmt.Print("User -> ")
+	if isTTY {
+		fmt.Print("👤 \033[1;34mUser\033[0m -> ")
+	} else {
+		fmt.Print("User -> ")
+	}
 }
 
 // buildInterruptResponse converts the operator's one-line input
