@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"iter"
@@ -27,12 +28,12 @@ import (
 
 	"google.golang.org/genai"
 
-	"google.golang.org/adk/agent"
-	"google.golang.org/adk/plugin"
-	"google.golang.org/adk/runner"
-	"google.golang.org/adk/server/adkrest/internal/fakes"
-	"google.golang.org/adk/server/adkrest/internal/models"
-	"google.golang.org/adk/session"
+	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/plugin"
+	"google.golang.org/adk/v2/runner"
+	"google.golang.org/adk/v2/server/adkrest/internal/fakes"
+	"google.golang.org/adk/v2/server/adkrest/internal/models"
+	"google.golang.org/adk/v2/session"
 )
 
 func TestNewRuntimeAPIController_PluginsAssignment(t *testing.T) {
@@ -77,7 +78,7 @@ func TestNewRuntimeAPIController_PluginsAssignment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := NewRuntimeAPIController(nil, nil, nil, nil, 10*time.Second, runner.PluginConfig{
 				Plugins: tt.plugins,
-			})
+			}, false)
 
 			if controller == nil {
 				t.Fatal("NewRuntimeAPIController returned nil")
@@ -116,7 +117,7 @@ func testAgent(results []testAgentResult) func(ctx agent.InvocationContext) iter
 }
 
 func makeEvent(id, author, text string) *session.Event {
-	e := session.NewEvent(id)
+	e := session.NewEvent(context.Background(), id)
 	e.Author = author
 	e.LLMResponse.Content = &genai.Content{
 		Parts: []*genai.Part{{Text: text}},
@@ -201,6 +202,7 @@ func TestRunSSEHandler(t *testing.T) {
 				nil,
 				10*time.Second,
 				runner.PluginConfig{},
+				false,
 			)
 
 			// Create request
@@ -235,5 +237,39 @@ func TestRunSSEHandler(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDecodeRequestBody_AcceptsFunctionCallEventID(t *testing.T) {
+	body := `{
+		"appName": "a",
+		"userId": "u",
+		"sessionId": "s",
+		"newMessage": {"role": "user", "parts": [{"text": "hi"}]},
+		"functionCallEventId": "fce-1"
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/run", bytes.NewBufferString(body))
+
+	got, err := decodeRequestBody(req)
+	if err != nil {
+		t.Fatalf("decodeRequestBody: unexpected error: %v", err)
+	}
+	if got.FunctionCallEventID == nil || *got.FunctionCallEventID != "fce-1" {
+		t.Errorf("FunctionCallEventID = %v, want %q", got.FunctionCallEventID, "fce-1")
+	}
+}
+
+func TestDecodeRequestBody_RejectsUnknownFields(t *testing.T) {
+	body := `{
+		"appName": "a",
+		"userId": "u",
+		"sessionId": "s",
+		"newMessage": {},
+		"totallyMadeUpField": 123
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/run", bytes.NewBufferString(body))
+
+	if _, err := decodeRequestBody(req); err == nil {
+		t.Errorf("decodeRequestBody: expected error for unknown field, got nil")
 	}
 }
