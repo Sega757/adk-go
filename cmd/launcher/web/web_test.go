@@ -19,7 +19,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"google.golang.org/adk/cmd/launcher/web"
+	"google.golang.org/adk/v2/cmd/launcher/web"
 )
 
 func TestBuildBaseRouter_SecurityHeaders(t *testing.T) {
