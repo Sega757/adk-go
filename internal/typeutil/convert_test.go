@@ -33,6 +33,19 @@ func mustResolve[T any](t *testing.T) *jsonschema.Resolved {
 	return r
 }
 
+func mustResolveBench[T any](b *testing.B) *jsonschema.Resolved {
+	b.Helper()
+	s, err := jsonschema.For[T](nil)
+	if err != nil {
+		b.Fatalf("jsonschema.For[%T]: %v", *new(T), err)
+	}
+	r, err := s.Resolve(nil)
+	if err != nil {
+		b.Fatalf("Resolve: %v", err)
+	}
+	return r
+}
+
 // TestConvertToWithJSONSchema_NilInputObjectSchema checks that a nil
 // input (a tool invoked with no arguments) validates against an object
 // schema.
@@ -109,4 +122,123 @@ func TestConvertToWithJSONSchema_NoSchemaSkipsValidation(t *testing.T) {
 	if got != nil {
 		t.Errorf("got %v, want nil", got)
 	}
+}
+
+// TestConvertToWithJSONSchema_OptimizedCorrectness verifies the correctness
+// of optimized basic types in ConvertToWithJSONSchema and ValidateWithJSONSchema.
+func TestConvertToWithJSONSchema_OptimizedCorrectness(t *testing.T) {
+	t.Run("string correctness", func(t *testing.T) {
+		schema := mustResolve[string](t)
+		got, err := ConvertToWithJSONSchema[string, string]("hello", schema)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "hello" {
+			t.Errorf("got %q, want hello", got)
+		}
+
+		err = ValidateWithJSONSchema("hello", schema)
+		if err != nil {
+			t.Fatalf("unexpected validation error: %v", err)
+		}
+	})
+
+	t.Run("float64 correctness", func(t *testing.T) {
+		schema := mustResolve[float64](t)
+		got, err := ConvertToWithJSONSchema[float64, float64](42.5, schema)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != 42.5 {
+			t.Errorf("got %f, want 42.5", got)
+		}
+
+		err = ValidateWithJSONSchema(42.5, schema)
+		if err != nil {
+			t.Fatalf("unexpected validation error: %v", err)
+		}
+	})
+
+	t.Run("bool correctness", func(t *testing.T) {
+		schema := mustResolve[bool](t)
+		got, err := ConvertToWithJSONSchema[bool, bool](true, schema)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !got {
+			t.Errorf("got %t, want true", got)
+		}
+
+		err = ValidateWithJSONSchema(true, schema)
+		if err != nil {
+			t.Fatalf("unexpected validation error: %v", err)
+		}
+	})
+
+	t.Run("untyped nil correctness", func(t *testing.T) {
+		schema := mustResolve[any](t)
+		_, err := ConvertToWithJSONSchema[any, any](nil, schema)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		err = ValidateWithJSONSchema(nil, schema)
+		if err != nil {
+			t.Fatalf("unexpected validation error: %v", err)
+		}
+	})
+}
+
+// BenchmarkConvertToWithJSONSchema measures performance differences for
+// optimized (JSON-safe) versus unoptimized values.
+func BenchmarkConvertToWithJSONSchema(b *testing.B) {
+	b.Run("Optimized_String", func(b *testing.B) {
+		schema := mustResolveBench[string](b)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := ConvertToWithJSONSchema[string, string]("hello", schema)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("Unoptimized_Map", func(b *testing.B) {
+		schema := mustResolveBench[map[string]any](b)
+		in := map[string]any{"key": "value"}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := ConvertToWithJSONSchema[map[string]any, map[string]any](in, schema)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+// BenchmarkValidateWithJSONSchema measures performance differences for
+// optimized (JSON-safe) versus unoptimized values.
+func BenchmarkValidateWithJSONSchema(b *testing.B) {
+	b.Run("Optimized_String", func(b *testing.B) {
+		schema := mustResolveBench[string](b)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			err := ValidateWithJSONSchema("hello", schema)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("Unoptimized_Map", func(b *testing.B) {
+		schema := mustResolveBench[map[string]any](b)
+		in := map[string]any{"key": "value"}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			err := ValidateWithJSONSchema(in, schema)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }
