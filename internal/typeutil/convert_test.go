@@ -20,7 +20,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-func mustResolve[T any](t *testing.T) *jsonschema.Resolved {
+func mustResolve[T any](t testing.TB) *jsonschema.Resolved {
 	t.Helper()
 	s, err := jsonschema.For[T](nil)
 	if err != nil {
@@ -108,5 +108,44 @@ func TestConvertToWithJSONSchema_NoSchemaSkipsValidation(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("got %v, want nil", got)
+	}
+}
+
+func BenchmarkConvertToWithJSONSchema_SafeString_NoSchema(b *testing.B) {
+	v := "hello world"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ConvertToWithJSONSchema[string, string](v, nil)
+	}
+}
+
+func BenchmarkConvertToWithJSONSchema_SafeString_WithSchema(b *testing.B) {
+	schema := mustResolve[string](b)
+	v := "hello world"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ConvertToWithJSONSchema[string, string](v, schema)
+	}
+}
+
+func BenchmarkValidateWithJSONSchema_SafeString(b *testing.B) {
+	schema := mustResolve[string](b)
+	v := "hello world"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ValidateWithJSONSchema(v, schema)
+	}
+}
+
+func BenchmarkConvertToWithJSONSchema_FallbackStruct(b *testing.B) {
+	type MyStruct struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+	schema := mustResolve[MyStruct](b)
+	v := MyStruct{Name: "Alice", Age: 30}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ConvertToWithJSONSchema[MyStruct, MyStruct](v, schema)
 	}
 }

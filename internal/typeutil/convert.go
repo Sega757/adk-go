@@ -21,11 +21,43 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
+// isJSONSafe reports whether v is a JSON-safe type that can bypass marshal/unmarshal
+// because it is a scalar value (float64, string, bool) or untyped nil.
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v.(type) {
+	case float64, string, bool:
+		return true
+	default:
+		return false
+	}
+}
+
 // ConvertToWithJSONSchema converts the given value to another type using json marshal/unmarshal.
 // If non-nil resolvedSchema is provided, validation against the resolvedSchema will run
 // during the conversion.
+//
+// Performance-optimized by Bolt: bypasses marshal/unmarshal when the input is a JSON-safe
+// scalar and can be directly asserted to the target type.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+	if isJSONSafe(v) {
+		if typed, ok := any(v).(To); ok {
+			if resolvedSchema != nil {
+				decoded := any(v)
+				if decoded == nil && schemaExpectsObject(resolvedSchema) {
+					decoded = map[string]any{}
+				}
+				if err := resolvedSchema.Validate(decoded); err != nil {
+					return zero, err
+				}
+			}
+			return typed, nil
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
@@ -57,9 +89,18 @@ func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Re
 
 // ValidateWithJSONSchema validates a Go value against a resolved schema by
 // first converting it to its JSON-decoded form to avoid struct validation issues.
+//
+// Performance-optimized by Bolt: bypasses marshal/unmarshal when the input is a JSON-safe scalar.
 func ValidateWithJSONSchema(v any, resolvedSchema *jsonschema.Resolved) error {
 	if resolvedSchema == nil {
 		return nil
+	}
+	if isJSONSafe(v) {
+		decoded := v
+		if decoded == nil && schemaExpectsObject(resolvedSchema) {
+			decoded = map[string]any{}
+		}
+		return resolvedSchema.Validate(decoded)
 	}
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
