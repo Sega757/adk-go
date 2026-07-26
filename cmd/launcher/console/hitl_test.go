@@ -556,3 +556,45 @@ func newConsoleHITLAgent(t *testing.T) agent.Agent {
 	}
 	return a
 }
+
+func TestIsTTY(t *testing.T) {
+	// isTTY should run without crashing
+	_ = isTTY()
+}
+
+func TestFormatUserPrompt(t *testing.T) {
+	p1 := formatUserPrompt(true)
+	p2 := formatUserPrompt(false)
+	if !strings.Contains(p1, "User") {
+		t.Errorf("formatUserPrompt(true) missing User: %q", p1)
+	}
+	if !strings.Contains(p2, "User") {
+		t.Errorf("formatUserPrompt(false) missing User: %q", p2)
+	}
+	if strings.HasPrefix(p2, "\n") {
+		t.Errorf("formatUserPrompt(false) should not start with newline: %q", p2)
+	}
+}
+
+func TestFormatAgentPrompt(t *testing.T) {
+	p1 := formatAgentPrompt(true)
+	p2 := formatAgentPrompt(false)
+	if !strings.Contains(p1, "Agent") {
+		t.Errorf("formatAgentPrompt(true) missing Agent: %q", p1)
+	}
+	if !strings.Contains(p2, "Agent") {
+		t.Errorf("formatAgentPrompt(false) missing Agent: %q", p2)
+	}
+	if strings.HasPrefix(p2, "\n") {
+		t.Errorf("formatAgentPrompt(false) should not start with newline: %q", p2)
+	}
+}
+
+func TestPrintWelcomeBanner(t *testing.T) {
+	out := captureStdout(t, func() {
+		printWelcomeBanner()
+	})
+	if !strings.Contains(out, "Welcome to the ADK Console Agent Launcher!") {
+		t.Errorf("printWelcomeBanner() output missing welcome text. Got: %q", out)
+	}
+}
