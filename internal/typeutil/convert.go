@@ -26,6 +26,25 @@ import (
 // during the conversion.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+
+	if isJSONSafe(v) {
+		var decoded any = v
+		if decoded == nil && schemaExpectsObject(resolvedSchema) {
+			decoded = map[string]any{}
+		}
+		if resolvedSchema != nil {
+			if err := resolvedSchema.Validate(decoded); err != nil {
+				return zero, err
+			}
+		}
+		if any(v) == nil {
+			return zero, nil
+		}
+		if typed, ok := any(v).(To); ok {
+			return typed, nil
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
@@ -61,6 +80,15 @@ func ValidateWithJSONSchema(v any, resolvedSchema *jsonschema.Resolved) error {
 	if resolvedSchema == nil {
 		return nil
 	}
+
+	if isJSONSafe(v) {
+		var decoded any = v
+		if decoded == nil && schemaExpectsObject(resolvedSchema) {
+			decoded = map[string]any{}
+		}
+		return resolvedSchema.Validate(decoded)
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -93,6 +121,19 @@ func schemaExpectsObject(resolved *jsonschema.Resolved) bool {
 		if t == "object" {
 			return true
 		}
+	}
+	return false
+}
+
+// isJSONSafe returns true if the value is directly JSON-safe
+// (float64, string, bool, or untyped nil).
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v.(type) {
+	case float64, string, bool:
+		return true
 	}
 	return false
 }
