@@ -17,6 +17,7 @@ package metacore
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -80,6 +81,35 @@ func (v *Validator) EvaluateAlignment(rVal, eSaf, kSaf float64) (float64, string
 
 // ValidatePipeline executes the three-layer META-CORE validation flow.
 func (v *Validator) ValidatePipeline(packet *DecisionPacket, empathy *EmpathyOutput) (*KillSwitchOutput, error) {
+	if packet == nil {
+		return &KillSwitchOutput{
+			Status:   "rejected",
+			Reason:   "Null pointer: DecisionPacket is nil",
+			Trigger:  []string{"anomaly_detected"},
+			Rollback: true,
+		}, ErrKAbsoluteBlock
+	}
+
+	if math.IsNaN(packet.Confidence) || math.IsInf(packet.Confidence, 0) || packet.Confidence < 0.0 || packet.Confidence > 1.0 {
+		return &KillSwitchOutput{
+			Status:   "rejected",
+			Reason:   "Invalid confidence value: NaN, Inf, or out-of-bounds",
+			Trigger:  []string{"anomaly_detected"},
+			Rollback: true,
+		}, ErrKAbsoluteBlock
+	}
+
+	if empathy != nil {
+		if math.IsNaN(empathy.VulnerabilityScore) || math.IsInf(empathy.VulnerabilityScore, 0) || empathy.VulnerabilityScore < 0.0 || empathy.VulnerabilityScore > 1.0 {
+			return &KillSwitchOutput{
+				Status:   "rejected",
+				Reason:   "Invalid vulnerability score: NaN, Inf, or out-of-bounds",
+				Trigger:  []string{"anomaly_detected"},
+				Rollback: true,
+			}, ErrKAbsoluteBlock
+		}
+	}
+
 	// Verify core principle: R cannot block or modify. R must only generate the plan.
 	// If the packet attempts to self-bypass or contains block/modify instructions, reject.
 	if strings.Contains(strings.ToLower(packet.Goal), "bypass") || strings.Contains(strings.ToLower(packet.Goal), "disable safety") {

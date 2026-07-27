@@ -16,6 +16,7 @@ package metacore_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"google.golang.org/adk/v2/internal/metacore"
@@ -327,4 +328,69 @@ func TestDegradationModes(t *testing.T) {
 	if v3.CurrentMode != metacore.ModeEmpathyOverride {
 		t.Errorf("Expected Empathy Override, got %s", v3.CurrentMode)
 	}
+}
+
+func TestNilPacketValidation(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	kOut, err := v.ValidatePipeline(nil, nil)
+	if !errors.Is(err, metacore.ErrKAbsoluteBlock) {
+		t.Errorf("Expected ErrKAbsoluteBlock for nil packet, got %v", err)
+	}
+	if kOut == nil || kOut.Status != "rejected" {
+		t.Errorf("Expected kOut status 'rejected' for nil packet, got %v", kOut)
+	}
+}
+
+func TestNaNAndOutOfBoundsConfidence(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+
+	importMath := func(conf float64) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "test task",
+			Plan:       []string{"step"},
+			Confidence: conf,
+		}
+		kOut, err := v.ValidatePipeline(packet, nil)
+		if !errors.Is(err, metacore.ErrKAbsoluteBlock) {
+			t.Errorf("Expected ErrKAbsoluteBlock for confidence %f, got %v", conf, err)
+		}
+		if kOut == nil || kOut.Status != "rejected" {
+			t.Errorf("Expected rejected status for confidence %f, got %v", conf, kOut)
+		}
+	}
+
+	importMath(math.NaN()) // NaN
+	importMath(math.Inf(1)) // +Inf
+	importMath(math.Inf(-1)) // -Inf
+	importMath(-0.1) // Out of bounds low
+	importMath(1.1) // Out of bounds high
+}
+
+func TestNaNAndOutOfBoundsVulnerabilityScore(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+
+	importMath := func(score float64) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "test task",
+			Plan:       []string{"step"},
+			Confidence: 0.9,
+		}
+		empathy := &metacore.EmpathyOutput{
+			Status:             "pass",
+			VulnerabilityScore: score,
+		}
+		kOut, err := v.ValidatePipeline(packet, empathy)
+		if !errors.Is(err, metacore.ErrKAbsoluteBlock) {
+			t.Errorf("Expected ErrKAbsoluteBlock for vulnerability score %f, got %v", score, err)
+		}
+		if kOut == nil || kOut.Status != "rejected" {
+			t.Errorf("Expected rejected status for vulnerability score %f, got %v", score, kOut)
+		}
+	}
+
+	importMath(math.NaN()) // NaN
+	importMath(math.Inf(1)) // +Inf
+	importMath(math.Inf(-1)) // -Inf
+	importMath(-0.1) // Out of bounds low
+	importMath(1.1) // Out of bounds high
 }
