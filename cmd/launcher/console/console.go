@@ -129,17 +129,42 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			inputChan <- userInput
 		}
 	}()
+
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+
+	userPrompt := "\nUser -> "
+	agentPrompt := "\nAgent -> "
+	if isTTY {
+		userPrompt = "\n\033[1;34m👤 User\033[0m -> "
+		agentPrompt = "\n\033[1;32m🤖 Agent\033[0m -> "
+	}
+
 	// Print an initial newline to work around PTY/exec buffering issues in some environments.
 	fmt.Println()
 
-	fmt.Print("\nUser -> ")
+	if isTTY {
+		fmt.Println("\033[1;36m==================================================\033[0m")
+		fmt.Println("\033[1;32m   🤖 Welcome to the Agent Development Kit CLI! 🤖 \033[0m")
+		fmt.Println("\033[90m      Type your message to chat with the agent.   \033[0m")
+		fmt.Println("\033[90m      Type \033[1;31m/exit\033[90m, \033[1;31m/quit\033[90m, or press Ctrl+D to exit.  \033[0m")
+		fmt.Println("\033[1;36m==================================================\033[0m")
+	} else {
+		fmt.Println("==================================================")
+		fmt.Println("   Welcome to the Agent Development Kit CLI! ")
+		fmt.Println("      Type your message to chat with the agent.")
+		fmt.Println("      Type /exit, /quit, or press Ctrl+D to exit.")
+		fmt.Println("==================================================")
+	}
+
+	fmt.Print(userPrompt)
 
 	// Resolve "auto" streaming mode once per session (stdout TTY-ness doesn't change).
 	defaultStreamingMode := l.config.streamingMode
 	if defaultStreamingMode == "" {
-		// Stdlib-only terminal heuristic: stdout is a character device.
-		// Avoids adding golang.org/x/term dependency (golangci-lint failed to load its export data in CI).
-		if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		if isTTY {
 			defaultStreamingMode = agent.StreamingModeSSE
 		} else {
 			defaultStreamingMode = agent.StreamingModeNone
@@ -160,7 +185,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			return nil
 		case err := <-readErrChan:
 			if errors.Is(err, io.EOF) {
-				fmt.Println("\nEOF detected, exiting...")
+				if isTTY {
+					fmt.Println("\n\033[1;33m👋 EOF detected, exiting...\033[0m")
+				} else {
+					fmt.Println("\nEOF detected, exiting...")
+				}
 				return nil
 			}
 			log.Fatal(err)
@@ -168,6 +197,21 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			// Drop the line terminator the reader keeps, so the message
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
+
+			trimmed := strings.TrimSpace(userInput)
+			if trimmed == "" && len(pendingInterrupts) == 0 {
+				fmt.Print(userPrompt)
+				continue
+			}
+
+			if strings.ToLower(trimmed) == "/exit" || strings.ToLower(trimmed) == "/quit" {
+				if isTTY {
+					fmt.Println("\n\033[1;33m👋 Goodbye!\033[0m")
+				} else {
+					fmt.Println("\nGoodbye!")
+				}
+				return nil
+			}
 
 			var userMsg *genai.Content
 			if len(pendingInterrupts) > 0 {
@@ -201,7 +245,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				streamingMode = defaultStreamingMode
 			}
 
-			fmt.Print("\nAgent -> ")
+			fmt.Print(agentPrompt)
 			prevText := ""
 			printedContent := false
 			var finalOutput any
@@ -210,7 +254,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				StreamingMode: streamingMode,
 			}) {
 				if err != nil {
-					fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					if isTTY {
+						fmt.Printf("\n\033[1;31m❌ AGENT_ERROR: %v\033[0m\n", err)
+					} else {
+						fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					}
 				} else {
 					collectedEvents = append(collectedEvents, event)
 					if event.LLMResponse.Content == nil {
@@ -267,7 +315,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			if !printedContent && finalOutput != nil {
 				fmt.Print(renderOutput(finalOutput))
 			}
-			fmt.Print("\nUser -> ")
+			fmt.Print(userPrompt)
 		}
 	}
 }
