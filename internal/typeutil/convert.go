@@ -24,8 +24,31 @@ import (
 // ConvertToWithJSONSchema converts the given value to another type using json marshal/unmarshal.
 // If non-nil resolvedSchema is provided, validation against the resolvedSchema will run
 // during the conversion.
+//
+// Performance Optimization: If the input is a JSON-safe scalar type (float64, string, bool,
+// or untyped nil), we can bypass the expensive json marshal/unmarshal cycle entirely. This
+// avoids CPU-heavy operations and heap allocations.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+
+	if isJSONSafe(v) {
+		var decoded any = v
+		if decoded == nil && schemaExpectsObject(resolvedSchema) {
+			decoded = map[string]any{}
+		}
+		if resolvedSchema != nil {
+			if err := resolvedSchema.Validate(decoded); err != nil {
+				return zero, err
+			}
+		}
+		if any(v) == nil {
+			return zero, nil
+		}
+		if typed, ok := any(v).(To); ok {
+			return typed, nil
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
@@ -57,10 +80,22 @@ func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Re
 
 // ValidateWithJSONSchema validates a Go value against a resolved schema by
 // first converting it to its JSON-decoded form to avoid struct validation issues.
+//
+// Performance Optimization: Bypasses marshal/unmarshal for JSON-safe scalar types to avoid
+// allocations and CPU overhead when validating scalar inputs.
 func ValidateWithJSONSchema(v any, resolvedSchema *jsonschema.Resolved) error {
 	if resolvedSchema == nil {
 		return nil
 	}
+
+	if isJSONSafe(v) {
+		var decoded any = v
+		if decoded == nil && schemaExpectsObject(resolvedSchema) {
+			decoded = map[string]any{}
+		}
+		return resolvedSchema.Validate(decoded)
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -73,6 +108,19 @@ func ValidateWithJSONSchema(v any, resolvedSchema *jsonschema.Resolved) error {
 		decoded = map[string]any{}
 	}
 	return resolvedSchema.Validate(decoded)
+}
+
+// isJSONSafe returns true if the value is directly JSON-safe
+// (float64, string, bool, or untyped nil).
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v.(type) {
+	case float64, string, bool:
+		return true
+	}
+	return false
 }
 
 // schemaExpectsObject reports whether the resolved schema's root type

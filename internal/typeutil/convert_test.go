@@ -20,7 +20,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-func mustResolve[T any](t *testing.T) *jsonschema.Resolved {
+func mustResolve[T any](t testing.TB) *jsonschema.Resolved {
 	t.Helper()
 	s, err := jsonschema.For[T](nil)
 	if err != nil {
@@ -31,6 +31,50 @@ func mustResolve[T any](t *testing.T) *jsonschema.Resolved {
 		t.Fatalf("Resolve: %v", err)
 	}
 	return r
+}
+
+func BenchmarkValidateWithJSONSchema_String(b *testing.B) {
+	schema := mustResolve[string](b)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := ValidateWithJSONSchema("hello", schema)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkConvertToWithJSONSchema_String(b *testing.B) {
+	schema := mustResolve[string](b)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ConvertToWithJSONSchema[string, string]("hello", schema)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkValidateWithJSONSchema_Float(b *testing.B) {
+	schema := mustResolve[float64](b)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := ValidateWithJSONSchema(123.45, schema)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkConvertToWithJSONSchema_Float(b *testing.B) {
+	schema := mustResolve[float64](b)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ConvertToWithJSONSchema[float64, float64](123.45, schema)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 // TestConvertToWithJSONSchema_NilInputObjectSchema checks that a nil
