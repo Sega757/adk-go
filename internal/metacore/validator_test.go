@@ -16,6 +16,7 @@ package metacore_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"google.golang.org/adk/v2/internal/metacore"
@@ -327,4 +328,91 @@ func TestDegradationModes(t *testing.T) {
 	if v3.CurrentMode != metacore.ModeEmpathyOverride {
 		t.Errorf("Expected Empathy Override, got %s", v3.CurrentMode)
 	}
+}
+
+func TestValidatePipelineInputValidation(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+
+	t.Run("Nil Packet", func(t *testing.T) {
+		_, err := v.ValidatePipeline(nil, nil)
+		if err == nil {
+			t.Error("Expected error for nil packet, got nil")
+		}
+	})
+
+	t.Run("NaN Confidence", func(t *testing.T) {
+		p := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Plan:       []string{"step"},
+			Confidence: math.NaN(),
+		}
+		_, err := v.ValidatePipeline(p, nil)
+		if err == nil {
+			t.Error("Expected error for NaN confidence, got nil")
+		}
+	})
+
+	t.Run("Out of Bounds Confidence", func(t *testing.T) {
+		pLow := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Plan:       []string{"step"},
+			Confidence: -0.1,
+		}
+		_, errLow := v.ValidatePipeline(pLow, nil)
+		if errLow == nil {
+			t.Error("Expected error for confidence < 0.0, got nil")
+		}
+
+		pHigh := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Plan:       []string{"step"},
+			Confidence: 1.1,
+		}
+		_, errHigh := v.ValidatePipeline(pHigh, nil)
+		if errHigh == nil {
+			t.Error("Expected error for confidence > 1.0, got nil")
+		}
+	})
+
+	t.Run("NaN Vulnerability Score", func(t *testing.T) {
+		p := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Plan:       []string{"step"},
+			Confidence: 0.8,
+		}
+		e := &metacore.EmpathyOutput{
+			Status:             "pass",
+			VulnerabilityScore: math.NaN(),
+		}
+		_, err := v.ValidatePipeline(p, e)
+		if err == nil {
+			t.Error("Expected error for NaN vulnerability score, got nil")
+		}
+	})
+
+	t.Run("Out of Bounds Vulnerability Score", func(t *testing.T) {
+		p := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Plan:       []string{"step"},
+			Confidence: 0.8,
+		}
+
+		eLow := &metacore.EmpathyOutput{
+			Status:             "pass",
+			VulnerabilityScore: -0.5,
+		}
+		_, errLow := v.ValidatePipeline(p, eLow)
+		if errLow == nil {
+			t.Error("Expected error for vulnerability score < 0.0, got nil")
+		}
+
+		eHigh := &metacore.EmpathyOutput{
+			Status:             "pass",
+			VulnerabilityScore: 1.5,
+		}
+		_, errHigh := v.ValidatePipeline(p, eHigh)
+		if errHigh == nil {
+			t.Error("Expected error for vulnerability score > 1.0, got nil")
+		}
+	})
 }
