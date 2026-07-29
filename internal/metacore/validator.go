@@ -17,6 +17,7 @@ package metacore
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -36,6 +37,7 @@ var (
 	ErrECannotInitiate      = errors.New("Empathy Layer (E) has no privilege to initiate action")
 	ErrKCannotModify        = errors.New("Kill-Switch Layer (K) has no privilege to modify parameters")
 	ErrKAbsoluteBlock       = errors.New("Kill-Switch Layer (K) triggered absolute execution halt")
+	ErrInvalidInput         = errors.New("invalid input parameters provided to validator")
 )
 
 // Validator implements the META-CORE (R-E-K) validation engine and pipeline.
@@ -80,10 +82,12 @@ func (v *Validator) EvaluateAlignment(rVal, eSaf, kSaf float64) (float64, string
 
 // ValidatePipeline executes the three-layer META-CORE validation flow.
 func (v *Validator) ValidatePipeline(packet *DecisionPacket, empathy *EmpathyOutput) (*KillSwitchOutput, error) {
-	// Verify core principle: R cannot block or modify. R must only generate the plan.
-	// If the packet attempts to self-bypass or contains block/modify instructions, reject.
-	if strings.Contains(strings.ToLower(packet.Goal), "bypass") || strings.Contains(strings.ToLower(packet.Goal), "disable safety") {
-		return nil, ErrRCannotBlockOrModify
+	if packet == nil {
+		return nil, fmt.Errorf("%w: decision packet cannot be nil", ErrInvalidInput)
+	}
+
+	if math.IsNaN(packet.Confidence) || packet.Confidence < 0.0 || packet.Confidence > 1.0 {
+		return nil, fmt.Errorf("%w: confidence must be between 0.0 and 1.0", ErrInvalidInput)
 	}
 
 	// 1. Evaluate Empathy Layer (E)
@@ -94,6 +98,16 @@ func (v *Validator) ValidatePipeline(packet *DecisionPacket, empathy *EmpathyOut
 			VulnerabilityScore: 0.1,
 			Reason:             "Default pass",
 		}
+	} else {
+		if math.IsNaN(empathy.VulnerabilityScore) || empathy.VulnerabilityScore < 0.0 || empathy.VulnerabilityScore > 1.0 {
+			return nil, fmt.Errorf("%w: vulnerability score must be between 0.0 and 1.0", ErrInvalidInput)
+		}
+	}
+
+	// Verify core principle: R cannot block or modify. R must only generate the plan.
+	// If the packet attempts to self-bypass or contains block/modify instructions, reject.
+	if strings.Contains(strings.ToLower(packet.Goal), "bypass") || strings.Contains(strings.ToLower(packet.Goal), "disable safety") {
+		return nil, ErrRCannotBlockOrModify
 	}
 
 	// Semantic vulnerability assessment

@@ -16,6 +16,7 @@ package metacore_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"google.golang.org/adk/v2/internal/metacore"
@@ -83,6 +84,85 @@ func TestBypassViolationR(t *testing.T) {
 	if !errors.Is(err, metacore.ErrRCannotBlockOrModify) {
 		t.Errorf("Expected ErrRCannotBlockOrModify, got %v", err)
 	}
+}
+
+func TestValidatePipelineInvalidInputs(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+
+	t.Run("nil packet", func(t *testing.T) {
+		_, err := v.ValidatePipeline(nil, nil)
+		if !errors.Is(err, metacore.ErrInvalidInput) {
+			t.Errorf("Expected ErrInvalidInput for nil packet, got %v", err)
+		}
+	})
+
+	t.Run("NaN confidence", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "valid goal",
+			Plan:       []string{"valid plan"},
+			Confidence: math.NaN(),
+		}
+		_, err := v.ValidatePipeline(packet, nil)
+		if !errors.Is(err, metacore.ErrInvalidInput) {
+			t.Errorf("Expected ErrInvalidInput for NaN confidence, got %v", err)
+		}
+	})
+
+	t.Run("negative confidence", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "valid goal",
+			Plan:       []string{"valid plan"},
+			Confidence: -0.1,
+		}
+		_, err := v.ValidatePipeline(packet, nil)
+		if !errors.Is(err, metacore.ErrInvalidInput) {
+			t.Errorf("Expected ErrInvalidInput for negative confidence, got %v", err)
+		}
+	})
+
+	t.Run("too large confidence", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "valid goal",
+			Plan:       []string{"valid plan"},
+			Confidence: 1.05,
+		}
+		_, err := v.ValidatePipeline(packet, nil)
+		if !errors.Is(err, metacore.ErrInvalidInput) {
+			t.Errorf("Expected ErrInvalidInput for too large confidence, got %v", err)
+		}
+	})
+
+	t.Run("NaN empathy vulnerability score", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "valid goal",
+			Plan:       []string{"valid plan"},
+			Confidence: 0.8,
+		}
+		empathy := &metacore.EmpathyOutput{
+			Status:             "pass",
+			VulnerabilityScore: math.NaN(),
+		}
+		_, err := v.ValidatePipeline(packet, empathy)
+		if !errors.Is(err, metacore.ErrInvalidInput) {
+			t.Errorf("Expected ErrInvalidInput for NaN vulnerability score, got %v", err)
+		}
+	})
+
+	t.Run("out-of-bounds empathy vulnerability score", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "valid goal",
+			Plan:       []string{"valid plan"},
+			Confidence: 0.8,
+		}
+		empathy := &metacore.EmpathyOutput{
+			Status:             "pass",
+			VulnerabilityScore: 1.1,
+		}
+		_, err := v.ValidatePipeline(packet, empathy)
+		if !errors.Is(err, metacore.ErrInvalidInput) {
+			t.Errorf("Expected ErrInvalidInput for out-of-bounds vulnerability score, got %v", err)
+		}
+	})
 }
 
 func TestNormalWithModifications(t *testing.T) {
