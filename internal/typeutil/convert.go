@@ -17,37 +17,95 @@ package typeutil
 
 import (
 	"encoding/json"
+	"reflect"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
+
+// isJSONSafe returns true if the value is a safe, scalar JSON-compatible type
+// (float64, string, bool, or untyped nil) that can be validated directly
+// without an expensive json.Marshal/json.Unmarshal cycle.
+// We exclude typed nil pointers to prevent incorrect validation behavior.
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v.(type) {
+	case float64, string, bool:
+		return true
+	}
+	return false
+}
 
 // ConvertToWithJSONSchema converts the given value to another type using json marshal/unmarshal.
 // If non-nil resolvedSchema is provided, validation against the resolvedSchema will run
 // during the conversion.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+
+	// Optimization: if schema is nil, we can bypass validation entirely
+	if resolvedSchema == nil {
+		rawArgs, err := json.Marshal(v)
+		if err != nil {
+			return zero, err
+		}
+		var typed To
+		if err := json.Unmarshal(rawArgs, &typed); err != nil {
+			return zero, err
+		}
+		return typed, nil
+	}
+
+	// Optimization: if value is a safe JSON type and matches To, we can validate directly
+	anyV := any(v)
+	if isJSONSafe(anyV) {
+		// Treat untyped nil specially if we expect an object
+		var decoded any = anyV
+		if decoded == nil && schemaExpectsObject(resolvedSchema) {
+			decoded = map[string]any{}
+		}
+
+		if err := resolvedSchema.Validate(decoded); err != nil {
+			return zero, err
+		}
+
+		// If the type matches To, we can return it directly to avoid JSON round-trip
+		if typed, ok := anyV.(To); ok {
+			return typed, nil
+		}
+		if anyV == nil {
+			// If v is nil (untyped), and To is a pointer/slice/map/interface type, return zero (nil)
+			var val To
+			valVal := reflect.ValueOf(&val).Elem()
+			switch valVal.Kind() {
+			case reflect.Pointer, reflect.Slice, reflect.Map, reflect.Interface:
+				return val, nil
+			}
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
 	}
-	if resolvedSchema != nil {
-		// Validate the JSON-decoded form rather than the Go value:
-		// struct validation can't account for `omitempty` or custom
-		// marshalling (see
-		// https://github.com/google/jsonschema-go/issues/23).
-		var decoded any
-		if err := json.Unmarshal(rawArgs, &decoded); err != nil {
-			return zero, err
-		}
-		// An absent input (e.g. a tool invoked with no arguments)
-		// should satisfy an object schema.
-		if decoded == nil && schemaExpectsObject(resolvedSchema) {
-			decoded = map[string]any{}
-		}
-		if err := resolvedSchema.Validate(decoded); err != nil {
-			return zero, err
-		}
+
+	// Validate the JSON-decoded form rather than the Go value:
+	// struct validation can't account for `omitempty` or custom
+	// marshalling (see
+	// https://github.com/google/jsonschema-go/issues/23).
+	var decoded any
+	if err := json.Unmarshal(rawArgs, &decoded); err != nil {
+		return zero, err
 	}
+	// An absent input (e.g. a tool invoked with no arguments)
+	// should satisfy an object schema.
+	if decoded == nil && schemaExpectsObject(resolvedSchema) {
+		decoded = map[string]any{}
+	}
+	if err := resolvedSchema.Validate(decoded); err != nil {
+		return zero, err
+	}
+
 	var typed To
 	if err := json.Unmarshal(rawArgs, &typed); err != nil {
 		return zero, err
@@ -61,6 +119,16 @@ func ValidateWithJSONSchema(v any, resolvedSchema *jsonschema.Resolved) error {
 	if resolvedSchema == nil {
 		return nil
 	}
+
+	// Optimization: if value is a safe JSON type, validate directly to avoid JSON round-trip
+	if isJSONSafe(v) {
+		decoded := v
+		if decoded == nil && schemaExpectsObject(resolvedSchema) {
+			decoded = map[string]any{}
+		}
+		return resolvedSchema.Validate(decoded)
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return err
