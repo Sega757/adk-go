@@ -12,29 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package web_test
+package adkrest
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"google.golang.org/adk/v2/cmd/launcher/web"
 )
 
-func TestBuildBaseRouter_SecurityHeaders(t *testing.T) {
-	router := web.BuildBaseRouter()
-
-	// Register a dummy endpoint
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+func TestSecurityHeaders(t *testing.T) {
+	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	handlerToTest := securityHeaders(dummyHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/any-path", nil)
 	rr := httptest.NewRecorder()
 
-	router.ServeHTTP(rr, req)
+	handlerToTest.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected status OK, got %d", rr.Code)
