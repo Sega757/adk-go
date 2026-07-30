@@ -16,6 +16,7 @@ package metacore_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"google.golang.org/adk/v2/internal/metacore"
@@ -327,4 +328,90 @@ func TestDegradationModes(t *testing.T) {
 	if v3.CurrentMode != metacore.ModeEmpathyOverride {
 		t.Errorf("Expected Empathy Override, got %s", v3.CurrentMode)
 	}
+}
+
+func TestValidatePipelineSecurityBoundary(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+
+	t.Run("Nil DecisionPacket", func(t *testing.T) {
+		_, err := v.ValidatePipeline(nil, nil)
+		if !errors.Is(err, metacore.ErrNilPacket) {
+			t.Errorf("Expected ErrNilPacket error, got %v", err)
+		}
+	})
+
+	t.Run("Confidence Out of Bounds (NaN)", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Confidence: math.NaN(),
+		}
+		_, err := v.ValidatePipeline(packet, nil)
+		if !errors.Is(err, metacore.ErrInvalidConfidence) {
+			t.Errorf("Expected ErrInvalidConfidence, got %v", err)
+		}
+	})
+
+	t.Run("Confidence Out of Bounds (Negative)", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Confidence: -0.1,
+		}
+		_, err := v.ValidatePipeline(packet, nil)
+		if !errors.Is(err, metacore.ErrInvalidConfidence) {
+			t.Errorf("Expected ErrInvalidConfidence, got %v", err)
+		}
+	})
+
+	t.Run("Confidence Out of Bounds (Greater Than 1)", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Confidence: 1.05,
+		}
+		_, err := v.ValidatePipeline(packet, nil)
+		if !errors.Is(err, metacore.ErrInvalidConfidence) {
+			t.Errorf("Expected ErrInvalidConfidence, got %v", err)
+		}
+	})
+
+	t.Run("Vulnerability Score Out of Bounds (NaN)", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Confidence: 0.8,
+		}
+		empathy := &metacore.EmpathyOutput{
+			VulnerabilityScore: math.NaN(),
+		}
+		_, err := v.ValidatePipeline(packet, empathy)
+		if !errors.Is(err, metacore.ErrInvalidVulnerability) {
+			t.Errorf("Expected ErrInvalidVulnerability, got %v", err)
+		}
+	})
+
+	t.Run("Vulnerability Score Out of Bounds (Negative)", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Confidence: 0.8,
+		}
+		empathy := &metacore.EmpathyOutput{
+			VulnerabilityScore: -0.5,
+		}
+		_, err := v.ValidatePipeline(packet, empathy)
+		if !errors.Is(err, metacore.ErrInvalidVulnerability) {
+			t.Errorf("Expected ErrInvalidVulnerability, got %v", err)
+		}
+	})
+
+	t.Run("Vulnerability Score Out of Bounds (Greater Than 1)", func(t *testing.T) {
+		packet := &metacore.DecisionPacket{
+			Goal:       "normal goal",
+			Confidence: 0.8,
+		}
+		empathy := &metacore.EmpathyOutput{
+			VulnerabilityScore: 1.5,
+		}
+		_, err := v.ValidatePipeline(packet, empathy)
+		if !errors.Is(err, metacore.ErrInvalidVulnerability) {
+			t.Errorf("Expected ErrInvalidVulnerability, got %v", err)
+		}
+	})
 }
