@@ -17,6 +17,7 @@ package console
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"google.golang.org/genai"
@@ -99,7 +100,15 @@ func renderInterruptPrompt(p pendingInterrupt) {
 	default:
 		renderGenericInterruptPrompt(p.name, p.args)
 	}
-	fmt.Print("User -> ")
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+	if isTTY {
+		fmt.Print("💬 \033[32mUser\033[0m -> ")
+	} else {
+		fmt.Print("User -> ")
+	}
 }
 
 // buildInterruptResponse converts the operator's one-line input
@@ -134,7 +143,15 @@ func renderWorkflowInputPrompt(args map[string]any) {
 	if msg == "" {
 		msg = "Input requested"
 	}
-	fmt.Printf("Agent -> %s\n", msg)
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+	if isTTY {
+		fmt.Printf("🤖 \033[34mAgent (HITL)\033[0m -> %s\n", msg)
+	} else {
+		fmt.Printf("Agent -> %s\n", msg)
+	}
 	if payload, ok := args["payload"]; ok && payload != nil {
 		// Strings (incl. those that survived a JSON persistence
 		// roundtrip) print raw to avoid the noisy "\"escaped\""
@@ -190,7 +207,15 @@ func renderToolConfirmationPrompt(args map[string]any) {
 		}
 		hint = "Confirm " + originalName + "?"
 	}
-	fmt.Printf("Agent -> %s\n", hint)
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+	if isTTY {
+		fmt.Printf("🤖 \033[34mAgent (HITL)\033[0m -> %s\n", hint)
+	} else {
+		fmt.Printf("Agent -> %s\n", hint)
+	}
 	fmt.Println("  Type 'yes' to confirm, anything else to reject.")
 }
 
@@ -213,7 +238,15 @@ func toolConfirmationResponseFromUserInput(line string) map[string]any {
 // and the raw args so the operator can compose a sensible
 // response by hand.
 func renderGenericInterruptPrompt(name string, args map[string]any) {
-	fmt.Printf("Agent -> waiting for response (kind: %s)\n", name)
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+	if isTTY {
+		fmt.Printf("🤖 \033[34mAgent (HITL)\033[0m -> waiting for response (kind: %s)\n", name)
+	} else {
+		fmt.Printf("Agent -> waiting for response (kind: %s)\n", name)
+	}
 	if len(args) > 0 {
 		if pretty, err := json.Marshal(args); err == nil {
 			fmt.Printf("  Args: %s\n", pretty)

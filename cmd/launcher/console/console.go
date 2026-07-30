@@ -115,6 +115,18 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 		return fmt.Errorf("failed to create runner: %v", err)
 	}
 
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+
+	userPrompt := "\nUser -> "
+	agentPrompt := "\nAgent -> "
+	if isTTY {
+		userPrompt = "\n💬 \033[32mUser\033[0m -> "
+		agentPrompt = "\n🤖 \033[34mAgent\033[0m -> "
+	}
+
 	inputChan := make(chan string)
 	readErrChan := make(chan error, 1)
 
@@ -132,14 +144,26 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	// Print an initial newline to work around PTY/exec buffering issues in some environments.
 	fmt.Println()
 
-	fmt.Print("\nUser -> ")
+	if isTTY {
+		fmt.Println("\033[36m==================================================\033[0m")
+		fmt.Println("\033[36m✨  Welcome to the ADK Console Agent Launcher!  ✨\033[0m")
+		fmt.Println("\033[36m👉  Type your message below and press Enter.      \033[0m")
+		fmt.Println("\033[36m👉  Press Ctrl+C or Ctrl+D (EOF) to exit.         \033[0m")
+		fmt.Println("\033[36m==================================================\033[0m")
+	} else {
+		fmt.Println("==================================================")
+		fmt.Println("Welcome to the ADK Console Agent Launcher!")
+		fmt.Println("Type your message below and press Enter.")
+		fmt.Println("Press Ctrl+C or Ctrl+D (EOF) to exit.")
+		fmt.Println("==================================================")
+	}
+
+	fmt.Print(userPrompt)
 
 	// Resolve "auto" streaming mode once per session (stdout TTY-ness doesn't change).
 	defaultStreamingMode := l.config.streamingMode
 	if defaultStreamingMode == "" {
-		// Stdlib-only terminal heuristic: stdout is a character device.
-		// Avoids adding golang.org/x/term dependency (golangci-lint failed to load its export data in CI).
-		if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		if isTTY {
 			defaultStreamingMode = agent.StreamingModeSSE
 		} else {
 			defaultStreamingMode = agent.StreamingModeNone
@@ -168,6 +192,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			// Drop the line terminator the reader keeps, so the message
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
+
+			if strings.TrimSpace(userInput) == "" {
+				fmt.Print(userPrompt)
+				continue
+			}
 
 			var userMsg *genai.Content
 			if len(pendingInterrupts) > 0 {
@@ -201,7 +230,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				streamingMode = defaultStreamingMode
 			}
 
-			fmt.Print("\nAgent -> ")
+			fmt.Print(agentPrompt)
 			prevText := ""
 			printedContent := false
 			var finalOutput any
@@ -210,7 +239,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				StreamingMode: streamingMode,
 			}) {
 				if err != nil {
-					fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					if isTTY {
+						fmt.Printf("\n⚠️  \033[31mAGENT_ERROR\033[0m: %v\n", err)
+					} else {
+						fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					}
 				} else {
 					collectedEvents = append(collectedEvents, event)
 					if event.LLMResponse.Content == nil {
@@ -267,7 +300,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			if !printedContent && finalOutput != nil {
 				fmt.Print(renderOutput(finalOutput))
 			}
-			fmt.Print("\nUser -> ")
+			fmt.Print(userPrompt)
 		}
 	}
 }
