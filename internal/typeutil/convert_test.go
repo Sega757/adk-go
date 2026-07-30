@@ -110,3 +110,59 @@ func TestConvertToWithJSONSchema_NoSchemaSkipsValidation(t *testing.T) {
 		t.Errorf("got %v, want nil", got)
 	}
 }
+
+func mustResolveTB[T any](tb testing.TB) *jsonschema.Resolved {
+	tb.Helper()
+	s, err := jsonschema.For[T](nil)
+	if err != nil {
+		tb.Fatalf("jsonschema.For[%T]: %v", *new(T), err)
+	}
+	r, err := s.Resolve(nil)
+	if err != nil {
+		tb.Fatalf("Resolve: %v", err)
+	}
+	return r
+}
+
+func BenchmarkConvertToWithJSONSchema_Fast(b *testing.B) {
+	schema := mustResolveTB[string](b)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ConvertToWithJSONSchema[string, string]("hello", schema)
+	}
+}
+
+func BenchmarkConvertToWithJSONSchema_Slow(b *testing.B) {
+	type userStruct struct {
+		Name string
+		Age  int
+	}
+	schema := mustResolveTB[userStruct](b)
+	v := userStruct{Name: "Alice", Age: 30}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ConvertToWithJSONSchema[userStruct, userStruct](v, schema)
+	}
+}
+
+func BenchmarkValidateWithJSONSchema_Fast(b *testing.B) {
+	schema := mustResolveTB[float64](b)
+	v := 42.0
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ValidateWithJSONSchema(v, schema)
+	}
+}
+
+func BenchmarkValidateWithJSONSchema_Slow(b *testing.B) {
+	type userStruct struct {
+		Name string
+		Age  int
+	}
+	schema := mustResolveTB[userStruct](b)
+	v := userStruct{Name: "Alice", Age: 30}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ValidateWithJSONSchema(v, schema)
+	}
+}
