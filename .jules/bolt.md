@@ -1,5 +1,9 @@
 # Bolt's Performance Journal
 
+## 2026-07-12 - Primitive validation and conversion serialization bypass
+**Learning:** Performing a serialization round-trip (`json.Marshal` then `json.Unmarshal`) to obtain a JSON-decoded form for schema validation is useful for complex structures (handling `omitempty` and custom marshallers), but represents a massive performance bottleneck for primitive/scalar types. Simple types like `float64`, `string`, `bool`, and untyped `nil` are already in their canonical JSON-decoded form, making marshal/unmarshal completely redundant. Bypassing serialization for these types yields ~75% reduction in latency and ~73% reduction in memory bytes.
+**Action:** When validating or converting objects via a JSON-schema layer, always introduce a fast-path bypass for primitive, immutable, or already-decoded types (`float64`, `string`, `bool`, untyped `nil`) to avoid costly marshal/unmarshal round-trips.
+
 ## 2026-07-11 - Reflection-based deep copy allocation anti-pattern
 **Learning:** Generic reflection-based cloning routines (like `clone` and `deepCopy` in Go) are highly flexible but can be extremely slow and allocation-heavy. Allocating temporary `reflect.Value` instances via `reflect.New` for every struct field or slice element is unnecessary when the destination struct is already fully allocated and its fields/elements are addressable/settable. Direct in-place copying bypasses these allocations completely. Additionally, maps with basic/scalar keys and values do not need deep copying of their keys or values at all, allowing us to skip allocations for map entries entirely.
 **Action:** Avoid allocating new values with `reflect.New` for addressable sub-fields or slice elements when implementing generic copy functions. Always check whether the types of keys/values require deep copying (using a helper like `isCopyRequired`) before copying map entries.

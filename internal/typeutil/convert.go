@@ -21,11 +21,45 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
+// isJSONSafe checks if the value is directly JSON safe to bypass marshal/unmarshal.
+// It limits bypass checks to float64, string, bool, and untyped nil.
+func isJSONSafe(v any) (any, bool) {
+	if v == nil {
+		return nil, true
+	}
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case string:
+		return val, true
+	case bool:
+		return val, true
+	}
+	return nil, false
+}
+
 // ConvertToWithJSONSchema converts the given value to another type using json marshal/unmarshal.
 // If non-nil resolvedSchema is provided, validation against the resolvedSchema will run
 // during the conversion.
+// Optimized by Bolt: Bypasses marshal/unmarshal for JSON-safe primitive types when possible.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+
+	if decodedVal, safe := isJSONSafe(v); safe {
+		if typed, ok := any(v).(To); ok {
+			if resolvedSchema != nil {
+				decoded := decodedVal
+				if decoded == nil && schemaExpectsObject(resolvedSchema) {
+					decoded = map[string]any{}
+				}
+				if err := resolvedSchema.Validate(decoded); err != nil {
+					return zero, err
+				}
+			}
+			return typed, nil
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
@@ -57,17 +91,22 @@ func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Re
 
 // ValidateWithJSONSchema validates a Go value against a resolved schema by
 // first converting it to its JSON-decoded form to avoid struct validation issues.
+// Optimized by Bolt: Bypasses marshal/unmarshal for JSON-safe primitive types.
 func ValidateWithJSONSchema(v any, resolvedSchema *jsonschema.Resolved) error {
 	if resolvedSchema == nil {
 		return nil
 	}
-	rawArgs, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
 	var decoded any
-	if err := json.Unmarshal(rawArgs, &decoded); err != nil {
-		return err
+	if decodedVal, safe := isJSONSafe(v); safe {
+		decoded = decodedVal
+	} else {
+		rawArgs, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(rawArgs, &decoded); err != nil {
+			return err
+		}
 	}
 	if decoded == nil && schemaExpectsObject(resolvedSchema) {
 		decoded = map[string]any{}
