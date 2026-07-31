@@ -110,3 +110,130 @@ func TestConvertToWithJSONSchema_NoSchemaSkipsValidation(t *testing.T) {
 		t.Errorf("got %v, want nil", got)
 	}
 }
+
+// TestIsJSONSafe verifies the behavior of the isJSONSafe utility.
+func TestIsJSONSafe(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected bool
+	}{
+		{"float64", float64(3.14), true},
+		{"string", "test", true},
+		{"bool", true, true},
+		{"untyped nil", nil, true},
+		{"int (not safe)", int(42), false},
+		{"typed nil pointer (not safe)", (*string)(nil), false},
+		{"map (not safe)", map[string]any{}, false},
+		{"slice (not safe)", []any{}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isJSONSafe(tc.input)
+			if got != tc.expected {
+				t.Errorf("isJSONSafe(%T(%v)) = %v; want %v", tc.input, tc.input, got, tc.expected)
+			}
+		})
+	}
+}
+
+// BenchmarkConvertToWithJSONSchema_Bypass measures performance of ConvertToWithJSONSchema
+// when the input is JSON-safe and conversion type matches exactly.
+func BenchmarkConvertToWithJSONSchema_Bypass(b *testing.B) {
+	schema, err := jsonschema.For[string](nil)
+	if err != nil {
+		b.Fatalf("jsonschema.For: %v", err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		b.Fatalf("Resolve: %v", err)
+	}
+
+	input := "benchmark-test-string"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ConvertToWithJSONSchema[string, string](input, resolved)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkConvertToWithJSONSchema_NoBypass measures performance of ConvertToWithJSONSchema
+// when bypass cannot be used (e.g. converting a struct or map).
+func BenchmarkConvertToWithJSONSchema_NoBypass(b *testing.B) {
+	type TestStruct struct {
+		Field string `json:"field"`
+	}
+
+	schema, err := jsonschema.For[TestStruct](nil)
+	if err != nil {
+		b.Fatalf("jsonschema.For: %v", err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		b.Fatalf("Resolve: %v", err)
+	}
+
+	input := TestStruct{Field: "benchmark-test-string"}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ConvertToWithJSONSchema[TestStruct, TestStruct](input, resolved)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkValidateWithJSONSchema_Bypass measures performance of ValidateWithJSONSchema
+// when the input is JSON-safe.
+func BenchmarkValidateWithJSONSchema_Bypass(b *testing.B) {
+	schema, err := jsonschema.For[string](nil)
+	if err != nil {
+		b.Fatalf("jsonschema.For: %v", err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		b.Fatalf("Resolve: %v", err)
+	}
+
+	input := "benchmark-test-string"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := ValidateWithJSONSchema(input, resolved)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkValidateWithJSONSchema_NoBypass measures performance of ValidateWithJSONSchema
+// when bypass cannot be used.
+func BenchmarkValidateWithJSONSchema_NoBypass(b *testing.B) {
+	type TestStruct struct {
+		Field string `json:"field"`
+	}
+
+	schema, err := jsonschema.For[TestStruct](nil)
+	if err != nil {
+		b.Fatalf("jsonschema.For: %v", err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		b.Fatalf("Resolve: %v", err)
+	}
+
+	input := TestStruct{Field: "benchmark-test-string"}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := ValidateWithJSONSchema(input, resolved)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
