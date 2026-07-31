@@ -426,7 +426,7 @@ func TestRenderWorkflowInputPrompt_PayloadFormatting(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			out := captureStdout(t, func() {
-				renderWorkflowInputPrompt(tc.args)
+				renderWorkflowInputPrompt(tc.args, false)
 			})
 			for _, s := range tc.wantContains {
 				if !strings.Contains(out, s) {
@@ -440,6 +440,70 @@ func TestRenderWorkflowInputPrompt_PayloadFormatting(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTerminalUX_PromptsAndHITL(t *testing.T) {
+	t.Run("Prompts without TTY", func(t *testing.T) {
+		user := captureStdout(t, func() { printUserPrompt(false) })
+		if !strings.Contains(user, "User ->") || strings.Contains(user, "\033") {
+			t.Errorf("expected plain User prompt, got %q", user)
+		}
+
+		agent := captureStdout(t, func() { printAgentPrompt(false) })
+		if !strings.Contains(agent, "Agent ->") || strings.Contains(agent, "\033") {
+			t.Errorf("expected plain Agent prompt, got %q", agent)
+		}
+
+		errPrompt := captureStdout(t, func() { printErrorPrompt(false, io.EOF) })
+		if !strings.Contains(errPrompt, "AGENT_ERROR: EOF") || strings.Contains(errPrompt, "\033") {
+			t.Errorf("expected plain Error prompt, got %q", errPrompt)
+		}
+	})
+
+	t.Run("Prompts with TTY", func(t *testing.T) {
+		user := captureStdout(t, func() { printUserPrompt(true) })
+		if !strings.Contains(user, "\033[1;34m") || !strings.Contains(user, "👤") {
+			t.Errorf("expected TTY-styled User prompt with emoji, got %q", user)
+		}
+
+		agent := captureStdout(t, func() { printAgentPrompt(true) })
+		if !strings.Contains(agent, "\033[1;32m") || !strings.Contains(agent, "🤖") {
+			t.Errorf("expected TTY-styled Agent prompt with emoji, got %q", agent)
+		}
+
+		errPrompt := captureStdout(t, func() { printErrorPrompt(true, io.EOF) })
+		if !strings.Contains(errPrompt, "\033[1;31m") || !strings.Contains(errPrompt, "❌") {
+			t.Errorf("expected TTY-styled Error prompt with emoji, got %q", errPrompt)
+		}
+	})
+
+	t.Run("HITL outputs", func(t *testing.T) {
+		args := map[string]any{"message": "Enter value"}
+
+		// No TTY
+		outNoTTY := captureStdout(t, func() { renderWorkflowInputPrompt(args, false) })
+		if !strings.Contains(outNoTTY, "Agent -> Enter value") || strings.Contains(outNoTTY, "\033") {
+			t.Errorf("expected plain HITL prompt, got %q", outNoTTY)
+		}
+
+		// TTY
+		outTTY := captureStdout(t, func() { renderWorkflowInputPrompt(args, true) })
+		if !strings.Contains(outTTY, "\033[1;33m") || !strings.Contains(outTTY, "🤝 HITL -> Enter value") {
+			t.Errorf("expected TTY HITL prompt with emoji, got %q", outTTY)
+		}
+
+		// Tool confirmation TTY
+		outConfTTY := captureStdout(t, func() { renderToolConfirmationPrompt(args, true) })
+		if !strings.Contains(outConfTTY, "\033[1;33m") || !strings.Contains(outConfTTY, "🤝") {
+			t.Errorf("expected TTY confirmation prompt, got %q", outConfTTY)
+		}
+
+		// Generic interrupt TTY
+		outGenTTY := captureStdout(t, func() { renderGenericInterruptPrompt("some_action", args, true) })
+		if !strings.Contains(outGenTTY, "\033[1;33m") || !strings.Contains(outGenTTY, "some_action") {
+			t.Errorf("expected TTY generic prompt, got %q", outGenTTY)
+		}
+	})
 }
 
 func TestRenderOutput(t *testing.T) {
