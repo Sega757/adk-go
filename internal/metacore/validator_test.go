@@ -16,6 +16,7 @@ package metacore_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"google.golang.org/adk/v2/internal/metacore"
@@ -326,5 +327,61 @@ func TestDegradationModes(t *testing.T) {
 	}
 	if v3.CurrentMode != metacore.ModeEmpathyOverride {
 		t.Errorf("Expected Empathy Override, got %s", v3.CurrentMode)
+	}
+}
+
+func TestValidatePipeline_NilPacket(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	_, err := v.ValidatePipeline(nil, nil)
+	if !errors.Is(err, metacore.ErrNilDecisionPacket) {
+		t.Errorf("Expected ErrNilDecisionPacket, got %v", err)
+	}
+}
+
+func TestValidatePipeline_InvalidConfidence(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	invalidValues := []float64{
+		math.NaN(),
+		math.Inf(1),
+		math.Inf(-1),
+		-0.1,
+		1.1,
+	}
+
+	for _, val := range invalidValues {
+		packet := &metacore.DecisionPacket{
+			Goal:       "normal task",
+			Confidence: val,
+		}
+		_, err := v.ValidatePipeline(packet, nil)
+		if !errors.Is(err, metacore.ErrInvalidConfidence) {
+			t.Errorf("Expected ErrInvalidConfidence for confidence %f, got %v", val, err)
+		}
+	}
+}
+
+func TestValidatePipeline_InvalidVulnerabilityScore(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	invalidValues := []float64{
+		math.NaN(),
+		math.Inf(1),
+		math.Inf(-1),
+		-0.1,
+		1.1,
+	}
+
+	for _, val := range invalidValues {
+		packet := &metacore.DecisionPacket{
+			Goal:       "normal task",
+			Confidence: 0.8,
+		}
+		empathy := &metacore.EmpathyOutput{
+			Status:             "pass",
+			VulnerabilityScore: val,
+		}
+		_, err := v.ValidatePipeline(packet, empathy)
+		if !errors.Is(err, metacore.ErrInvalidVulnerability) {
+			t.Errorf("Expected ErrInvalidVulnerability for vulnerability score %f, got %v", val, err)
+		}
 	}
 }
