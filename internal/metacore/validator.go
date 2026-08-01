@@ -17,6 +17,7 @@ package metacore
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -36,6 +37,9 @@ var (
 	ErrECannotInitiate      = errors.New("Empathy Layer (E) has no privilege to initiate action")
 	ErrKCannotModify        = errors.New("Kill-Switch Layer (K) has no privilege to modify parameters")
 	ErrKAbsoluteBlock       = errors.New("Kill-Switch Layer (K) triggered absolute execution halt")
+	ErrNilDecisionPacket    = errors.New("DecisionPacket cannot be nil")
+	ErrInvalidConfidence    = errors.New("Confidence must be a valid number between 0.0 and 1.0")
+	ErrInvalidVulnerability = errors.New("Vulnerability score must be a valid number between 0.0 and 1.0")
 )
 
 // Validator implements the META-CORE (R-E-K) validation engine and pipeline.
@@ -80,6 +84,14 @@ func (v *Validator) EvaluateAlignment(rVal, eSaf, kSaf float64) (float64, string
 
 // ValidatePipeline executes the three-layer META-CORE validation flow.
 func (v *Validator) ValidatePipeline(packet *DecisionPacket, empathy *EmpathyOutput) (*KillSwitchOutput, error) {
+	if packet == nil {
+		return nil, ErrNilDecisionPacket
+	}
+
+	if math.IsNaN(packet.Confidence) || packet.Confidence < 0.0 || packet.Confidence > 1.0 {
+		return nil, ErrInvalidConfidence
+	}
+
 	// Verify core principle: R cannot block or modify. R must only generate the plan.
 	// If the packet attempts to self-bypass or contains block/modify instructions, reject.
 	if strings.Contains(strings.ToLower(packet.Goal), "bypass") || strings.Contains(strings.ToLower(packet.Goal), "disable safety") {
@@ -93,6 +105,10 @@ func (v *Validator) ValidatePipeline(packet *DecisionPacket, empathy *EmpathyOut
 			Status:             "pass",
 			VulnerabilityScore: 0.1,
 			Reason:             "Default pass",
+		}
+	} else {
+		if math.IsNaN(empathy.VulnerabilityScore) || empathy.VulnerabilityScore < 0.0 || empathy.VulnerabilityScore > 1.0 {
+			return nil, ErrInvalidVulnerability
 		}
 	}
 

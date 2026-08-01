@@ -16,6 +16,7 @@ package metacore_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"google.golang.org/adk/v2/internal/metacore"
@@ -82,6 +83,68 @@ func TestBypassViolationR(t *testing.T) {
 	_, err := v.ValidatePipeline(packet, nil)
 	if !errors.Is(err, metacore.ErrRCannotBlockOrModify) {
 		t.Errorf("Expected ErrRCannotBlockOrModify, got %v", err)
+	}
+}
+
+func TestNilPacket(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	_, err := v.ValidatePipeline(nil, nil)
+	if !errors.Is(err, metacore.ErrNilDecisionPacket) {
+		t.Errorf("Expected ErrNilDecisionPacket, got %v", err)
+	}
+}
+
+func TestInvalidConfidence(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	tests := []struct {
+		name       string
+		confidence float64
+	}{
+		{"Negative", -0.1},
+		{"Too Large", 1.1},
+		{"NaN", math.NaN()},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			packet := &metacore.DecisionPacket{
+				Goal:       "test goal",
+				Confidence: tc.confidence,
+			}
+			_, err := v.ValidatePipeline(packet, nil)
+			if !errors.Is(err, metacore.ErrInvalidConfidence) {
+				t.Errorf("Expected ErrInvalidConfidence, got %v", err)
+			}
+		})
+	}
+}
+
+func TestInvalidVulnerabilityScore(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	tests := []struct {
+		name               string
+		vulnerabilityScore float64
+	}{
+		{"Negative", -0.1},
+		{"Too Large", 1.1},
+		{"NaN", math.NaN()},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			packet := &metacore.DecisionPacket{
+				Goal:       "test goal",
+				Confidence: 0.8,
+			}
+			empathy := &metacore.EmpathyOutput{
+				Status:             "pass",
+				VulnerabilityScore: tc.vulnerabilityScore,
+			}
+			_, err := v.ValidatePipeline(packet, empathy)
+			if !errors.Is(err, metacore.ErrInvalidVulnerability) {
+				t.Errorf("Expected ErrInvalidVulnerability, got %v", err)
+			}
+		})
 	}
 }
 
