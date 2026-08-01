@@ -17,15 +17,54 @@ package typeutil
 
 import (
 	"encoding/json"
+	"reflect"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
+
+// isJSONSafe returns true if the value is a float64, string, bool, or untyped nil.
+// This allows bypassing json marshal/unmarshal.
+func isJSONSafe(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v.(type) {
+	case float64, string, bool:
+		return true
+	}
+	return false
+}
 
 // ConvertToWithJSONSchema converts the given value to another type using json marshal/unmarshal.
 // If non-nil resolvedSchema is provided, validation against the resolvedSchema will run
 // during the conversion.
 func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Resolved) (To, error) {
 	var zero To
+
+	// Performance optimization by Bolt:
+	// If From and To are the exact same type and the value is JSON-safe,
+	// we can bypass JSON marshal/unmarshal entirely.
+	var zeroFrom From
+	var zeroTo To
+	if reflect.TypeOf(&zeroFrom) == reflect.TypeOf(&zeroTo) {
+		val := any(v)
+		if isJSONSafe(val) {
+			if resolvedSchema != nil {
+				decoded := val
+				if decoded == nil && schemaExpectsObject(resolvedSchema) {
+					decoded = map[string]any{}
+				}
+				if err := resolvedSchema.Validate(decoded); err != nil {
+					return zero, err
+				}
+			}
+			if val == nil {
+				return zero, nil
+			}
+			return val.(To), nil
+		}
+	}
+
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
 		return zero, err
@@ -60,6 +99,16 @@ func ConvertToWithJSONSchema[From, To any](v From, resolvedSchema *jsonschema.Re
 func ValidateWithJSONSchema(v any, resolvedSchema *jsonschema.Resolved) error {
 	if resolvedSchema == nil {
 		return nil
+	}
+	// Performance optimization by Bolt:
+	// If the value is JSON-safe, we can validate it directly and bypass
+	// JSON marshalling and unmarshalling entirely.
+	if isJSONSafe(v) {
+		decoded := v
+		if decoded == nil && schemaExpectsObject(resolvedSchema) {
+			decoded = map[string]any{}
+		}
+		return resolvedSchema.Validate(decoded)
 	}
 	rawArgs, err := json.Marshal(v)
 	if err != nil {
