@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -52,11 +53,46 @@ func (a *apiLauncher) CommandLineSyntax() string {
 
 // Adds CORS headers which allow calling ADK REST API from another web app (like ADK WebUI)
 func corsWithArgs(frontendAddress string) func(next http.Handler) http.Handler {
+	var allowedScheme, allowedHost string
+	if strings.Contains(frontendAddress, "://") {
+		if u, err := url.Parse(frontendAddress); err == nil {
+			allowedScheme = strings.ToLower(u.Scheme)
+			allowedHost = strings.ToLower(u.Host)
+		}
+	} else {
+		allowedHost = strings.TrimSuffix(strings.ToLower(frontendAddress), "/")
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendAddress)
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			u, err := url.Parse(origin)
+			if err != nil {
+				http.Error(w, "Forbidden: Invalid Origin Header", http.StatusForbidden)
+				return
+			}
+			originScheme := strings.ToLower(u.Scheme)
+			originHost := strings.ToLower(u.Host)
+
+			if originHost != allowedHost {
+				http.Error(w, "Forbidden: Origin Not Allowed", http.StatusForbidden)
+				return
+			}
+			if allowedScheme != "" && originScheme != allowedScheme {
+				http.Error(w, "Forbidden: Scheme Mismatch", http.StatusForbidden)
+				return
+			}
+
+			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Vary", "Origin")
+
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
 				return
