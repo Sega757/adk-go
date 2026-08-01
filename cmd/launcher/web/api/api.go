@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -54,7 +55,55 @@ func (a *apiLauncher) CommandLineSyntax() string {
 func corsWithArgs(frontendAddress string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendAddress)
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				// No origin header, allow the request to proceed (standard direct API client)
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Add Vary: Origin to response headers to prevent intermediate caches from poisoning
+			w.Header().Add("Vary", "Origin")
+
+			originURL, err := url.Parse(origin)
+			if err != nil {
+				http.Error(w, "Forbidden: invalid Origin header format", http.StatusForbidden)
+				return
+			}
+
+			originScheme := strings.ToLower(originURL.Scheme)
+			originHost := strings.ToLower(originURL.Host)
+
+			// Parse the configured allowed address
+			var allowedScheme, allowedHost string
+			if strings.Contains(frontendAddress, "://") {
+				allowedURL, err := url.Parse(frontendAddress)
+				if err != nil {
+					http.Error(w, "Internal Server Error: invalid configured webui_address", http.StatusInternalServerError)
+					return
+				}
+				allowedScheme = strings.ToLower(allowedURL.Scheme)
+				allowedHost = strings.ToLower(allowedURL.Host)
+			} else {
+				allowedHost = strings.ToLower(frontendAddress)
+			}
+
+			// Check schemes if configured
+			if allowedScheme != "" {
+				if originScheme != allowedScheme {
+					http.Error(w, "Forbidden: origin scheme mismatch", http.StatusForbidden)
+					return
+				}
+			}
+
+			// Compare hosts
+			if originHost != allowedHost {
+				http.Error(w, "Forbidden: unauthorized origin", http.StatusForbidden)
+				return
+			}
+
+			// Valid CORS request. Set the Access-Control headers.
+			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			if r.Method == "OPTIONS" {
