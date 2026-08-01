@@ -99,7 +99,7 @@ func renderInterruptPrompt(p pendingInterrupt) {
 	default:
 		renderGenericInterruptPrompt(p.name, p.args)
 	}
-	fmt.Print("User -> ")
+	fmt.Print(formatUserPrompt(false))
 }
 
 // buildInterruptResponse converts the operator's one-line input
@@ -134,7 +134,7 @@ func renderWorkflowInputPrompt(args map[string]any) {
 	if msg == "" {
 		msg = "Input requested"
 	}
-	fmt.Printf("Agent -> %s\n", msg)
+	fmt.Printf("%s%s\n", formatAgentPrompt(false), msg)
 	if payload, ok := args["payload"]; ok && payload != nil {
 		// Strings (incl. those that survived a JSON persistence
 		// roundtrip) print raw to avoid the noisy "\"escaped\""
@@ -190,7 +190,7 @@ func renderToolConfirmationPrompt(args map[string]any) {
 		}
 		hint = "Confirm " + originalName + "?"
 	}
-	fmt.Printf("Agent -> %s\n", hint)
+	fmt.Printf("%s%s\n", formatAgentPrompt(false), hint)
 	fmt.Println("  Type 'yes' to confirm, anything else to reject.")
 }
 
@@ -213,7 +213,7 @@ func toolConfirmationResponseFromUserInput(line string) map[string]any {
 // and the raw args so the operator can compose a sensible
 // response by hand.
 func renderGenericInterruptPrompt(name string, args map[string]any) {
-	fmt.Printf("Agent -> waiting for response (kind: %s)\n", name)
+	fmt.Printf("%swaiting for response (kind: %s)\n", formatAgentPrompt(false), name)
 	if len(args) > 0 {
 		if pretty, err := json.Marshal(args); err == nil {
 			fmt.Printf("  Args: %s\n", pretty)

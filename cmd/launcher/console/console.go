@@ -129,17 +129,18 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			inputChan <- userInput
 		}
 	}()
+	// Print a beautiful welcome banner with instructions.
+	printWelcomeBanner()
+
 	// Print an initial newline to work around PTY/exec buffering issues in some environments.
 	fmt.Println()
 
-	fmt.Print("\nUser -> ")
+	fmt.Print(formatUserPrompt(true))
 
 	// Resolve "auto" streaming mode once per session (stdout TTY-ness doesn't change).
 	defaultStreamingMode := l.config.streamingMode
 	if defaultStreamingMode == "" {
-		// Stdlib-only terminal heuristic: stdout is a character device.
-		// Avoids adding golang.org/x/term dependency (golangci-lint failed to load its export data in CI).
-		if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		if isTTY() {
 			defaultStreamingMode = agent.StreamingModeSSE
 		} else {
 			defaultStreamingMode = agent.StreamingModeNone
@@ -164,10 +165,19 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				return nil
 			}
 			log.Fatal(err)
-		case userInput := <-inputChan:
+		case userInput, ok := <-inputChan:
+			if !ok {
+				fmt.Println("\nInput channel closed, exiting...")
+				return nil
+			}
 			// Drop the line terminator the reader keeps, so the message
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
+
+			if len(pendingInterrupts) == 0 && strings.TrimSpace(userInput) == "" {
+				fmt.Print(formatUserPrompt(false))
+				continue
+			}
 
 			var userMsg *genai.Content
 			if len(pendingInterrupts) > 0 {
@@ -201,7 +211,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				streamingMode = defaultStreamingMode
 			}
 
-			fmt.Print("\nAgent -> ")
+			fmt.Print(formatAgentPrompt(true))
 			prevText := ""
 			printedContent := false
 			var finalOutput any
@@ -210,7 +220,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				StreamingMode: streamingMode,
 			}) {
 				if err != nil {
-					fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					if isTTY() {
+						fmt.Printf("\n❌ \033[1;31mAGENT_ERROR\033[0m: %v\n", err)
+					} else {
+						fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					}
 				} else {
 					collectedEvents = append(collectedEvents, event)
 					if event.LLMResponse.Content == nil {
@@ -267,8 +281,62 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			if !printedContent && finalOutput != nil {
 				fmt.Print(renderOutput(finalOutput))
 			}
-			fmt.Print("\nUser -> ")
+			fmt.Print(formatUserPrompt(true))
 		}
+	}
+}
+
+// isTTY returns true if os.Stdout is a character device (TTY).
+// Stdlib-only terminal heuristic avoids adding external terminal dependencies.
+func isTTY() bool {
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		return true
+	}
+	return false
+}
+
+// formatUserPrompt returns a formatted User prompt header.
+func formatUserPrompt(withNewline bool) string {
+	prefix := ""
+	if withNewline {
+		prefix = "\n"
+	}
+	if isTTY() {
+		return prefix + "👤 \033[1;32mUser\033[0m -> "
+	}
+	return prefix + "User -> "
+}
+
+// formatAgentPrompt returns a formatted Agent prompt header.
+func formatAgentPrompt(withNewline bool) string {
+	prefix := ""
+	if withNewline {
+		prefix = "\n"
+	}
+	if isTTY() {
+		return prefix + "🤖 \033[1;34mAgent\033[0m -> "
+	}
+	return prefix + "Agent -> "
+}
+
+// printWelcomeBanner prints a friendly, informative, and high-contrast welcome banner to stdout.
+func printWelcomeBanner() {
+	if isTTY() {
+		fmt.Println("\033[1;36m==================================================\033[0m")
+		fmt.Println("\033[1;32m 🤖 Welcome to the ADK Console Agent Launcher! 🤖\033[0m")
+		fmt.Println("\033[1;36m==================================================\033[0m")
+		fmt.Println(" 👉 \033[1mHow to use:\033[0m")
+		fmt.Println("    • Type your query and press \033[33mEnter\033[0m to chat.")
+		fmt.Println("    • To finish, type \033[31mexit\033[0m, \033[31mquit\033[0m, or press \033[33mCtrl+D\033[0m.")
+		fmt.Println("\033[1;36m--------------------------------------------------\033[0m")
+	} else {
+		fmt.Println("==================================================")
+		fmt.Println("   Welcome to the ADK Console Agent Launcher!     ")
+		fmt.Println("==================================================")
+		fmt.Println(" How to use:")
+		fmt.Println("    • Type your query and press Enter to chat.")
+		fmt.Println("    • To finish, type 'exit', 'quit', or press Ctrl+D.")
+		fmt.Println("--------------------------------------------------")
 	}
 }
 
