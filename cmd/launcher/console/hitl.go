@@ -17,6 +17,7 @@ package console
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"google.golang.org/genai"
@@ -99,7 +100,15 @@ func renderInterruptPrompt(p pendingInterrupt) {
 	default:
 		renderGenericInterruptPrompt(p.name, p.args)
 	}
-	fmt.Print("User -> ")
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+	if isTTY {
+		fmt.Print("\033[1;36m👤 User ->\033[0m ")
+	} else {
+		fmt.Print("User -> ")
+	}
 }
 
 // buildInterruptResponse converts the operator's one-line input
@@ -134,8 +143,20 @@ func renderWorkflowInputPrompt(args map[string]any) {
 	if msg == "" {
 		msg = "Input requested"
 	}
-	fmt.Printf("Agent -> %s\n", msg)
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+	if isTTY {
+		fmt.Printf("\033[1;32m🤖 Agent -> %s\033[0m\n", msg)
+	} else {
+		fmt.Printf("Agent -> %s\n", msg)
+	}
 	if payload, ok := args["payload"]; ok && payload != nil {
+		label := "  Payload:"
+		if isTTY {
+			label = "  \033[1;33mPayload:\033[0m"
+		}
 		// Strings (incl. those that survived a JSON persistence
 		// roundtrip) print raw to avoid the noisy "\"escaped\""
 		// form. Other values render as pretty JSON aligned under
@@ -144,16 +165,20 @@ func renderWorkflowInputPrompt(args map[string]any) {
 		// and indent="  " adds two spaces per nesting level — so
 		// top-level keys sit two columns inside the opening brace.
 		if s, ok := payload.(string); ok {
-			fmt.Printf("  Payload: %s\n", s)
+			fmt.Printf("%s %s\n", label, s)
 		} else if pretty, err := json.MarshalIndent(payload, "  ", "  "); err == nil {
-			fmt.Printf("  Payload: %s\n", pretty)
+			fmt.Printf("%s %s\n", label, pretty)
 		} else {
-			fmt.Printf("  Payload: %v\n", payload)
+			fmt.Printf("%s %v\n", label, payload)
 		}
 	}
 	if schema, ok := args["responseSchema"]; ok && schema != nil {
+		label := "  Expected response schema:"
+		if isTTY {
+			label = "  \033[1;33mExpected response schema:\033[0m"
+		}
 		if pretty, err := json.Marshal(schema); err == nil {
-			fmt.Printf("  Expected response schema: %s\n", pretty)
+			fmt.Printf("%s %s\n", label, pretty)
 		}
 	}
 }
@@ -190,8 +215,17 @@ func renderToolConfirmationPrompt(args map[string]any) {
 		}
 		hint = "Confirm " + originalName + "?"
 	}
-	fmt.Printf("Agent -> %s\n", hint)
-	fmt.Println("  Type 'yes' to confirm, anything else to reject.")
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+	if isTTY {
+		fmt.Printf("\033[1;32m🤖 Agent -> %s\033[0m\n", hint)
+		fmt.Println("  Type '\033[1myes\033[0m' to confirm, anything else to reject.")
+	} else {
+		fmt.Printf("Agent -> %s\n", hint)
+		fmt.Println("  Type 'yes' to confirm, anything else to reject.")
+	}
 }
 
 // toolConfirmationResponseFromUserInput maps yes-ish answers
@@ -213,12 +247,24 @@ func toolConfirmationResponseFromUserInput(line string) map[string]any {
 // and the raw args so the operator can compose a sensible
 // response by hand.
 func renderGenericInterruptPrompt(name string, args map[string]any) {
-	fmt.Printf("Agent -> waiting for response (kind: %s)\n", name)
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+	if isTTY {
+		fmt.Printf("\033[1;32m🤖 Agent -> waiting for response (kind: %s)\033[0m\n", name)
+	} else {
+		fmt.Printf("Agent -> waiting for response (kind: %s)\n", name)
+	}
 	if len(args) > 0 {
+		label := "  Args:"
+		if isTTY {
+			label = "  \033[1;33mArgs:\033[0m"
+		}
 		if pretty, err := json.Marshal(args); err == nil {
-			fmt.Printf("  Args: %s\n", pretty)
+			fmt.Printf("%s %s\n", label, pretty)
 		} else {
-			fmt.Printf("  Args: %v\n", args)
+			fmt.Printf("%s %v\n", label, args)
 		}
 	}
 }
