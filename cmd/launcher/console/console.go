@@ -40,6 +40,14 @@ import (
 	"google.golang.org/adk/v2/session"
 )
 
+var isStdoutTTY bool
+
+func init() {
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isStdoutTTY = true
+	}
+}
+
 // consoleConfig contains command-line params for console launcher
 type consoleConfig struct {
 	streamingMode       agent.StreamingMode
@@ -119,10 +127,14 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	readErrChan := make(chan error, 1)
 
 	go func() {
+		defer close(inputChan)
 		reader := bufio.NewReader(os.Stdin)
 		for {
 			userInput, err := reader.ReadString('\n')
 			if err != nil {
+				if userInput != "" {
+					inputChan <- userInput
+				}
 				readErrChan <- err
 				return
 			}
@@ -132,14 +144,32 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	// Print an initial newline to work around PTY/exec buffering issues in some environments.
 	fmt.Println()
 
-	fmt.Print("\nUser -> ")
+	if isStdoutTTY {
+		fmt.Println("\033[1;36m==================================================\033[0m")
+		fmt.Println("\033[1;36m🤖 Welcome to the ADK Console Launcher!           \033[0m")
+		fmt.Println("\033[36m👉 Type your message and press Enter to chat.      \033[0m")
+		fmt.Println("\033[36m👉 Press Ctrl+D (EOF) or Ctrl+C to exit.          \033[0m")
+		fmt.Println("\033[1;36m==================================================\033[0m")
+	} else {
+		fmt.Println("==================================================")
+		fmt.Println("Welcome to the ADK Console Launcher!")
+		fmt.Println("Type your message and press Enter to chat.")
+		fmt.Println("Press Ctrl+D (EOF) or Ctrl+C to exit.")
+		fmt.Println("==================================================")
+	}
+
+	if isStdoutTTY {
+		fmt.Print("\n\033[1;32m👤 User -> \033[0m")
+	} else {
+		fmt.Print("\nUser -> ")
+	}
 
 	// Resolve "auto" streaming mode once per session (stdout TTY-ness doesn't change).
 	defaultStreamingMode := l.config.streamingMode
 	if defaultStreamingMode == "" {
 		// Stdlib-only terminal heuristic: stdout is a character device.
 		// Avoids adding golang.org/x/term dependency (golangci-lint failed to load its export data in CI).
-		if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		if isStdoutTTY {
 			defaultStreamingMode = agent.StreamingModeSSE
 		} else {
 			defaultStreamingMode = agent.StreamingModeNone
@@ -158,16 +188,36 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 		select {
 		case <-ctx.Done():
 			return nil
-		case err := <-readErrChan:
+		case err, ok := <-readErrChan:
+			if !ok {
+				return nil
+			}
 			if errors.Is(err, io.EOF) {
-				fmt.Println("\nEOF detected, exiting...")
+				if isStdoutTTY {
+					fmt.Println("\n\033[36mEOF detected, exiting...\033[0m")
+				} else {
+					fmt.Println("\nEOF detected, exiting...")
+				}
 				return nil
 			}
 			log.Fatal(err)
-		case userInput := <-inputChan:
+		case userInput, ok := <-inputChan:
+			if !ok {
+				return nil
+			}
 			// Drop the line terminator the reader keeps, so the message
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
+
+			// Safely ignore empty/whitespace-only input to prevent redundant API/agent calls
+			if strings.TrimSpace(userInput) == "" {
+				if isStdoutTTY {
+					fmt.Print("\033[1;32m👤 User -> \033[0m")
+				} else {
+					fmt.Print("User -> ")
+				}
+				continue
+			}
 
 			var userMsg *genai.Content
 			if len(pendingInterrupts) > 0 {
@@ -201,7 +251,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				streamingMode = defaultStreamingMode
 			}
 
-			fmt.Print("\nAgent -> ")
+			if isStdoutTTY {
+				fmt.Print("\n\033[1;34m🤖 Agent -> \033[0m")
+			} else {
+				fmt.Print("\nAgent -> ")
+			}
 			prevText := ""
 			printedContent := false
 			var finalOutput any
@@ -210,7 +264,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				StreamingMode: streamingMode,
 			}) {
 				if err != nil {
-					fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					if isStdoutTTY {
+						fmt.Printf("\n\033[1;31m🚨 AGENT_ERROR: %v\033[0m\n", err)
+					} else {
+						fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					}
 				} else {
 					collectedEvents = append(collectedEvents, event)
 					if event.LLMResponse.Content == nil {
@@ -267,7 +325,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			if !printedContent && finalOutput != nil {
 				fmt.Print(renderOutput(finalOutput))
 			}
-			fmt.Print("\nUser -> ")
+			if isStdoutTTY {
+				fmt.Print("\n\033[1;32m👤 User -> \033[0m")
+			} else {
+				fmt.Print("\nUser -> ")
+			}
 		}
 	}
 }
