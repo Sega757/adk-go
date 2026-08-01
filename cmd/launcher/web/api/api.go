@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -50,13 +51,48 @@ func (a *apiLauncher) CommandLineSyntax() string {
 	return util.FormatFlagUsage(a.flags)
 }
 
-// Adds CORS headers which allow calling ADK REST API from another web app (like ADK WebUI)
+// Adds CORS headers which allow calling ADK REST API from another web app (like ADK WebUI).
+// It dynamically validates incoming request Origin headers against the configured frontendAddress
+// (supporting both schemed and scheme-less formats), strictly enforcing matching schemes if configured
+// (preventing cross-scheme CORS bypass), applying Vary: Origin to mitigate cache poisoning,
+// and securely rejecting invalid or unmatched origins with 403 Forbidden.
 func corsWithArgs(frontendAddress string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendAddress)
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			originURL, err := url.Parse(origin)
+			if err != nil || originURL.Scheme == "" || originURL.Host == "" {
+				http.Error(w, "Invalid Origin header", http.StatusForbidden)
+				return
+			}
+
+			allowed := false
+			if strings.Contains(frontendAddress, "://") {
+				configURL, err := url.Parse(frontendAddress)
+				if err == nil && originURL.Scheme == configURL.Scheme && originURL.Host == configURL.Host {
+					allowed = true
+				}
+			} else {
+				if originURL.Host == frontendAddress {
+					allowed = true
+				}
+			}
+
+			if !allowed {
+				http.Error(w, "Origin not allowed", http.StatusForbidden)
+				return
+			}
+
+			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Add("Vary", "Origin")
+
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
 				return
