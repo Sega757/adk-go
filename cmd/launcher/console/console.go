@@ -129,17 +129,33 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			inputChan <- userInput
 		}
 	}()
+
+	isTTY := false
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		isTTY = true
+	}
+
 	// Print an initial newline to work around PTY/exec buffering issues in some environments.
 	fmt.Println()
+
+	if isTTY {
+		fmt.Println("\033[1;35m✨ Welcome to the Agent Development Kit (ADK) Console! ✨\033[0m")
+		fmt.Println("\033[1;36m---------------------------------------------------\033[0m")
+		fmt.Println("Interactive session started. Talk to your agent below.")
+		fmt.Println("Type your message and press \033[1mEnter\033[0m to send.")
+		fmt.Println("Press \033[1mCtrl+D\033[0m (EOF) or \033[1mCtrl+C\033[0m to exit.")
+		fmt.Println("\033[1;36m---------------------------------------------------\033[0m")
+	} else {
+		fmt.Println("Welcome to the Agent Development Kit (ADK) Console!")
+		fmt.Println("Interactive session started. Press Ctrl+D or Ctrl+C to exit.")
+	}
 
 	fmt.Print("\nUser -> ")
 
 	// Resolve "auto" streaming mode once per session (stdout TTY-ness doesn't change).
 	defaultStreamingMode := l.config.streamingMode
 	if defaultStreamingMode == "" {
-		// Stdlib-only terminal heuristic: stdout is a character device.
-		// Avoids adding golang.org/x/term dependency (golangci-lint failed to load its export data in CI).
-		if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		if isTTY {
 			defaultStreamingMode = agent.StreamingModeSSE
 		} else {
 			defaultStreamingMode = agent.StreamingModeNone
