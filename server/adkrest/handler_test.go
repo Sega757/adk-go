@@ -12,33 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package web_test
+package adkrest_test
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"google.golang.org/adk/v2/cmd/launcher/web"
+	"google.golang.org/adk/server/adkrest"
+	"google.golang.org/adk/session"
 )
 
-func TestBuildBaseRouter_SecurityHeaders(t *testing.T) {
-	router := web.BuildBaseRouter()
+func TestNewServer_SecurityHeaders(t *testing.T) {
+	cfg := adkrest.ServerConfig{
+		SessionService: session.InMemoryService(),
+	}
+	server, err := adkrest.NewServer(cfg)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 
-	// Register a dummy endpoint
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/apps/test/users/test/sessions", nil)
 	rr := httptest.NewRecorder()
 
-	router.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status OK, got %d", rr.Code)
-	}
+	server.ServeHTTP(rr, req)
 
 	headers := []struct {
 		key   string
