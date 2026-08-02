@@ -119,6 +119,7 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	readErrChan := make(chan error, 1)
 
 	go func() {
+		defer close(inputChan)
 		reader := bufio.NewReader(os.Stdin)
 		for {
 			userInput, err := reader.ReadString('\n')
@@ -132,18 +133,35 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	// Print an initial newline to work around PTY/exec buffering issues in some environments.
 	fmt.Println()
 
-	fmt.Print("\nUser -> ")
+	// Show welcome banner instructing users how to chat and exit.
+	if isTerminal() {
+		fmt.Println("\033[1;36m========================================================\033[0m")
+		fmt.Println("\033[1;32m  Welcome to ADK Console! Let's chat with your agent.  \033[0m")
+		fmt.Println("\033[1;33m  Type your message and press Enter. To exit, press Ctrl+C.\033[0m")
+		fmt.Println("\033[1;36m========================================================\033[0m")
+	} else {
+		fmt.Println("========================================================")
+		fmt.Println("  Welcome to ADK Console! Let's chat with your agent.")
+		fmt.Println("  Type your message and press Enter. To exit, press Ctrl+C.")
+		fmt.Println("========================================================")
+	}
 
 	// Resolve "auto" streaming mode once per session (stdout TTY-ness doesn't change).
 	defaultStreamingMode := l.config.streamingMode
 	if defaultStreamingMode == "" {
 		// Stdlib-only terminal heuristic: stdout is a character device.
 		// Avoids adding golang.org/x/term dependency (golangci-lint failed to load its export data in CI).
-		if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		if isTerminal() {
 			defaultStreamingMode = agent.StreamingModeSSE
 		} else {
 			defaultStreamingMode = agent.StreamingModeNone
 		}
+	}
+
+	if isTerminal() {
+		fmt.Print("\n\033[1;32mUser 👤 ->\033[0m ")
+	} else {
+		fmt.Print("\nUser -> ")
 	}
 
 	// pendingInterrupts carries human-input prompts the agent
@@ -164,10 +182,22 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				return nil
 			}
 			log.Fatal(err)
-		case userInput := <-inputChan:
+		case userInput, ok := <-inputChan:
+			if !ok {
+				return nil
+			}
 			// Drop the line terminator the reader keeps, so the message
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
+
+			if len(pendingInterrupts) == 0 && strings.TrimSpace(userInput) == "" {
+				if isTerminal() {
+					fmt.Print("\033[1;32mUser 👤 ->\033[0m ")
+				} else {
+					fmt.Print("User -> ")
+				}
+				continue
+			}
 
 			var userMsg *genai.Content
 			if len(pendingInterrupts) > 0 {
@@ -201,7 +231,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				streamingMode = defaultStreamingMode
 			}
 
-			fmt.Print("\nAgent -> ")
+			if isTerminal() {
+				fmt.Print("\n\033[1;36mAgent 🤖 ->\033[0m ")
+			} else {
+				fmt.Print("\nAgent -> ")
+			}
 			prevText := ""
 			printedContent := false
 			var finalOutput any
@@ -210,7 +244,11 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				StreamingMode: streamingMode,
 			}) {
 				if err != nil {
-					fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					if isTerminal() {
+						fmt.Printf("\n\033[1;31mError ❌ -> %v\033[0m\n", err)
+					} else {
+						fmt.Printf("\nAGENT_ERROR: %v\n", err)
+					}
 				} else {
 					collectedEvents = append(collectedEvents, event)
 					if event.LLMResponse.Content == nil {
@@ -267,9 +305,21 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			if !printedContent && finalOutput != nil {
 				fmt.Print(renderOutput(finalOutput))
 			}
-			fmt.Print("\nUser -> ")
+			if isTerminal() {
+				fmt.Print("\n\033[1;32mUser 👤 ->\033[0m ")
+			} else {
+				fmt.Print("\nUser -> ")
+			}
 		}
 	}
+}
+
+// isTerminal returns true if stdout is a character device (TTY).
+func isTerminal() bool {
+	if fi, err := os.Stdout.Stat(); err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+		return true
+	}
+	return false
 }
 
 // renderOutput formats a node's Output value for the console: strings
