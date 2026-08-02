@@ -16,6 +16,8 @@ package metacore_test
 
 import (
 	"errors"
+	"math"
+	"strings"
 	"testing"
 
 	"google.golang.org/adk/v2/internal/metacore"
@@ -326,5 +328,83 @@ func TestDegradationModes(t *testing.T) {
 	}
 	if v3.CurrentMode != metacore.ModeEmpathyOverride {
 		t.Errorf("Expected Empathy Override, got %s", v3.CurrentMode)
+	}
+}
+
+func TestSecureInputValidation(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+
+	// 1. Nil decision packet
+	_, err := v.ValidatePipeline(nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "nil decision packet") {
+		t.Errorf("Expected nil decision packet error, got: %v", err)
+	}
+
+	// 2. NaN Confidence score
+	packetNaN := &metacore.DecisionPacket{
+		Goal:       "normal goal",
+		Plan:       []string{"step 1"},
+		Confidence: math.NaN(),
+	}
+	_, err = v.ValidatePipeline(packetNaN, nil)
+	if err == nil || !strings.Contains(err.Error(), "invalid out-of-bounds or NaN confidence score") {
+		t.Errorf("Expected NaN confidence score error, got: %v", err)
+	}
+
+	// 3. Out-of-bounds Confidence score (negative)
+	packetNeg := &metacore.DecisionPacket{
+		Goal:       "normal goal",
+		Plan:       []string{"step 1"},
+		Confidence: -0.1,
+	}
+	_, err = v.ValidatePipeline(packetNeg, nil)
+	if err == nil || !strings.Contains(err.Error(), "invalid out-of-bounds or NaN confidence score") {
+		t.Errorf("Expected negative confidence score error, got: %v", err)
+	}
+
+	// 4. Out-of-bounds Confidence score (too large)
+	packetLarge := &metacore.DecisionPacket{
+		Goal:       "normal goal",
+		Plan:       []string{"step 1"},
+		Confidence: 1.1,
+	}
+	_, err = v.ValidatePipeline(packetLarge, nil)
+	if err == nil || !strings.Contains(err.Error(), "invalid out-of-bounds or NaN confidence score") {
+		t.Errorf("Expected too large confidence score error, got: %v", err)
+	}
+
+	// 5. NaN Empathy VulnerabilityScore
+	packetOk := &metacore.DecisionPacket{
+		Goal:       "normal goal",
+		Plan:       []string{"step 1"},
+		Confidence: 0.8,
+	}
+	empathyNaN := &metacore.EmpathyOutput{
+		Status:             "pass",
+		VulnerabilityScore: math.NaN(),
+	}
+	_, err = v.ValidatePipeline(packetOk, empathyNaN)
+	if err == nil || !strings.Contains(err.Error(), "invalid out-of-bounds or NaN vulnerability score") {
+		t.Errorf("Expected NaN vulnerability score error, got: %v", err)
+	}
+
+	// 6. Out-of-bounds Empathy VulnerabilityScore (negative)
+	empathyNeg := &metacore.EmpathyOutput{
+		Status:             "pass",
+		VulnerabilityScore: -0.5,
+	}
+	_, err = v.ValidatePipeline(packetOk, empathyNeg)
+	if err == nil || !strings.Contains(err.Error(), "invalid out-of-bounds or NaN vulnerability score") {
+		t.Errorf("Expected negative vulnerability score error, got: %v", err)
+	}
+
+	// 7. Out-of-bounds Empathy VulnerabilityScore (too large)
+	empathyLarge := &metacore.EmpathyOutput{
+		Status:             "pass",
+		VulnerabilityScore: 1.5,
+	}
+	_, err = v.ValidatePipeline(packetOk, empathyLarge)
+	if err == nil || !strings.Contains(err.Error(), "invalid out-of-bounds or NaN vulnerability score") {
+		t.Errorf("Expected too large vulnerability score error, got: %v", err)
 	}
 }

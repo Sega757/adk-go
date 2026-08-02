@@ -17,6 +17,7 @@ package metacore
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -80,6 +81,23 @@ func (v *Validator) EvaluateAlignment(rVal, eSaf, kSaf float64) (float64, string
 
 // ValidatePipeline executes the three-layer META-CORE validation flow.
 func (v *Validator) ValidatePipeline(packet *DecisionPacket, empathy *EmpathyOutput) (*KillSwitchOutput, error) {
+	// Prevent nil pointer dereference
+	if packet == nil {
+		return nil, errors.New("invalid nil decision packet")
+	}
+
+	// Prevent out-of-bound numerical states and NaN bypass on Confidence
+	if math.IsNaN(packet.Confidence) || packet.Confidence < 0.0 || packet.Confidence > 1.0 {
+		return nil, errors.New("invalid out-of-bounds or NaN confidence score")
+	}
+
+	// Prevent out-of-bound numerical states and NaN bypass on VulnerabilityScore for provided empathy input
+	if empathy != nil {
+		if math.IsNaN(empathy.VulnerabilityScore) || empathy.VulnerabilityScore < 0.0 || empathy.VulnerabilityScore > 1.0 {
+			return nil, errors.New("invalid out-of-bounds or NaN vulnerability score")
+		}
+	}
+
 	// Verify core principle: R cannot block or modify. R must only generate the plan.
 	// If the packet attempts to self-bypass or contains block/modify instructions, reject.
 	if strings.Contains(strings.ToLower(packet.Goal), "bypass") || strings.Contains(strings.ToLower(packet.Goal), "disable safety") {
