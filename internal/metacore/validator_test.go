@@ -16,6 +16,7 @@ package metacore_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"google.golang.org/adk/v2/internal/metacore"
@@ -82,6 +83,77 @@ func TestBypassViolationR(t *testing.T) {
 	_, err := v.ValidatePipeline(packet, nil)
 	if !errors.Is(err, metacore.ErrRCannotBlockOrModify) {
 		t.Errorf("Expected ErrRCannotBlockOrModify, got %v", err)
+	}
+}
+
+func TestValidationBoundaryAndNaNChecks(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+
+	// Test nil decision packet
+	_, err := v.ValidatePipeline(nil, nil)
+	if !errors.Is(err, metacore.ErrNilDecisionPacket) {
+		t.Errorf("expected ErrNilDecisionPacket, got %v", err)
+	}
+
+	// Test NaN confidence
+	pNaN := &metacore.DecisionPacket{
+		Goal:       "valid goal",
+		Confidence: math.NaN(),
+	}
+	_, err = v.ValidatePipeline(pNaN, nil)
+	if !errors.Is(err, metacore.ErrInvalidConfidence) {
+		t.Errorf("expected ErrInvalidConfidence for NaN, got %v", err)
+	}
+
+	// Test confidence < 0.0
+	pLow := &metacore.DecisionPacket{
+		Goal:       "valid goal",
+		Confidence: -0.1,
+	}
+	_, err = v.ValidatePipeline(pLow, nil)
+	if !errors.Is(err, metacore.ErrInvalidConfidence) {
+		t.Errorf("expected ErrInvalidConfidence for < 0.0, got %v", err)
+	}
+
+	// Test confidence > 1.0
+	pHigh := &metacore.DecisionPacket{
+		Goal:       "valid goal",
+		Confidence: 1.1,
+	}
+	_, err = v.ValidatePipeline(pHigh, nil)
+	if !errors.Is(err, metacore.ErrInvalidConfidence) {
+		t.Errorf("expected ErrInvalidConfidence for > 1.0, got %v", err)
+	}
+
+	// Test NaN empathy vulnerability score
+	pOk := &metacore.DecisionPacket{
+		Goal:       "valid goal",
+		Confidence: 0.8,
+	}
+	eNaN := &metacore.EmpathyOutput{
+		VulnerabilityScore: math.NaN(),
+	}
+	_, err = v.ValidatePipeline(pOk, eNaN)
+	if !errors.Is(err, metacore.ErrInvalidVulnerability) {
+		t.Errorf("expected ErrInvalidVulnerability for NaN score, got %v", err)
+	}
+
+	// Test empathy vulnerability score < 0.0
+	eLow := &metacore.EmpathyOutput{
+		VulnerabilityScore: -0.05,
+	}
+	_, err = v.ValidatePipeline(pOk, eLow)
+	if !errors.Is(err, metacore.ErrInvalidVulnerability) {
+		t.Errorf("expected ErrInvalidVulnerability for < 0.0 score, got %v", err)
+	}
+
+	// Test empathy vulnerability score > 1.0
+	eHigh := &metacore.EmpathyOutput{
+		VulnerabilityScore: 1.05,
+	}
+	_, err = v.ValidatePipeline(pOk, eHigh)
+	if !errors.Is(err, metacore.ErrInvalidVulnerability) {
+		t.Errorf("expected ErrInvalidVulnerability for > 1.0 score, got %v", err)
 	}
 }
 
