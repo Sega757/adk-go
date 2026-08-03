@@ -90,16 +90,16 @@ func collectPendingInterrupts(events []*session.Event) []pendingInterrupt {
 // renderInterruptPrompt prints the pending interrupt and a
 // "User -> " input prompt to stdout. The caller reads the user's
 // reply and passes it to buildInterruptResponse.
-func renderInterruptPrompt(p pendingInterrupt) {
+func renderInterruptPrompt(p pendingInterrupt, tty bool) {
 	switch p.name {
 	case workflow.WorkflowInputFunctionCallName:
-		renderWorkflowInputPrompt(p.args)
+		renderWorkflowInputPrompt(p.args, tty)
 	case toolconfirmation.FunctionCallName:
-		renderToolConfirmationPrompt(p.args)
+		renderToolConfirmationPrompt(p.args, tty)
 	default:
-		renderGenericInterruptPrompt(p.name, p.args)
+		renderGenericInterruptPrompt(p.name, p.args, tty)
 	}
-	fmt.Print("User -> ")
+	printUserPrompt(tty)
 }
 
 // buildInterruptResponse converts the operator's one-line input
@@ -129,12 +129,16 @@ func buildInterruptResponse(p pendingInterrupt, userInput string) *genai.Part {
 // renderWorkflowInputPrompt prints the workflow request prompt.
 // Args carry the fields populated by workflow.NewRequestInputEvent:
 // interruptId, message, payload, responseSchema.
-func renderWorkflowInputPrompt(args map[string]any) {
+func renderWorkflowInputPrompt(args map[string]any, tty bool) {
 	msg, _ := args["message"].(string)
 	if msg == "" {
 		msg = "Input requested"
 	}
-	fmt.Printf("Agent -> %s\n", msg)
+	if tty {
+		fmt.Printf("\033[1;33m🤝 HITL -> %s\033[0m\n", msg)
+	} else {
+		fmt.Printf("Agent -> %s\n", msg)
+	}
 	if payload, ok := args["payload"]; ok && payload != nil {
 		// Strings (incl. those that survived a JSON persistence
 		// roundtrip) print raw to avoid the noisy "\"escaped\""
@@ -178,7 +182,7 @@ func workflowInputResponseFromUserInput(line string) map[string]any {
 // renderToolConfirmationPrompt prints the tool-confirmation
 // prompt, falling back to the original tool name when no hint is
 // provided.
-func renderToolConfirmationPrompt(args map[string]any) {
+func renderToolConfirmationPrompt(args map[string]any, tty bool) {
 	hint := ""
 	if tc, ok := args["toolConfirmation"].(map[string]any); ok {
 		hint, _ = tc["hint"].(string)
@@ -190,7 +194,11 @@ func renderToolConfirmationPrompt(args map[string]any) {
 		}
 		hint = "Confirm " + originalName + "?"
 	}
-	fmt.Printf("Agent -> %s\n", hint)
+	if tty {
+		fmt.Printf("\033[1;33m🤝 HITL -> %s\033[0m\n", hint)
+	} else {
+		fmt.Printf("Agent -> %s\n", hint)
+	}
 	fmt.Println("  Type 'yes' to confirm, anything else to reject.")
 }
 
@@ -212,8 +220,12 @@ func toolConfirmationResponseFromUserInput(line string) map[string]any {
 // launcher does not specifically recognise. Prints the kind name
 // and the raw args so the operator can compose a sensible
 // response by hand.
-func renderGenericInterruptPrompt(name string, args map[string]any) {
-	fmt.Printf("Agent -> waiting for response (kind: %s)\n", name)
+func renderGenericInterruptPrompt(name string, args map[string]any, tty bool) {
+	if tty {
+		fmt.Printf("\033[1;33m🤝 HITL -> waiting for response (kind: %s)\033[0m\n", name)
+	} else {
+		fmt.Printf("Agent -> waiting for response (kind: %s)\n", name)
+	}
 	if len(args) > 0 {
 		if pretty, err := json.Marshal(args); err == nil {
 			fmt.Printf("  Args: %s\n", pretty)
