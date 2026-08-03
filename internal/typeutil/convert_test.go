@@ -110,3 +110,145 @@ func TestConvertToWithJSONSchema_NoSchemaSkipsValidation(t *testing.T) {
 		t.Errorf("got %v, want nil", got)
 	}
 }
+
+// TestConvertToWithJSONSchema_FastPaths checks the fast-path for string, float64, bool, and untyped nil.
+func TestConvertToWithJSONSchema_FastPaths(t *testing.T) {
+	t.Run("string", func(t *testing.T) {
+		schema := mustResolve[string](t)
+		got, err := ConvertToWithJSONSchema[string, string]("test", schema)
+		if err != nil {
+			t.Fatalf("fast-path string conversion failed: %v", err)
+		}
+		if got != "test" {
+			t.Errorf("got %q, want 'test'", got)
+		}
+	})
+
+	t.Run("float64", func(t *testing.T) {
+		schema := mustResolve[float64](t)
+		got, err := ConvertToWithJSONSchema[float64, float64](123.45, schema)
+		if err != nil {
+			t.Fatalf("fast-path float64 conversion failed: %v", err)
+		}
+		if got != 123.45 {
+			t.Errorf("got %f, want 123.45", got)
+		}
+	})
+
+	t.Run("bool", func(t *testing.T) {
+		schema := mustResolve[bool](t)
+		got, err := ConvertToWithJSONSchema[bool, bool](true, schema)
+		if err != nil {
+			t.Fatalf("fast-path bool conversion failed: %v", err)
+		}
+		if !got {
+			t.Errorf("got %t, want true", got)
+		}
+	})
+
+	t.Run("untyped nil", func(t *testing.T) {
+		schema := mustResolve[any](t)
+		got, err := ConvertToWithJSONSchema[any, any](nil, schema)
+		if err != nil {
+			t.Fatalf("fast-path untyped nil conversion failed: %v", err)
+		}
+		if got != nil {
+			t.Errorf("got %v, want nil", got)
+		}
+	})
+
+	t.Run("typed nil pointer", func(t *testing.T) {
+		schema := mustResolve[*string](t)
+		var in *string
+		got, err := ConvertToWithJSONSchema[*string, *string](in, schema)
+		if err != nil {
+			t.Fatalf("typed nil pointer conversion failed: %v", err)
+		}
+		if got != nil {
+			t.Errorf("got %v, want nil pointer", got)
+		}
+	})
+}
+
+// TestValidateWithJSONSchema_FastPaths checks ValidateWithJSONSchema fast-paths.
+func TestValidateWithJSONSchema_FastPaths(t *testing.T) {
+	t.Run("string", func(t *testing.T) {
+		schema := mustResolve[string](t)
+		if err := ValidateWithJSONSchema("test", schema); err != nil {
+			t.Fatalf("fast-path string validation failed: %v", err)
+		}
+	})
+
+	t.Run("float64", func(t *testing.T) {
+		schema := mustResolve[float64](t)
+		if err := ValidateWithJSONSchema(123.45, schema); err != nil {
+			t.Fatalf("fast-path float64 validation failed: %v", err)
+		}
+	})
+
+	t.Run("bool", func(t *testing.T) {
+		schema := mustResolve[bool](t)
+		if err := ValidateWithJSONSchema(true, schema); err != nil {
+			t.Fatalf("fast-path bool validation failed: %v", err)
+		}
+	})
+
+	t.Run("untyped nil", func(t *testing.T) {
+		schema := mustResolve[any](t)
+		if err := ValidateWithJSONSchema(nil, schema); err != nil {
+			t.Fatalf("fast-path untyped nil validation failed: %v", err)
+		}
+	})
+
+	t.Run("typed nil pointer", func(t *testing.T) {
+		schema := mustResolve[*string](t)
+		var in *string
+		if err := ValidateWithJSONSchema(in, schema); err != nil {
+			t.Fatalf("typed nil pointer validation failed: %v", err)
+		}
+	})
+}
+
+func BenchmarkConvertToWithJSONSchema_FastPath_String(b *testing.B) {
+	s, _ := jsonschema.For[string](nil)
+	schema, _ := s.Resolve(nil)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ConvertToWithJSONSchema[string, string]("hello", schema)
+	}
+}
+
+func BenchmarkConvertToWithJSONSchema_SlowPath_Struct(b *testing.B) {
+	type testStruct struct {
+		Field string `json:"field"`
+	}
+	s, _ := jsonschema.For[testStruct](nil)
+	schema, _ := s.Resolve(nil)
+	val := testStruct{Field: "hello"}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ConvertToWithJSONSchema[testStruct, testStruct](val, schema)
+	}
+}
+
+func BenchmarkValidateWithJSONSchema_FastPath_String(b *testing.B) {
+	s, _ := jsonschema.For[string](nil)
+	schema, _ := s.Resolve(nil)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ValidateWithJSONSchema("hello", schema)
+	}
+}
+
+func BenchmarkValidateWithJSONSchema_SlowPath_Struct(b *testing.B) {
+	type testStruct struct {
+		Field string `json:"field"`
+	}
+	s, _ := jsonschema.For[testStruct](nil)
+	schema, _ := s.Resolve(nil)
+	val := testStruct{Field: "hello"}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ValidateWithJSONSchema(val, schema)
+	}
+}
