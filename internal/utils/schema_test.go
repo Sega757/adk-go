@@ -206,6 +206,31 @@ func TestMatchType(t *testing.T) {
 	}
 }
 
+func BenchmarkValidateMapOnSchema_NilProperties(b *testing.B) {
+	schema := &genai.Schema{
+		Type: genai.TypeObject,
+	}
+	args := map[string]any{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ValidateMapOnSchema(args, schema, true)
+	}
+}
+
+func BenchmarkValidateMapOnSchema_WithProperties(b *testing.B) {
+	schema := &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"str_field": {Type: genai.TypeString},
+		},
+	}
+	args := map[string]any{"str_field": "hello"}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ValidateMapOnSchema(args, schema, true)
+	}
+}
+
 func TestValidateMapOnSchema(t *testing.T) {
 	schema := &genai.Schema{
 		Type: genai.TypeObject,

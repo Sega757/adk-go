@@ -87,10 +87,9 @@ func ValidateMapOnSchema(args map[string]any, schema *genai.Schema, isInput bool
 		return fmt.Errorf("schema cannot be nil")
 	}
 
+	// Performance-optimized by Bolt: Skip redundant map allocation when schema.Properties is nil.
+	// In Go, reading from a nil map (e.g. properties[key]) is safe and returns the zero value and false.
 	properties := schema.Properties
-	if properties == nil {
-		properties = make(map[string]*genai.Schema)
-	}
 
 	argType := "input"
 	if !isInput {
