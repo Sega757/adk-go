@@ -137,12 +137,12 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	if isTerminal() {
 		fmt.Println("\033[1;36m========================================================\033[0m")
 		fmt.Println("\033[1;32m  Welcome to ADK Console! Let's chat with your agent.  \033[0m")
-		fmt.Println("\033[1;33m  Type your message and press Enter. To exit, press Ctrl+C.\033[0m")
+		fmt.Println("\033[1;33m  Type your message and press Enter. To exit, press Ctrl+C or type /exit.\033[0m")
 		fmt.Println("\033[1;36m========================================================\033[0m")
 	} else {
 		fmt.Println("========================================================")
 		fmt.Println("  Welcome to ADK Console! Let's chat with your agent.")
-		fmt.Println("  Type your message and press Enter. To exit, press Ctrl+C.")
+		fmt.Println("  Type your message and press Enter. To exit, press Ctrl+C or type /exit.")
 		fmt.Println("========================================================")
 	}
 
@@ -185,6 +185,55 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			// Drop the line terminator the reader keeps, so the message
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
+
+			if len(pendingInterrupts) == 0 {
+				cmd := strings.TrimSpace(userInput)
+				if strings.HasPrefix(cmd, "/") {
+					switch cmd {
+					case "/exit", "/quit":
+						if isTerminal() {
+							fmt.Println("\033[1;33mGoodbye! 👋\033[0m")
+						} else {
+							fmt.Println("Goodbye! 👋")
+						}
+						return nil
+					case "/clear":
+						if isTerminal() {
+							fmt.Print("\033[H\033[2J\033[3J")
+							fmt.Println("\033[1;36m========================================================\033[0m")
+							fmt.Println("\033[1;32m  Welcome to ADK Console! Let's chat with your agent.  \033[0m")
+							fmt.Println("\033[1;33m  Type your message and press Enter. To exit, press Ctrl+C or type /exit.\033[0m")
+							fmt.Println("\033[1;36m========================================================\033[0m")
+						} else {
+							fmt.Println("\n--- Screen Cleared ---")
+						}
+						printUserPrompt(isTerminal())
+						continue
+					case "/help":
+						if isTerminal() {
+							fmt.Println("\033[1;34m💡 Console Commands:\033[0m")
+							fmt.Println("  \033[1;32m/help\033[0m  - Show this help message")
+							fmt.Println("  \033[1;32m/clear\033[0m - Clear the console screen")
+							fmt.Println("  \033[1;32m/exit\033[0m  - Exit the console (also \033[1;32m/quit\033[0m)")
+						} else {
+							fmt.Println("💡 Console Commands:")
+							fmt.Println("  /help  - Show this help message")
+							fmt.Println("  /clear - Clear the console screen")
+							fmt.Println("  /exit  - Exit the console (also /quit)")
+						}
+						printUserPrompt(isTerminal())
+						continue
+					default:
+						if isTerminal() {
+							fmt.Printf("\033[1;31mUnknown command: %s. Type /help to see available commands.\033[0m\n", cmd)
+						} else {
+							fmt.Printf("Unknown command: %s. Type /help to see available commands.\n", cmd)
+						}
+						printUserPrompt(isTerminal())
+						continue
+					}
+				}
+			}
 
 			if len(pendingInterrupts) == 0 && strings.TrimSpace(userInput) == "" {
 				printUserPrompt(isTerminal())
