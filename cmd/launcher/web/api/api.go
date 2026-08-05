@@ -54,9 +54,42 @@ func (a *apiLauncher) CommandLineSyntax() string {
 func corsWithArgs(frontendAddress string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendAddress)
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			w.Header().Add("Vary", "Origin")
+
+			var allowedOrigins []string
+			hasScheme := strings.HasPrefix(frontendAddress, "http://") || strings.HasPrefix(frontendAddress, "https://")
+			if hasScheme {
+				allowedOrigins = []string{frontendAddress}
+			} else {
+				allowedOrigins = []string{
+					"http://" + frontendAddress,
+					"https://" + frontendAddress,
+				}
+			}
+
+			matched := false
+			for _, allowed := range allowedOrigins {
+				if origin == allowed {
+					matched = true
+					break
+				}
+			}
+
+			if !matched {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
 				return
