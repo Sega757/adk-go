@@ -18,11 +18,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"sort"
+	"strconv"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-// canonicalSchemaJSON marshals the schema to JSON, parses it back, and
+// CanonicalSchemaJSON marshals the schema to JSON, parses it back, and
 // re-emits it with object keys sorted alphabetically (recursively).
 // Arrays are preserved in their original order.
 func CanonicalSchemaJSON(s *jsonschema.Schema) ([]byte, error) {
@@ -34,64 +35,163 @@ func CanonicalSchemaJSON(s *jsonschema.Schema) ([]byte, error) {
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return nil, err
 	}
-	return canonicalize(v)
+	var buf bytes.Buffer
+	if err := canonicalizeTo(&buf, v); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // canonicalize recursively serializes v with sorted map keys. Slices
 // keep their order. Primitive values are encoded via json.Marshal.
 func canonicalize(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := canonicalizeTo(&buf, v); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// canonicalizeTo recursively serializes v into buf with sorted map keys.
+func canonicalizeTo(buf *bytes.Buffer, v any) error {
 	switch val := v.(type) {
 	case map[string]any:
 		if val == nil {
-			return []byte("null"), nil
+			buf.WriteString("null")
+			return nil
 		}
-		keys := make([]string, 0, len(val))
+		n := len(val)
+		if n == 0 {
+			buf.WriteString("{}")
+			return nil
+		}
+		if n == 1 {
+			buf.WriteByte('{')
+			for k, valItem := range val {
+				if isSafeString(k) {
+					writeString(buf, k)
+				} else {
+					keyBytes, err := json.Marshal(k)
+					if err != nil {
+						return err
+					}
+					buf.Write(keyBytes)
+				}
+				buf.WriteByte(':')
+				if err := canonicalizeTo(buf, valItem); err != nil {
+					return err
+				}
+			}
+			buf.WriteByte('}')
+			return nil
+		}
+
+		var keys []string
+		var localKeys [16]string
+		if n <= 16 {
+			keys = localKeys[:0]
+		} else {
+			keys = make([]string, 0, n)
+		}
 		for k := range val {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 
-		var buf bytes.Buffer
 		buf.WriteByte('{')
 		for i, k := range keys {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			keyBytes, err := json.Marshal(k)
-			if err != nil {
-				return nil, err
+			if isSafeString(k) {
+				writeString(buf, k)
+			} else {
+				keyBytes, err := json.Marshal(k)
+				if err != nil {
+					return err
+				}
+				buf.Write(keyBytes)
 			}
-			buf.Write(keyBytes)
 			buf.WriteByte(':')
-			valBytes, err := canonicalize(val[k])
-			if err != nil {
-				return nil, err
+			if err := canonicalizeTo(buf, val[k]); err != nil {
+				return err
 			}
-			buf.Write(valBytes)
 		}
 		buf.WriteByte('}')
-		return buf.Bytes(), nil
+		return nil
 
 	case []any:
 		if val == nil {
-			return []byte("null"), nil
+			buf.WriteString("null")
+			return nil
 		}
-		var buf bytes.Buffer
 		buf.WriteByte('[')
 		for i, item := range val {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			itemBytes, err := canonicalize(item)
-			if err != nil {
-				return nil, err
+			if err := canonicalizeTo(buf, item); err != nil {
+				return err
 			}
-			buf.Write(itemBytes)
 		}
 		buf.WriteByte(']')
-		return buf.Bytes(), nil
+		return nil
+
+	case string:
+		if isSafeString(val) {
+			writeString(buf, val)
+		} else {
+			b, err := json.Marshal(val)
+			if err != nil {
+				return err
+			}
+			buf.Write(b)
+		}
+		return nil
+
+	case float64:
+		var scratch [64]byte
+		b := strconv.AppendFloat(scratch[:0], val, 'g', -1, 64)
+		buf.Write(b)
+		return nil
+
+	case bool:
+		if val {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
+		return nil
+
+	case nil:
+		buf.WriteString("null")
+		return nil
 
 	default:
-		return json.Marshal(val)
+		b, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		buf.Write(b)
+		return nil
 	}
+}
+
+// isSafeString reports whether the string is safe to serialize directly
+// inside double quotes without any escaping or HTML injection safety concerns.
+func isSafeString(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c >= 0x7f || c == '"' || c == '\\' || c == '<' || c == '>' || c == '&' {
+			return false
+		}
+	}
+	return true
+}
+
+// writeString serializes the safe string s directly wrapped in double quotes.
+func writeString(buf *bytes.Buffer, s string) {
+	buf.WriteByte('"')
+	buf.WriteString(s)
+	buf.WriteByte('"')
 }
