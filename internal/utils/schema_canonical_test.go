@@ -15,11 +15,20 @@
 package utils
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/jsonschema-go/jsonschema"
 )
+
+func canonicalize(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := canonicalizeTo(&buf, v); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
 
 func TestCanonicalSchemaJSON_PropertyOrder(t *testing.T) {
 	// Two schemas representing {"foo": string, "bar": integer}
@@ -161,5 +170,43 @@ func TestCanonicalize_Primitives(t *testing.T) {
 				t.Errorf("canonicalize() = %s, want %s", string(out), tc.want)
 			}
 		})
+	}
+}
+
+func BenchmarkCanonicalSchemaJSON(b *testing.B) {
+	schema := &jsonschema.Schema{
+		Type: "object",
+		Properties: map[string]*jsonschema.Schema{
+			"foo": {Type: "string"},
+			"bar": {Type: "integer"},
+			"nested": {
+				Type: "object",
+				Properties: map[string]*jsonschema.Schema{
+					"x": {Type: "string"},
+					"y": {Type: "number"},
+				},
+			},
+		},
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = CanonicalSchemaJSON(schema)
+	}
+}
+
+func BenchmarkCanonicalize(b *testing.B) {
+	input := map[string]any{
+		"z": map[string]any{
+			"y": map[string]any{
+				"x": "val",
+				"a": 123.0,
+			},
+			"b": true,
+		},
+		"a": "top",
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = canonicalize(input)
 	}
 }
