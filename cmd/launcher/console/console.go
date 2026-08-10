@@ -191,6 +191,17 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 				continue
 			}
 
+			if len(pendingInterrupts) == 0 {
+				handled, shouldExit := handleSlashCommand(userInput, isTerminal())
+				if handled {
+					if shouldExit {
+						return nil
+					}
+					printUserPrompt(isTerminal())
+					continue
+				}
+			}
+
 			var userMsg *genai.Content
 			if len(pendingInterrupts) > 0 {
 				// Answer the head of the queue; loop back if more
@@ -382,4 +393,56 @@ func (l *consoleLauncher) Execute(ctx context.Context, config *launcher.Config, 
 		return fmt.Errorf("cannot parse all the arguments: %w", err)
 	}
 	return l.Run(ctx, config)
+}
+
+// handleSlashCommand checks if userInput is a terminal slash command starting with '/'.
+// If handled, it executes the command and returns true. If shouldExit is also true,
+// the console should terminate gracefully.
+func handleSlashCommand(userInput string, tty bool) (handled bool, shouldExit bool) {
+	cmd := strings.TrimSpace(userInput)
+	if !strings.HasPrefix(cmd, "/") {
+		return false, false
+	}
+
+	lowerCmd := strings.ToLower(cmd)
+	switch lowerCmd {
+	case "/exit", "/quit":
+		if tty {
+			fmt.Println("\n\033[1;32mGoodbye! 👋\033[0m")
+		} else {
+			fmt.Println("\nGoodbye!")
+		}
+		return true, true
+	case "/clear":
+		if tty {
+			fmt.Print("\033[H\033[2J")
+		} else {
+			fmt.Println()
+		}
+		return true, false
+	case "/help":
+		if tty {
+			fmt.Println("\n\033[1;36mAvailable Console Commands:\033[0m")
+			fmt.Println("  \033[1;32m/help\033[0m  - Show this help message")
+			fmt.Println("  \033[1;32m/clear\033[0m - Clear the console screen")
+			fmt.Println("  \033[1;32m/exit\033[0m  - Exit the console session")
+			fmt.Println("  \033[1;32m/quit\033[0m  - Exit the console session")
+		} else {
+			fmt.Println("\nAvailable Console Commands:")
+			fmt.Println("  /help  - Show this help message")
+			fmt.Println("  /clear - Clear the console screen")
+			fmt.Println("  /exit  - Exit the console session")
+			fmt.Println("  /quit  - Exit the console session")
+		}
+		return true, false
+	default:
+		if tty {
+			fmt.Printf("\n\033[1;31mUnknown command: %s\033[0m\n", cmd)
+			fmt.Println("Type \033[1;32m/help\033[0m to see available commands.")
+		} else {
+			fmt.Printf("\nUnknown command: %s\n", cmd)
+			fmt.Println("Type /help to see available commands.")
+		}
+		return true, false
+	}
 }
