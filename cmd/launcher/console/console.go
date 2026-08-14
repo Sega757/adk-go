@@ -186,6 +186,19 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
 
+			shouldExit, isCommand := handleSlashCommand(userInput, isTerminal())
+			if isCommand {
+				if shouldExit {
+					return nil
+				}
+				if len(pendingInterrupts) > 0 {
+					renderInterruptPrompt(pendingInterrupts[0], isTerminal())
+				} else {
+					printUserPrompt(isTerminal())
+				}
+				continue
+			}
+
 			if len(pendingInterrupts) == 0 && strings.TrimSpace(userInput) == "" {
 				printUserPrompt(isTerminal())
 				continue
@@ -382,4 +395,77 @@ func (l *consoleLauncher) Execute(ctx context.Context, config *launcher.Config, 
 		return fmt.Errorf("cannot parse all the arguments: %w", err)
 	}
 	return l.Run(ctx, config)
+}
+
+// handleSlashCommand checks if userInput is a slash command, executes it if so,
+// and returns (shouldExit, handled).
+func handleSlashCommand(userInput string, tty bool) (bool, bool) {
+	if !strings.HasPrefix(userInput, "/") {
+		return false, false
+	}
+	fields := strings.Fields(userInput)
+	if len(fields) == 0 {
+		return false, false
+	}
+	cmd := fields[0]
+	switch cmd {
+	case "/exit", "/quit":
+		if len(fields) > 1 {
+			invalidOpt := strings.Join(fields[1:], " ")
+			if tty {
+				fmt.Printf("\033[1;31mUnknown option: %s. Type /help for available commands.\033[0m\n", invalidOpt)
+			} else {
+				fmt.Printf("Unknown option: %s. Type /help for available commands.\n", invalidOpt)
+			}
+			return false, true
+		}
+		if tty {
+			fmt.Println("\033[1;33mGoodbye! 👋\033[0m")
+		} else {
+			fmt.Println("Goodbye!")
+		}
+		return true, true
+	case "/clear":
+		if len(fields) > 1 {
+			invalidOpt := strings.Join(fields[1:], " ")
+			if tty {
+				fmt.Printf("\033[1;31mUnknown option: %s. Type /help for available commands.\033[0m\n", invalidOpt)
+			} else {
+				fmt.Printf("Unknown option: %s. Type /help for available commands.\n", invalidOpt)
+			}
+			return false, true
+		}
+		if tty {
+			fmt.Print("\033[H\033[2J")
+		} else {
+			fmt.Println("[Screen Cleared]")
+		}
+		return false, true
+	case "/help":
+		if len(fields) > 1 {
+			invalidOpt := strings.Join(fields[1:], " ")
+			if tty {
+				fmt.Printf("\033[1;31mUnknown option: %s. Type /help for available commands.\033[0m\n", invalidOpt)
+			} else {
+				fmt.Printf("Unknown option: %s. Type /help for available commands.\n", invalidOpt)
+			}
+			return false, true
+		}
+		if tty {
+			fmt.Println("\033[1;36mAvailable commands:\033[0m")
+			fmt.Println("  \033[1;32m/help\033[0m  - Show this help message")
+			fmt.Println("  \033[1;32m/clear\033[0m - Clear the terminal screen")
+			fmt.Println("  \033[1;32m/exit\033[0m  - Exit the console session")
+			fmt.Println("  \033[1;32m/quit\033[0m  - Exit the console session")
+		} else {
+			fmt.Println("Available commands:")
+			fmt.Println("  /help  - Show this help message")
+			fmt.Println("  /clear - Clear the terminal screen")
+			fmt.Println("  /exit  - Exit the console session")
+			fmt.Println("  /quit  - Exit the console session")
+		}
+		return false, true
+	default:
+		return false, false
+	}
 }
