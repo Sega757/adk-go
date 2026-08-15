@@ -15,6 +15,7 @@
 package utils_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -65,5 +66,42 @@ func TestPopulateClientFunctionCallIDUsesProvider(t *testing.T) {
 	}
 	if got := content.Parts[1].FunctionCall.ID; got != "keep" {
 		t.Errorf("preset function call ID = %q, want it left untouched (%q)", got, "keep")
+	}
+}
+
+func BenchmarkPopulateClientFunctionCallID(b *testing.B) {
+	ctx := context.Background()
+	content := &genai.Content{
+		Parts: []*genai.Part{
+			{Text: "Hello world"},
+			{FunctionCall: &genai.FunctionCall{Name: "test_func1"}},
+			{Text: "Some context"},
+			{FunctionCall: &genai.FunctionCall{Name: "test_func2"}},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		content.Parts[1].FunctionCall.ID = ""
+		content.Parts[3].FunctionCall.ID = ""
+		utils.PopulateClientFunctionCallID(ctx, content)
+	}
+}
+
+func BenchmarkRemoveClientFunctionCallID(b *testing.B) {
+	content := &genai.Content{
+		Parts: []*genai.Part{
+			{Text: "Hello world"},
+			{FunctionCall: &genai.FunctionCall{ID: "adk-1234", Name: "test_func1"}},
+			{FunctionResponse: &genai.FunctionResponse{ID: "adk-1234", Name: "test_func1"}},
+			{Text: "Done"},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		content.Parts[1].FunctionCall.ID = "adk-1234"
+		content.Parts[2].FunctionResponse.ID = "adk-1234"
+		utils.RemoveClientFunctionCallID(content)
 	}
 }
