@@ -338,7 +338,7 @@ func (p *recordPlugin) saveRecordings(state *invocationRecordState) {
 		return
 	}
 
-	_ = os.WriteFile(filePath, out, 0o644)
+	_ = os.WriteFile(filePath, out, 0o600)
 }
 
 func shouldPruneYAMLField(key string, value *yaml.Node, inToolArgs bool) bool {
