@@ -137,12 +137,12 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	if isTerminal() {
 		fmt.Println("\033[1;36m========================================================\033[0m")
 		fmt.Println("\033[1;32m  Welcome to ADK Console! Let's chat with your agent.  \033[0m")
-		fmt.Println("\033[1;33m  Type your message and press Enter. To exit, press Ctrl+C.\033[0m")
+		fmt.Println("\033[1;33m  Type your message and press Enter. Commands: /help, /exit\033[0m")
 		fmt.Println("\033[1;36m========================================================\033[0m")
 	} else {
 		fmt.Println("========================================================")
 		fmt.Println("  Welcome to ADK Console! Let's chat with your agent.")
-		fmt.Println("  Type your message and press Enter. To exit, press Ctrl+C.")
+		fmt.Println("  Type your message and press Enter. Commands: /help, /exit")
 		fmt.Println("========================================================")
 	}
 
@@ -186,9 +186,18 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
 
-			if len(pendingInterrupts) == 0 && strings.TrimSpace(userInput) == "" {
-				printUserPrompt(isTerminal())
-				continue
+			if len(pendingInterrupts) == 0 {
+				if strings.TrimSpace(userInput) == "" {
+					printUserPrompt(isTerminal())
+					continue
+				}
+				if handled, shouldExit := handleConsoleCommand(userInput, isTerminal()); handled {
+					if shouldExit {
+						return nil
+					}
+					printUserPrompt(isTerminal())
+					continue
+				}
 			}
 
 			var userMsg *genai.Content
@@ -315,6 +324,43 @@ func printErrorPrompt(tty bool, err error) {
 		fmt.Printf("\n\033[1;31mError ❌ -> %v\033[0m\n", err)
 	} else {
 		fmt.Printf("\nAGENT_ERROR: %v\n", err)
+	}
+}
+
+// handleConsoleCommand evaluates input for interactive terminal slash commands.
+// Returns handled = true if a recognized command was executed, and shouldExit = true if exiting.
+func handleConsoleCommand(input string, tty bool) (handled bool, shouldExit bool) {
+	cmd := strings.TrimSpace(input)
+	switch strings.ToLower(cmd) {
+	case "/help":
+		if tty {
+			fmt.Println("\n\033[1;34m💡 Available Console Commands:\033[0m")
+			fmt.Println("  \033[1;32m/help\033[0m  - Display this help message")
+			fmt.Println("  \033[1;32m/clear\033[0m - Clear the terminal screen")
+			fmt.Println("  \033[1;32m/exit\033[0m  - Exit the console launcher (or /quit)")
+		} else {
+			fmt.Println("\nAvailable Console Commands:")
+			fmt.Println("  /help  - Display this help message")
+			fmt.Println("  /clear - Clear the terminal screen")
+			fmt.Println("  /exit  - Exit the console launcher (or /quit)")
+		}
+		return true, false
+	case "/clear":
+		if tty {
+			fmt.Print("\033[H\033[2J")
+		} else {
+			fmt.Println("\n[Screen Cleared]")
+		}
+		return true, false
+	case "/exit", "/quit":
+		if tty {
+			fmt.Println("\033[1;33mGoodbye! 👋\033[0m")
+		} else {
+			fmt.Println("Goodbye!")
+		}
+		return true, true
+	default:
+		return false, false
 	}
 }
 
