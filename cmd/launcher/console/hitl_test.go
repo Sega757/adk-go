@@ -498,6 +498,21 @@ func TestTerminalUX_PromptsAndHITL(t *testing.T) {
 			t.Errorf("expected TTY confirmation prompt, got %q", outConfTTY)
 		}
 
+		// Tool confirmation with original call arguments
+		argsWithCall := map[string]any{
+			"toolConfirmation": map[string]any{"hint": "Delete database table?"},
+			"originalFunctionCall": map[string]any{
+				"name": "delete_table",
+				"args": map[string]any{"table": "users", "force": true},
+			},
+		}
+		outConfArgs := captureStdout(t, func() { renderToolConfirmationPrompt(argsWithCall, false) })
+		if !strings.Contains(outConfArgs, "Agent -> Delete database table?") ||
+			!strings.Contains(outConfArgs, "  Args: ") ||
+			!strings.Contains(outConfArgs, `"table":"users"`) {
+			t.Errorf("expected confirmation prompt to display original call args, got %q", outConfArgs)
+		}
+
 		// Generic interrupt TTY
 		outGenTTY := captureStdout(t, func() { renderGenericInterruptPrompt("some_action", args, true) })
 		if !strings.Contains(outGenTTY, "\033[1;33m") || !strings.Contains(outGenTTY, "some_action") {
