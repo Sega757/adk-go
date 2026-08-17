@@ -105,16 +105,20 @@ func (req *SaveRequest) Validate() error {
 		return fmt.Errorf("invalid save request: Part.InlineData or Part.Text has to be set")
 	}
 
-	// Validate that FileName doesn't contain path separators
-	if err := validateFileName(req.FileName); err != nil {
+	if err := validateIdentifiers(fieldsToCheck); err != nil {
 		return err
 	}
 	return nil
 }
 
-func validateFileName(name string) error {
-	if strings.Contains(name, "/") || strings.Contains(name, "\\") {
-		return fmt.Errorf("invalid name: filename cannot contain path separators")
+func validateIdentifiers(fields []requiredField) error {
+	for _, f := range fields {
+		if strings.Contains(f.Value, "/") || strings.Contains(f.Value, "\\") {
+			return fmt.Errorf("invalid name: %s cannot contain path separators", strings.ToLower(f.Name))
+		}
+		if f.Value == "." || f.Value == ".." || strings.Contains(f.Value, "..") {
+			return fmt.Errorf("invalid name: %s cannot contain relative path navigation", strings.ToLower(f.Name))
+		}
 	}
 	return nil
 }
@@ -150,8 +154,7 @@ func (req *LoadRequest) Validate() error {
 		return fmt.Errorf("invalid load request: missing required fields: %s", strings.Join(missingFields, ", "))
 	}
 
-	// Validate that FileName doesn't contain path separators
-	if err := validateFileName(req.FileName); err != nil {
+	if err := validateIdentifiers(fieldsToCheck); err != nil {
 		return err
 	}
 
@@ -190,8 +193,7 @@ func (req *DeleteRequest) Validate() error {
 		return fmt.Errorf("invalid delete request: missing required fields: %s", strings.Join(missingFields, ", "))
 	}
 
-	// Validate that FileName doesn't contain path separators
-	if err := validateFileName(req.FileName); err != nil {
+	if err := validateIdentifiers(fieldsToCheck); err != nil {
 		return err
 	}
 
@@ -219,6 +221,11 @@ func (req *ListRequest) Validate() error {
 	if len(missingFields) > 0 {
 		return fmt.Errorf("invalid list request: missing required fields: %s", strings.Join(missingFields, ", "))
 	}
+
+	if err := validateIdentifiers(fieldsToCheck); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -250,8 +257,7 @@ func (req *VersionsRequest) Validate() error {
 		return fmt.Errorf("invalid versions request: missing required fields: %s", strings.Join(missingFields, ", "))
 	}
 
-	// Validate that FileName doesn't contain path separators
-	if err := validateFileName(req.FileName); err != nil {
+	if err := validateIdentifiers(fieldsToCheck); err != nil {
 		return err
 	}
 
@@ -298,8 +304,7 @@ func (req *GetArtifactVersionRequest) Validate() error {
 		return fmt.Errorf("invalid get artifact version request: missing required fields: %s", strings.Join(missingFields, ", "))
 	}
 
-	// Validate that FileName doesn't contain path separators
-	if err := validateFileName(req.FileName); err != nil {
+	if err := validateIdentifiers(fieldsToCheck); err != nil {
 		return err
 	}
 
