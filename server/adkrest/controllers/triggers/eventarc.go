@@ -28,7 +28,10 @@ import (
 	"google.golang.org/adk/v2/session"
 )
 
-const eventArcDefaultUserID = "eventarc-caller"
+const (
+	eventArcDefaultUserID  = "eventarc-caller"
+	maxEventarcBodyBytes   = 10 * 1024 * 1024 // 10MB limit to prevent memory exhaustion DoS
+)
 
 // EventarcController handles the Eventarc trigger endpoints.
 type EventarcController struct {
@@ -74,11 +77,11 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		event.SpecVersion = r.Header.Get("ce-specversion")
 		event.Time = r.Header.Get("ce-time")
 
-		// The entire body is the payload.
-		// We just read it as raw bytes into event.Data.
-		bodyBytes, err := io.ReadAll(r.Body)
+		// The entire body is the payload. Protect against excessive memory allocation / DoS.
+		limitedBody := http.MaxBytesReader(w, r.Body, maxEventarcBodyBytes)
+		bodyBytes, err := io.ReadAll(limitedBody)
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to read body: %v", err))
+			respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to read body: %v", err))
 			return
 		}
 		event.Data = bodyBytes
