@@ -506,6 +506,31 @@ func TestTerminalUX_PromptsAndHITL(t *testing.T) {
 	})
 }
 
+func TestRenderToolConfirmationPrompt_WithArgs(t *testing.T) {
+	args := map[string]any{
+		"toolConfirmation": map[string]any{
+			"hint": "Delete database table?",
+		},
+		"originalFunctionCall": map[string]any{
+			"name": "drop_table",
+			"args": map[string]any{
+				"table_name": "users",
+			},
+		},
+	}
+
+	out := captureStdout(t, func() {
+		renderToolConfirmationPrompt(args, true)
+	})
+
+	if !strings.Contains(out, "🤝 HITL -> Delete database table?") {
+		t.Errorf("expected hint in output, got %q", out)
+	}
+	if !strings.Contains(out, `Args: {"table_name":"users"}`) {
+		t.Errorf("expected formatted tool call arguments in output, got %q", out)
+	}
+}
+
 func TestRenderOutput(t *testing.T) {
 	tests := []struct {
 		name string

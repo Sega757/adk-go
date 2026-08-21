@@ -181,15 +181,19 @@ func workflowInputResponseFromUserInput(line string) map[string]any {
 
 // renderToolConfirmationPrompt prints the tool-confirmation
 // prompt, falling back to the original tool name when no hint is
-// provided.
+// provided, and displaying original tool arguments when present.
 func renderToolConfirmationPrompt(args map[string]any, tty bool) {
 	hint := ""
 	if tc, ok := args["toolConfirmation"].(map[string]any); ok {
 		hint, _ = tc["hint"].(string)
 	}
+	var oc *genai.FunctionCall
+	if fc, err := toolconfirmation.OriginalCallFrom(&genai.FunctionCall{Args: args}); err == nil {
+		oc = fc
+	}
 	if hint == "" {
 		originalName := "unknown"
-		if oc, err := toolconfirmation.OriginalCallFrom(&genai.FunctionCall{Args: args}); err == nil && oc.Name != "" {
+		if oc != nil && oc.Name != "" {
 			originalName = oc.Name
 		}
 		hint = "Confirm " + originalName + "?"
@@ -198,6 +202,13 @@ func renderToolConfirmationPrompt(args map[string]any, tty bool) {
 		fmt.Printf("\033[1;33m🤝 HITL -> %s\033[0m\n", hint)
 	} else {
 		fmt.Printf("Agent -> %s\n", hint)
+	}
+	if oc != nil && len(oc.Args) > 0 {
+		if pretty, err := json.Marshal(oc.Args); err == nil {
+			fmt.Printf("  Args: %s\n", pretty)
+		} else {
+			fmt.Printf("  Args: %v\n", oc.Args)
+		}
 	}
 	fmt.Println("  Type 'yes' to confirm, anything else to reject.")
 }
