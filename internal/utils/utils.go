@@ -35,9 +35,12 @@ const afFunctionCallIDPrefix = "adk-"
 // the LLMAgent depends on the IDs to map FunctionCall and FunctionResponse events
 // in the event stream.
 func PopulateClientFunctionCallID(ctx context.Context, c *genai.Content) {
-	for _, fn := range FunctionCalls(c) {
-		if fn.ID == "" {
-			fn.ID = GenerateFunctionCallID(ctx)
+	if c == nil {
+		return
+	}
+	for _, p := range c.Parts {
+		if p != nil && p.FunctionCall != nil && p.FunctionCall.ID == "" {
+			p.FunctionCall.ID = GenerateFunctionCallID(ctx)
 		}
 	}
 }
@@ -53,14 +56,18 @@ func GenerateFunctionCallID(ctx context.Context) string {
 // by populateClientFunctionCallID. This is necessary when FunctionCall or
 // FunctionResponse are sent back to the model.
 func RemoveClientFunctionCallID(c *genai.Content) {
-	for _, fn := range FunctionCalls(c) {
-		if strings.HasPrefix(fn.ID, afFunctionCallIDPrefix) {
-			fn.ID = ""
-		}
+	if c == nil {
+		return
 	}
-	for _, fn := range FunctionResponses(c) {
-		if strings.HasPrefix(fn.ID, afFunctionCallIDPrefix) {
-			fn.ID = ""
+	for _, p := range c.Parts {
+		if p == nil {
+			continue
+		}
+		if p.FunctionCall != nil && strings.HasPrefix(p.FunctionCall.ID, afFunctionCallIDPrefix) {
+			p.FunctionCall.ID = ""
+		}
+		if p.FunctionResponse != nil && strings.HasPrefix(p.FunctionResponse.ID, afFunctionCallIDPrefix) {
+			p.FunctionResponse.ID = ""
 		}
 	}
 }
@@ -82,8 +89,11 @@ func FunctionCalls(c *genai.Content) (ret []*genai.FunctionCall) {
 	if c == nil {
 		return nil
 	}
-	for _, p := range c.Parts {
-		if p.FunctionCall != nil {
+	for i, p := range c.Parts {
+		if p != nil && p.FunctionCall != nil {
+			if ret == nil {
+				ret = make([]*genai.FunctionCall, 0, len(c.Parts)-i)
+			}
 			ret = append(ret, p.FunctionCall)
 		}
 	}
@@ -95,8 +105,11 @@ func FunctionResponses(c *genai.Content) (ret []*genai.FunctionResponse) {
 	if c == nil {
 		return nil
 	}
-	for _, p := range c.Parts {
-		if p.FunctionResponse != nil {
+	for i, p := range c.Parts {
+		if p != nil && p.FunctionResponse != nil {
+			if ret == nil {
+				ret = make([]*genai.FunctionResponse, 0, len(c.Parts)-i)
+			}
 			ret = append(ret, p.FunctionResponse)
 		}
 	}
@@ -108,8 +121,11 @@ func TextParts(c *genai.Content) (ret []string) {
 	if c == nil {
 		return nil
 	}
-	for _, p := range c.Parts {
-		if p.Text != "" {
+	for i, p := range c.Parts {
+		if p != nil && p.Text != "" {
+			if ret == nil {
+				ret = make([]string, 0, len(c.Parts)-i)
+			}
 			ret = append(ret, p.Text)
 		}
 	}
@@ -122,7 +138,12 @@ func FunctionDecls(c *genai.GenerateContentConfig) (ret []*genai.FunctionDeclara
 		return nil
 	}
 	for _, t := range c.Tools {
-		ret = append(ret, t.FunctionDeclarations...)
+		if t != nil && len(t.FunctionDeclarations) > 0 {
+			if ret == nil {
+				ret = make([]*genai.FunctionDeclaration, 0, len(t.FunctionDeclarations))
+			}
+			ret = append(ret, t.FunctionDeclarations...)
+		}
 	}
 	return ret
 }
