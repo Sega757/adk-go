@@ -27,7 +27,10 @@ import (
 	"google.golang.org/adk/v2/session"
 )
 
-const pubSubDefaultUserID = "pubsub-caller"
+const (
+	pubSubDefaultUserID = "pubsub-caller"
+	maxPubSubBodyBytes  = 10 * 1024 * 1024 // 10MB limit
+)
 
 // PubSubController handles the PubSub trigger endpoints.
 type PubSubController struct {
@@ -52,6 +55,7 @@ func NewPubSubController(sessionService session.Service, agentLoader agent.Loade
 
 // PubSubTriggerHandler handles the PubSub trigger endpoint.
 func (c *PubSubController) PubSubTriggerHandler(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxPubSubBodyBytes)
 	// Parse the request to the request model.
 	var req models.PubSubTriggerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
