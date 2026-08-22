@@ -128,9 +128,44 @@ func (v *Validator) ValidatePipeline(packet *DecisionPacket, empathy *EmpathyOut
 		hasStress = true
 	}
 
+	// Enforce active degradation mode rules before standard layer processing
+	switch v.CurrentMode {
+	case ModeSafeMode:
+		if len(packet.Plan) > 2 || strings.Contains(planStr, "tool") || strings.Contains(planStr, "exec") || strings.Contains(planStr, "call") || strings.Contains(planStr, "api") {
+			v.TotalKTriggers++
+			return &KillSwitchOutput{
+				Status:   "rejected",
+				Reason:   "Safe Mode active: execution parameter containing tool execution keyword or decision depth > 2 blocked",
+				Trigger:  []string{"anomaly_detected"},
+				Rollback: true,
+			}, ErrKAbsoluteBlock
+		}
+	case ModeEmpathyOverride:
+		if !strings.Contains(planStr, "template") && !strings.Contains(planStr, "humanitarian_template") {
+			v.TotalKTriggers++
+			return &KillSwitchOutput{
+				Status:   "rejected",
+				Reason:   "Empathy Override active: non-templated stochastic goals or plans blocked",
+				Trigger:  []string{"ethical_violation"},
+				Rollback: true,
+			}, ErrKAbsoluteBlock
+		}
+	case ModeConservativePlanning:
+		hasConfirm := strings.Contains(planStr, "confirm") || strings.Contains(planStr, "operator_approved") || (strings.Contains(planStr, "verified") && !strings.Contains(planStr, "unverified"))
+		if len(packet.Plan) > 1 || !hasConfirm {
+			v.TotalKTriggers++
+			return &KillSwitchOutput{
+				Status:   "rejected",
+				Reason:   "Conservative Planning active: plan steps > 1 or missing operator confirmation keyword blocked",
+				Trigger:  []string{"resource_limit"},
+				Rollback: true,
+			}, ErrKAbsoluteBlock
+		}
+	}
+
 	// Invariant: vulnerability_score > 0.7 => status = modify or block
 	if empathy.VulnerabilityScore > 0.7 {
-		if empathy.Status == "pass" {
+		if empathy.Status != "modify" && empathy.Status != "block" {
 			empathy.Status = "modify"
 			empathy.Modifications.Tone = "gentle"
 			empathy.Modifications.Intensity = "low"

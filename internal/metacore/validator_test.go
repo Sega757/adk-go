@@ -213,8 +213,6 @@ func TestScenario3HumanitarianVeto(t *testing.T) {
 }
 
 func TestScenario2LawViolationAndEthical6Fields(t *testing.T) {
-	v := metacore.NewValidator(0.7, 100.0, 3)
-
 	tests := []struct {
 		name         string
 		packet       *metacore.DecisionPacket
@@ -290,6 +288,7 @@ func TestScenario2LawViolationAndEthical6Fields(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			v := metacore.NewValidator(0.7, 100.0, 3)
 			kOut, err := v.ValidatePipeline(tc.packet, nil)
 			if !errors.Is(err, metacore.ErrKAbsoluteBlock) {
 				t.Errorf("Expected ErrKAbsoluteBlock, got %v", err)
@@ -398,5 +397,144 @@ func TestDegradationModes(t *testing.T) {
 	}
 	if v3.CurrentMode != metacore.ModeEmpathyOverride {
 		t.Errorf("Expected Empathy Override, got %s", v3.CurrentMode)
+	}
+}
+
+func TestDefensiveVulnerabilityStatus(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	packet := &metacore.DecisionPacket{
+		Goal:       "send notification",
+		Plan:       []string{"notify user"},
+		Confidence: 0.9,
+	}
+
+	// Empathy output with empty status but high vulnerability score
+	empathy := &metacore.EmpathyOutput{
+		Status:             "",
+		VulnerabilityScore: 0.75,
+	}
+
+	kOut, err := v.ValidatePipeline(packet, empathy)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if empathy.Status != "modify" {
+		t.Errorf("Expected defensive status update to 'modify', got %q", empathy.Status)
+	}
+
+	if kOut.Status != "approved" {
+		t.Errorf("Expected approved status, got %q", kOut.Status)
+	}
+}
+
+func TestActiveDegradationModesEnforcement(t *testing.T) {
+	// 1. Safe Mode
+	vSafe := metacore.NewValidator(0.7, 100.0, 3)
+	vSafe.CurrentMode = metacore.ModeSafeMode
+
+	// Plan steps > 2 -> blocked
+	packetDeepPlan := &metacore.DecisionPacket{
+		Goal:       "perform step sequence",
+		Plan:       []string{"step 1", "step 2", "step 3"},
+		Confidence: 0.9,
+	}
+	_, err := vSafe.ValidatePipeline(packetDeepPlan, nil)
+	if !errors.Is(err, metacore.ErrKAbsoluteBlock) {
+		t.Errorf("Expected ErrKAbsoluteBlock for decision depth > 2 in Safe Mode, got %v", err)
+	}
+
+	// Plan contains tool execution keyword -> blocked
+	packetToolKeyword := &metacore.DecisionPacket{
+		Goal:       "execute external tool call",
+		Plan:       []string{"step 1"},
+		Confidence: 0.9,
+	}
+	_, err = vSafe.ValidatePipeline(packetToolKeyword, nil)
+	if !errors.Is(err, metacore.ErrKAbsoluteBlock) {
+		t.Errorf("Expected ErrKAbsoluteBlock for tool keyword in Safe Mode, got %v", err)
+	}
+
+	// Compliant plan in Safe Mode -> approved
+	packetCompliantSafe := &metacore.DecisionPacket{
+		Goal:       "read summary",
+		Plan:       []string{"read line", "display text"},
+		Confidence: 0.9,
+	}
+	kOut, err := vSafe.ValidatePipeline(packetCompliantSafe, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error for compliant plan in Safe Mode: %v", err)
+	}
+	if kOut.Status != "approved" {
+		t.Errorf("Expected status 'approved', got %q", kOut.Status)
+	}
+
+	// 2. Empathy Override
+	vEmpathy := metacore.NewValidator(0.7, 100.0, 3)
+	vEmpathy.CurrentMode = metacore.ModeEmpathyOverride
+
+	// Non-templated stochastic plan -> blocked
+	packetNonTemplate := &metacore.DecisionPacket{
+		Goal:       "generate dynamic response",
+		Plan:       []string{"draft idea"},
+		Confidence: 0.9,
+	}
+	_, err = vEmpathy.ValidatePipeline(packetNonTemplate, nil)
+	if !errors.Is(err, metacore.ErrKAbsoluteBlock) {
+		t.Errorf("Expected ErrKAbsoluteBlock for non-templated goal in Empathy Override, got %v", err)
+	}
+
+	// Templated plan -> approved
+	packetTemplate := &metacore.DecisionPacket{
+		Goal:       "execute template response",
+		Plan:       []string{"humanitarian_template step"},
+		Confidence: 0.9,
+	}
+	kOut, err = vEmpathy.ValidatePipeline(packetTemplate, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error for templated plan in Empathy Override: %v", err)
+	}
+	if kOut.Status != "approved" {
+		t.Errorf("Expected status 'approved', got %q", kOut.Status)
+	}
+
+	// 3. Conservative Planning
+	vCons := metacore.NewValidator(0.7, 100.0, 3)
+	vCons.CurrentMode = metacore.ModeConservativePlanning
+
+	// Plan steps > 1 -> blocked
+	packetMultiStepCons := &metacore.DecisionPacket{
+		Goal:       "confirm task",
+		Plan:       []string{"step 1", "step 2"},
+		Confidence: 0.9,
+	}
+	_, err = vCons.ValidatePipeline(packetMultiStepCons, nil)
+	if !errors.Is(err, metacore.ErrKAbsoluteBlock) {
+		t.Errorf("Expected ErrKAbsoluteBlock for step length > 1 in Conservative Planning, got %v", err)
+	}
+
+	// Missing confirmation keyword -> blocked
+	packetNoConfirm := &metacore.DecisionPacket{
+		Goal:       "unverified action",
+		Plan:       []string{"step 1"},
+		Confidence: 0.9,
+	}
+	_, err = vCons.ValidatePipeline(packetNoConfirm, nil)
+	if !errors.Is(err, metacore.ErrKAbsoluteBlock) {
+		t.Errorf("Expected ErrKAbsoluteBlock for missing confirmation in Conservative Planning, got %v", err)
+	}
+
+	// Compliant single-step with confirmation -> approved
+	packetCompliantCons := &metacore.DecisionPacket{
+		Goal:       "action operator_approved",
+		Plan:       []string{"step 1"},
+		Confidence: 0.9,
+	}
+	kOut, err = vCons.ValidatePipeline(packetCompliantCons, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error for compliant conservative plan: %v", err)
+	}
+	if kOut.Status != "approved" {
+		t.Errorf("Expected status 'approved', got %q", kOut.Status)
 	}
 }
