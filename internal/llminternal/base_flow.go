@@ -1381,7 +1381,8 @@ func mergeEventActions(base, other *session.EventActions) *session.EventActions 
 	// TODO add similar logic for state
 	if other.RequestedToolConfirmations != nil {
 		if base.RequestedToolConfirmations == nil {
-			base.RequestedToolConfirmations = make(map[string]toolconfirmation.ToolConfirmation)
+			// Preallocate map capacity to avoid rehashing allocations during map population.
+			base.RequestedToolConfirmations = make(map[string]toolconfirmation.ToolConfirmation, len(other.RequestedToolConfirmations))
 		}
 		maps.Copy(base.RequestedToolConfirmations, other.RequestedToolConfirmations)
 	}
@@ -1390,7 +1391,11 @@ func mergeEventActions(base, other *session.EventActions) *session.EventActions 
 
 func deepMergeMap(dst, src map[string]any) map[string]any {
 	if dst == nil {
-		dst = make(map[string]any)
+		// Preallocate map capacity matching src size to prevent dynamic map re-allocations.
+		dst = make(map[string]any, len(src))
+	}
+	if len(src) == 0 {
+		return dst
 	}
 	for key, value := range src {
 		if srcMap, ok := value.(map[string]any); ok {

@@ -429,6 +429,38 @@ func TestCallTool(t *testing.T) {
 	}
 }
 
+func BenchmarkDeepMergeMap(b *testing.B) {
+	src := map[string]any{
+		"k1": "v1",
+		"k2": "v2",
+		"k3": map[string]any{
+			"sub1": "sv1",
+			"sub2": "sv2",
+		},
+		"k4": 100,
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = deepMergeMap(nil, src)
+	}
+}
+
+func BenchmarkMergeEventActions(b *testing.B) {
+	base := &session.EventActions{
+		StateDelta: map[string]any{"a": 1, "b": 2},
+	}
+	other := &session.EventActions{
+		StateDelta: map[string]any{"b": 3, "c": map[string]any{"d": 4}},
+		Escalate:   true,
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = mergeEventActions(base, other)
+	}
+}
+
 func TestMergeEventActions(t *testing.T) {
 	tests := []struct {
 		name  string
