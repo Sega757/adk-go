@@ -137,12 +137,12 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	if isTerminal() {
 		fmt.Println("\033[1;36m========================================================\033[0m")
 		fmt.Println("\033[1;32m  Welcome to ADK Console! Let's chat with your agent.  \033[0m")
-		fmt.Println("\033[1;33m  Type your message and press Enter. To exit, press Ctrl+C.\033[0m")
+		fmt.Println("\033[1;33m  Type your message or use commands: /help, /clear, /exit\033[0m")
 		fmt.Println("\033[1;36m========================================================\033[0m")
 	} else {
 		fmt.Println("========================================================")
 		fmt.Println("  Welcome to ADK Console! Let's chat with your agent.")
-		fmt.Println("  Type your message and press Enter. To exit, press Ctrl+C.")
+		fmt.Println("  Type your message or use commands: /help, /clear, /exit")
 		fmt.Println("========================================================")
 	}
 
