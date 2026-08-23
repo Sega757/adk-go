@@ -1144,3 +1144,42 @@ func TestFinishReasonUnexpectedToolCallPreservesErrorCode(t *testing.T) {
 		t.Errorf("ErrorMessage was unexpectedly overwritten to '%s'", finalResponse.ErrorMessage)
 	}
 }
+
+func BenchmarkStreamingResponseAggregator(b *testing.B) {
+	ctx := context.Background()
+
+	chunks := make([]*genai.GenerateContentResponse, 50)
+	for i := 0; i < 50; i++ {
+		chunks[i] = &genai.GenerateContentResponse{
+			Candidates: []*genai.Candidate{
+				{
+					Content: &genai.Content{
+						Role: "model",
+						Parts: []*genai.Part{
+							{
+								Text:    "Streaming LLM response text chunk sequence number ",
+								Thought: i%2 == 0,
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+	chunks[49].Candidates[0].FinishReason = genai.FinishReasonStop
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		aggregator := llminternal.NewStreamingResponseAggregator()
+		for _, chunk := range chunks {
+			for _, err := range aggregator.ProcessResponse(ctx, chunk) {
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		}
+		_ = aggregator.Close()
+	}
+}
