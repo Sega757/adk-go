@@ -34,24 +34,24 @@ func matchType(value any, schema *genai.Schema, isInput bool) (bool, error) {
 		return false, nil
 	}
 
-	// Convert type to upper case to match the type in the schema.
-	switch genai.Type(strings.ToUpper(string(schema.Type))) {
-	case genai.TypeString:
+	st := schema.Type
+	switch st {
+	case genai.TypeString, "string":
 		_, ok := value.(string)
 		return ok, nil
-	case genai.TypeInteger:
+	case genai.TypeInteger, "integer":
 		f, ok := value.(float64)
 		if !ok {
 			return false, nil
 		}
 		return f == math.Trunc(f), nil
-	case genai.TypeBoolean:
+	case genai.TypeBoolean, "boolean":
 		_, ok := value.(bool)
 		return ok, nil
-	case genai.TypeNumber:
+	case genai.TypeNumber, "number":
 		_, ok := value.(float64)
 		return ok, nil
-	case genai.TypeArray:
+	case genai.TypeArray, "array":
 		val := reflect.ValueOf(value)
 		if val.Kind() != reflect.Slice {
 			return false, nil
@@ -69,7 +69,7 @@ func matchType(value any, schema *genai.Schema, isInput bool) (bool, error) {
 			}
 		}
 		return true, nil
-	case genai.TypeObject:
+	case genai.TypeObject, "object":
 		obj, ok := value.(map[string]any)
 		if !ok {
 			return false, nil
@@ -77,7 +77,50 @@ func matchType(value any, schema *genai.Schema, isInput bool) (bool, error) {
 		err := ValidateMapOnSchema(obj, schema, isInput)
 		return err == nil, err
 	default:
-		return false, fmt.Errorf("unsupported type: %s", schema.Type)
+		switch genai.Type(strings.ToUpper(string(st))) {
+		case genai.TypeString:
+			_, ok := value.(string)
+			return ok, nil
+		case genai.TypeInteger:
+			f, ok := value.(float64)
+			if !ok {
+				return false, nil
+			}
+			return f == math.Trunc(f), nil
+		case genai.TypeBoolean:
+			_, ok := value.(bool)
+			return ok, nil
+		case genai.TypeNumber:
+			_, ok := value.(float64)
+			return ok, nil
+		case genai.TypeArray:
+			val := reflect.ValueOf(value)
+			if val.Kind() != reflect.Slice {
+				return false, nil
+			}
+			if schema.Items == nil {
+				return false, fmt.Errorf("array schema missing items definition")
+			}
+			for i := 0; i < val.Len(); i++ {
+				ok, err := matchType(val.Index(i).Interface(), schema.Items, isInput)
+				if err != nil {
+					return false, fmt.Errorf("array item %d: %w", i, err)
+				}
+				if !ok {
+					return false, nil
+				}
+			}
+			return true, nil
+		case genai.TypeObject:
+			obj, ok := value.(map[string]any)
+			if !ok {
+				return false, nil
+			}
+			err := ValidateMapOnSchema(obj, schema, isInput)
+			return err == nil, err
+		default:
+			return false, fmt.Errorf("unsupported type: %s", st)
+		}
 	}
 }
 
@@ -88,9 +131,6 @@ func ValidateMapOnSchema(args map[string]any, schema *genai.Schema, isInput bool
 	}
 
 	properties := schema.Properties
-	if properties == nil {
-		properties = make(map[string]*genai.Schema)
-	}
 
 	argType := "input"
 	if !isInput {

@@ -163,3 +163,62 @@ func TestCanonicalize_Primitives(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkCanonicalSchemaJSON(b *testing.B) {
+	schema := &jsonschema.Schema{
+		Type: "object",
+		Properties: map[string]*jsonschema.Schema{
+			"user_id": {Type: "string", Description: "User unique identifier"},
+			"age":     {Type: "integer", Minimum: jsonschema.Ptr(float64(0))},
+			"tags": {
+				Type: "array",
+				Items: &jsonschema.Schema{
+					Type: "string",
+				},
+			},
+			"meta": {
+				Type: "object",
+				Properties: map[string]*jsonschema.Schema{
+					"active": {Type: "boolean"},
+					"score":  {Type: "number"},
+				},
+			},
+		},
+		Required: []string{"user_id", "age"},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, err := CanonicalSchemaJSON(schema)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkCanonicalize(b *testing.B) {
+	input := map[string]any{
+		"z": map[string]any{
+			"y": map[string]any{
+				"x": "val",
+				"a": 123.0,
+			},
+			"b": true,
+		},
+		"a": "top",
+		"items": []any{
+			map[string]any{"b": 2.0, "a": 1.0},
+			"string",
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, err := canonicalize(input)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}

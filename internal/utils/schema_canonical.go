@@ -37,61 +37,131 @@ func CanonicalSchemaJSON(s *jsonschema.Schema) ([]byte, error) {
 	return canonicalize(v)
 }
 
-// canonicalize recursively serializes v with sorted map keys. Slices
-// keep their order. Primitive values are encoded via json.Marshal.
+// canonicalize recursively serializes v with sorted map keys into a single buffer.
 func canonicalize(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := canonicalizeTo(&buf, v); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func writeString(buf *bytes.Buffer, s string) error {
+	// Fast path for safe ASCII strings (no quotes, backslashes, HTML unsafe chars, or control chars)
+	isSafe := true
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c >= 0x7f || c == '"' || c == '\\' || c == '<' || c == '>' || c == '&' {
+			isSafe = false
+			break
+		}
+	}
+	if isSafe {
+		buf.WriteByte('"')
+		buf.WriteString(s)
+		buf.WriteByte('"')
+		return nil
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+	buf.Write(b)
+	return nil
+}
+
+func canonicalizeTo(buf *bytes.Buffer, v any) error {
 	switch val := v.(type) {
+	case nil:
+		buf.WriteString("null")
+		return nil
+
+	case bool:
+		if val {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
+		return nil
+
+	case string:
+		return writeString(buf, val)
+
 	case map[string]any:
 		if val == nil {
-			return []byte("null"), nil
+			buf.WriteString("null")
+			return nil
 		}
-		keys := make([]string, 0, len(val))
+		buf.WriteByte('{')
+		n := len(val)
+		if n == 0 {
+			buf.WriteByte('}')
+			return nil
+		}
+		if n == 1 {
+			for k, item := range val {
+				if err := writeString(buf, k); err != nil {
+					return err
+				}
+				buf.WriteByte(':')
+				if err := canonicalizeTo(buf, item); err != nil {
+					return err
+				}
+			}
+			buf.WriteByte('}')
+			return nil
+		}
+
+		var stackKeys [16]string
+		var keys []string
+		if n <= len(stackKeys) {
+			keys = stackKeys[:0]
+		} else {
+			keys = make([]string, 0, n)
+		}
 		for k := range val {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 
-		var buf bytes.Buffer
-		buf.WriteByte('{')
 		for i, k := range keys {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			keyBytes, err := json.Marshal(k)
-			if err != nil {
-				return nil, err
+			if err := writeString(buf, k); err != nil {
+				return err
 			}
-			buf.Write(keyBytes)
 			buf.WriteByte(':')
-			valBytes, err := canonicalize(val[k])
-			if err != nil {
-				return nil, err
+			if err := canonicalizeTo(buf, val[k]); err != nil {
+				return err
 			}
-			buf.Write(valBytes)
 		}
 		buf.WriteByte('}')
-		return buf.Bytes(), nil
+		return nil
 
 	case []any:
 		if val == nil {
-			return []byte("null"), nil
+			buf.WriteString("null")
+			return nil
 		}
-		var buf bytes.Buffer
 		buf.WriteByte('[')
 		for i, item := range val {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			itemBytes, err := canonicalize(item)
-			if err != nil {
-				return nil, err
+			if err := canonicalizeTo(buf, item); err != nil {
+				return err
 			}
-			buf.Write(itemBytes)
 		}
 		buf.WriteByte(']')
-		return buf.Bytes(), nil
+		return nil
 
 	default:
-		return json.Marshal(val)
+		b, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		buf.Write(b)
+		return nil
 	}
 }
