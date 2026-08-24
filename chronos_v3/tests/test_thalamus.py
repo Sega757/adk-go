@@ -6,12 +6,10 @@ from chronos_v3.thalamus import ThalamusBus, Event
 async def test_thalamus_priority_routing():
     bus = ThalamusBus()
 
-    # Publish events out of order
     await bus.publish(priority=10, name="LowPriorityTelemetry")
     await bus.publish(priority=1, name="CriticalSystemEvent")
     await bus.publish(priority=5, name="NormalOperation")
 
-    # Retrieve events and assert priority order
     event1 = await bus.get()
     assert event1.priority == 1
     assert event1.name == "CriticalSystemEvent"
@@ -39,7 +37,7 @@ async def test_thalamus_halt():
     bus.halt()
 
     await bus.publish(2, "AfterHalt")
-    assert bus.qsize == 1 # Queue size should not increase after halt
+    assert bus.qsize == 1
 
     event = await bus.get()
     assert event.name == "BeforeHalt"

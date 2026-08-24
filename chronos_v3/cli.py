@@ -9,9 +9,7 @@ async def prefrontal_cortex_worker(bus: ThalamusBus, shield: MetaCoreShield, wor
         try:
             event = await asyncio.wait_for(bus.get(), timeout=0.2)
 
-            # Allow Cingulate Cortex to process the anomaly
             if event.name == "InjectAnomaly":
-                # Put it back and yield so Cingulate Cortex can grab it
                 await bus.publish(event.priority, event.name, event.payload)
                 bus.task_done()
                 await asyncio.sleep(0.01)
@@ -41,9 +39,8 @@ async def cingulate_cortex_worker(bus: ThalamusBus, shield: MetaCoreShield):
             if event.name != "InjectAnomaly" and "semantic" not in event.name.lower():
                  print(f"[Cingulate Cortex] Routing State Transition: {event.name} (Priority: {event.priority})")
             elif event.name == "InjectAnomaly":
-                 pass # process below
+                 pass
             else:
-                 # Yield back semantic events to PFC
                  await bus.publish(event.priority, event.name, event.payload)
                  bus.task_done()
                  await asyncio.sleep(0.01)
@@ -90,7 +87,6 @@ async def simulate_traffic(bus: ThalamusBus, shield: MetaCoreShield):
     print("[Traffic Simulator] Attempting to send post-anomaly payload...")
     await bus.publish(priority=1, name="MaliciousPayload")
 
-    # Let workers process
     await asyncio.sleep(0.5)
     print("[Traffic Simulator] Finished.")
 

@@ -29,21 +29,16 @@ class MetaCoreShield:
         if len(embeddings) == 0:
             return False
 
-        # Normalize the embeddings onto the unit hypersphere (L2 normalization)
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-        # Avoid division by zero
         norms[norms == 0] = 1.0
         normalized_embeddings = embeddings / norms
 
-        # Calculate the resultant vector R
         R = np.sum(normalized_embeddings, axis=0)
 
-        # Calculate the mean resultant length R_bar (rho)
         N = len(embeddings)
         R_norm = np.linalg.norm(R)
         R_bar = R_norm / N
 
-        # Trigger kill switch if semantic density exceeds threshold
         if R_bar > self.threshold:
             self.panic_mode = True
             return True
@@ -62,8 +57,6 @@ class MetaCoreShield:
         Returns:
             float: Estimated kappa.
         """
-        # Approximation for initial guess based on Banerjee et al. (2005)
-        # kappa ~= (R_bar * d - R_bar**3) / (1 - R_bar**2)
         if R_bar >= 1.0:
             return float('inf')
         if R_bar <= 0.0:
@@ -71,39 +64,26 @@ class MetaCoreShield:
 
         kappa_guess = (R_bar * d - R_bar**3) / (1 - R_bar**2)
 
-        # Function to find root for: f(kappa) = A_d(kappa) - R_bar = 0
         def f(k):
-            # A_d(k) = I_{d/2}(k) / I_{d/2-1}(k)
-            # scipy.special.ive is exponentially scaled modified Bessel function,
-            # which avoids overflow for large kappa.
-            # I_v(k) / I_{v-1}(k) == ive_v(k) / ive_{v-1}(k)
             num = scipy.special.ive(d / 2, k)
             den = scipy.special.ive(d / 2 - 1, k)
             if den == 0:
-                # Fallback to standard iv if ive returns 0 (e.g. very small kappa)
                 num = scipy.special.iv(d / 2, k)
                 den = scipy.special.iv(d / 2 - 1, k)
                 if den == 0:
-                    return -R_bar # Should not happen for k>0, but safe fallback
+                    return -R_bar
             return (num / den) - R_bar
 
-        # Optimization: use scipy.optimize.root_scalar
         try:
             from scipy.optimize import root_scalar
-            # Newton or secant might be faster, but let's try a simple bracket first if possible,
-            # or use the guess with a secant method.
-            # Since A_d(k) is monotonically increasing from 0 to 1 as k goes 0 to inf:
-            # For a given R_bar in (0, 1), there is a unique root.
             res = root_scalar(f, x0=kappa_guess, x1=kappa_guess * 1.1, method='secant')
             if res.converged:
                 return res.root
         except Exception:
             pass
 
-        # Fallback to simple Newton-Raphson if optimization fails or isn't available
-        # derivative A_d'(k) = 1 - A_d(k)^2 - (d-1)/k * A_d(k)
         kappa = kappa_guess
-        for _ in range(50): # Max iterations
+        for _ in range(50):
             val = f(kappa)
             if abs(val) < 1e-6:
                 break
@@ -116,7 +96,6 @@ class MetaCoreShield:
 
             kappa = kappa - val / deriv
 
-            # kappa must be > 0
             if kappa <= 0:
                 kappa = 1e-4
 
