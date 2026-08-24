@@ -122,6 +122,30 @@ func TestSaveRequest_Validate(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "invalid name: filename cannot contain path separators",
 		},
+		{
+			name: "FileName with relative path traversal",
+			req: &SaveRequest{
+				AppName:   "MyApp",
+				UserID:    "user-123",
+				SessionID: "sess-abc",
+				FileName:  "..",
+				Part:      genai.NewPartFromBytes([]byte("data"), "text/plain"),
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: filename cannot contain relative path navigation",
+		},
+		{
+			name: "SessionID with relative path traversal",
+			req: &SaveRequest{
+				AppName:   "MyApp",
+				UserID:    "user-123",
+				SessionID: "..",
+				FileName:  "file.txt",
+				Part:      genai.NewPartFromBytes([]byte("data"), "text/plain"),
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: sessionid cannot contain relative path navigation",
+		},
 	}
 	executeValidatorTestCases(t, "SaveRequest", testCases)
 }
