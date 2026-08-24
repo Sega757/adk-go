@@ -51,16 +51,46 @@ func (a *apiLauncher) CommandLineSyntax() string {
 }
 
 // Adds CORS headers which allow calling ADK REST API from another web app (like ADK WebUI)
+// This middleware dynamically validates incoming request Origin headers against the configured
+// frontendAddress (supporting both schemed and scheme-less formats), strictly enforcing
+// matching schemes if configured, applying Vary: Origin to mitigate cache poisoning, and
+// securely omitting CORS headers on mismatch.
 func corsWithArgs(frontendAddress string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendAddress)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			if r.Method == "OPTIONS" {
-				w.WriteHeader(http.StatusOK)
-				return
+			// Apply Vary: Origin to mitigate cache poisoning.
+			w.Header().Add("Vary", "Origin")
+
+			origin := r.Header.Get("Origin")
+			var allowedOrigin string
+
+			if origin != "" {
+				normOrigin := strings.TrimSuffix(origin, "/")
+				normFrontend := strings.TrimSuffix(frontendAddress, "/")
+				hasScheme := strings.HasPrefix(normFrontend, "http://") || strings.HasPrefix(normFrontend, "https://")
+
+				if hasScheme {
+					if normOrigin == normFrontend {
+						allowedOrigin = origin
+					}
+				} else {
+					if normOrigin == "http://"+normFrontend || normOrigin == "https://"+normFrontend {
+						allowedOrigin = origin
+					}
+				}
 			}
+
+			if allowedOrigin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+				if r.Method == "OPTIONS" {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+			}
+
 			next.ServeHTTP(w, r)
 		})
 	}
