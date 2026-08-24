@@ -33,13 +33,16 @@ const (
 
 // InvariantErrors
 var (
-	ErrRCannotBlockOrModify = errors.New("Reasoning Engine (R) has no privilege to block or modify execution")
-	ErrECannotInitiate      = errors.New("Empathy Layer (E) has no privilege to initiate action")
-	ErrKCannotModify        = errors.New("Kill-Switch Layer (K) has no privilege to modify parameters")
-	ErrKAbsoluteBlock       = errors.New("Kill-Switch Layer (K) triggered absolute execution halt")
-	ErrNilDecisionPacket    = errors.New("Decision Packet (R) cannot be nil")
-	ErrInvalidConfidence    = errors.New("Confidence score must be a valid number between 0.0 and 1.0")
-	ErrInvalidVulnerability = errors.New("Vulnerability score must be a valid number between 0.0 and 1.0")
+	ErrRCannotBlockOrModify       = errors.New("Reasoning Engine (R) has no privilege to block or modify execution")
+	ErrECannotInitiate            = errors.New("Empathy Layer (E) has no privilege to initiate action")
+	ErrKCannotModify              = errors.New("Kill-Switch Layer (K) has no privilege to modify parameters")
+	ErrKAbsoluteBlock             = errors.New("Kill-Switch Layer (K) triggered absolute execution halt")
+	ErrNilDecisionPacket          = errors.New("Decision Packet (R) cannot be nil")
+	ErrInvalidConfidence          = errors.New("Confidence score must be a valid number between 0.0 and 1.0")
+	ErrInvalidVulnerability       = errors.New("Vulnerability score must be a valid number between 0.0 and 1.0")
+	ErrSafeModeActive             = errors.New("Safe Mode active: dynamic tool calls are forbidden and decision depth is restricted")
+	ErrEmpathyOverrideActive      = errors.New("Empathy Override active: stochastic reasoning is disabled; deterministic responses only")
+	ErrConservativePlanningActive = errors.New("Conservative Planning active: time horizons must be limited and require step-by-step confirmation")
 )
 
 // Validator implements the META-CORE (R-E-K) validation engine and pipeline.
@@ -98,6 +101,33 @@ func (v *Validator) ValidatePipeline(packet *DecisionPacket, empathy *EmpathyOut
 		return nil, ErrRCannotBlockOrModify
 	}
 
+	// Enforce active degradation modes
+	switch v.CurrentMode {
+	case ModeSafeMode:
+		planStr := strings.ToLower(packet.Goal) + " " + strings.Join(packet.Plan, " ")
+		if strings.Contains(planStr, "tool") || strings.Contains(planStr, "call") || strings.Contains(planStr, "execute") || strings.Contains(planStr, "run") {
+			return nil, ErrSafeModeActive
+		}
+		if len(packet.Plan) > 2 {
+			return nil, ErrSafeModeActive
+		}
+
+	case ModeEmpathyOverride:
+		planStr := strings.ToLower(packet.Goal) + " " + strings.Join(packet.Plan, " ")
+		if !strings.Contains(planStr, "template") && !strings.Contains(planStr, "deterministic") {
+			return nil, ErrEmpathyOverrideActive
+		}
+
+	case ModeConservativePlanning:
+		planStr := strings.ToLower(packet.Goal) + " " + strings.Join(packet.Plan, " ")
+		if len(packet.Plan) > 1 {
+			return nil, ErrConservativePlanningActive
+		}
+		if !strings.Contains(planStr, "confirm") && !strings.Contains(planStr, "operator") {
+			return nil, ErrConservativePlanningActive
+		}
+	}
+
 	// 1. Evaluate Empathy Layer (E)
 	// E cannot initiate actions (must not change packet goal/plan completely)
 	if empathy == nil {
@@ -130,7 +160,7 @@ func (v *Validator) ValidatePipeline(packet *DecisionPacket, empathy *EmpathyOut
 
 	// Invariant: vulnerability_score > 0.7 => status = modify or block
 	if empathy.VulnerabilityScore > 0.7 {
-		if empathy.Status == "pass" {
+		if empathy.Status != "modify" && empathy.Status != "block" {
 			empathy.Status = "modify"
 			empathy.Modifications.Tone = "gentle"
 			empathy.Modifications.Intensity = "low"

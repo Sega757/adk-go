@@ -213,8 +213,6 @@ func TestScenario3HumanitarianVeto(t *testing.T) {
 }
 
 func TestScenario2LawViolationAndEthical6Fields(t *testing.T) {
-	v := metacore.NewValidator(0.7, 100.0, 3)
-
 	tests := []struct {
 		name         string
 		packet       *metacore.DecisionPacket
@@ -290,6 +288,7 @@ func TestScenario2LawViolationAndEthical6Fields(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			v := metacore.NewValidator(0.7, 100.0, 3)
 			kOut, err := v.ValidatePipeline(tc.packet, nil)
 			if !errors.Is(err, metacore.ErrKAbsoluteBlock) {
 				t.Errorf("Expected ErrKAbsoluteBlock, got %v", err)
@@ -398,5 +397,102 @@ func TestDegradationModes(t *testing.T) {
 	}
 	if v3.CurrentMode != metacore.ModeEmpathyOverride {
 		t.Errorf("Expected Empathy Override, got %s", v3.CurrentMode)
+	}
+}
+
+func TestDegradationModesConstraintsEnforced(t *testing.T) {
+	// Test Safe Mode constraints
+	vSafe := metacore.NewValidator(0.7, 100.0, 3)
+	vSafe.CurrentMode = metacore.ModeSafeMode
+
+	// 1. Packet calling tools should be blocked
+	packetTool := &metacore.DecisionPacket{
+		Goal:       "call a database query tool",
+		Plan:       []string{"execute script"},
+		Confidence: 0.9,
+	}
+	_, err := vSafe.ValidatePipeline(packetTool, nil)
+	if !errors.Is(err, metacore.ErrSafeModeActive) {
+		t.Errorf("Expected ErrSafeModeActive for tool call in Safe Mode, got %v", err)
+	}
+
+	// 2. Packet with plan length > 2 steps should be blocked
+	packetLongPlan := &metacore.DecisionPacket{
+		Goal:       "simple task",
+		Plan:       []string{"step1", "step2", "step3"},
+		Confidence: 0.9,
+	}
+	_, err = vSafe.ValidatePipeline(packetLongPlan, nil)
+	if !errors.Is(err, metacore.ErrSafeModeActive) {
+		t.Errorf("Expected ErrSafeModeActive for decision depth > 2 in Safe Mode, got %v", err)
+	}
+
+	// 3. Simple non-tool plan with <= 2 steps should be approved
+	packetSafeOk := &metacore.DecisionPacket{
+		Goal:       "respond with status update",
+		Plan:       []string{"format text"},
+		Confidence: 0.9,
+	}
+	_, err = vSafe.ValidatePipeline(packetSafeOk, nil)
+	if err != nil {
+		t.Errorf("Unexpected error for safe packet in Safe Mode: %v", err)
+	}
+
+	// Test Empathy Override constraints (only deterministic/templated)
+	vEmp := metacore.NewValidator(0.7, 100.0, 3)
+	vEmp.CurrentMode = metacore.ModeEmpathyOverride
+
+	packetStochastic := &metacore.DecisionPacket{
+		Goal:       "generate dynamic novel advice",
+		Plan:       []string{"synthesize response"},
+		Confidence: 0.9,
+	}
+	_, err = vEmp.ValidatePipeline(packetStochastic, nil)
+	if !errors.Is(err, metacore.ErrEmpathyOverrideActive) {
+		t.Errorf("Expected ErrEmpathyOverrideActive for stochastic packet, got %v", err)
+	}
+
+	packetTemplate := &metacore.DecisionPacket{
+		Goal:       "return template fallback message",
+		Plan:       []string{"send deterministic response"},
+		Confidence: 0.9,
+	}
+	_, err = vEmp.ValidatePipeline(packetTemplate, nil)
+	if err != nil {
+		t.Errorf("Unexpected error for template packet under Empathy Override: %v", err)
+	}
+
+	// Test Conservative Planning constraints (time horizons limited to 1 step and requires operator/confirm)
+	vCons := metacore.NewValidator(0.7, 100.0, 3)
+	vCons.CurrentMode = metacore.ModeConservativePlanning
+
+	packetMultiStep := &metacore.DecisionPacket{
+		Goal:       "confirm transaction",
+		Plan:       []string{"confirm step", "another step"},
+		Confidence: 0.9,
+	}
+	_, err = vCons.ValidatePipeline(packetMultiStep, nil)
+	if !errors.Is(err, metacore.ErrConservativePlanningActive) {
+		t.Errorf("Expected ErrConservativePlanningActive for multi-step plan, got %v", err)
+	}
+
+	packetNoConfirm := &metacore.DecisionPacket{
+		Goal:       "execute direct write",
+		Plan:       []string{"write action"},
+		Confidence: 0.9,
+	}
+	_, err = vCons.ValidatePipeline(packetNoConfirm, nil)
+	if !errors.Is(err, metacore.ErrConservativePlanningActive) {
+		t.Errorf("Expected ErrConservativePlanningActive for non-confirmed plan, got %v", err)
+	}
+
+	packetConsOk := &metacore.DecisionPacket{
+		Goal:       "ask operator for instructions",
+		Plan:       []string{"confirm details"},
+		Confidence: 0.9,
+	}
+	_, err = vCons.ValidatePipeline(packetConsOk, nil)
+	if err != nil {
+		t.Errorf("Unexpected error for conservative packet: %v", err)
 	}
 }
