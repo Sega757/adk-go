@@ -184,20 +184,32 @@ func workflowInputResponseFromUserInput(line string) map[string]any {
 // provided.
 func renderToolConfirmationPrompt(args map[string]any, tty bool) {
 	hint := ""
+	var origArgs map[string]any
+	if oc, err := toolconfirmation.OriginalCallFrom(&genai.FunctionCall{Args: args}); err == nil {
+		origArgs = oc.Args
+		if oc.Name != "" {
+			hint = "Confirm " + oc.Name + "?"
+		}
+	}
 	if tc, ok := args["toolConfirmation"].(map[string]any); ok {
-		hint, _ = tc["hint"].(string)
+		if tcHint, _ := tc["hint"].(string); tcHint != "" {
+			hint = tcHint
+		}
 	}
 	if hint == "" {
-		originalName := "unknown"
-		if oc, err := toolconfirmation.OriginalCallFrom(&genai.FunctionCall{Args: args}); err == nil && oc.Name != "" {
-			originalName = oc.Name
-		}
-		hint = "Confirm " + originalName + "?"
+		hint = "Confirm tool execution?"
 	}
 	if tty {
 		fmt.Printf("\033[1;33m🤝 HITL -> %s\033[0m\n", hint)
 	} else {
 		fmt.Printf("Agent -> %s\n", hint)
+	}
+	if len(origArgs) > 0 {
+		if pretty, err := json.Marshal(origArgs); err == nil {
+			fmt.Printf("  Args: %s\n", pretty)
+		} else {
+			fmt.Printf("  Args: %v\n", origArgs)
+		}
 	}
 	fmt.Println("  Type 'yes' to confirm, anything else to reject.")
 }
