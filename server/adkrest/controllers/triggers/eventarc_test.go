@@ -202,3 +202,39 @@ func TestEventarcTriggerHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestEventarcTriggerHandler_PayloadTooLarge(t *testing.T) {
+	testAgent, err := agent.New(agent.Config{
+		Name: "test-agent",
+		Run: func(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
+			return func(yield func(*session.Event, error) bool) {
+				yield(&session.Event{ID: "success-event"}, nil)
+			}
+		},
+	})
+	if err != nil {
+		t.Fatalf("agent.New failed: %v", err)
+	}
+
+	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}
+	agentLoader := agent.NewSingleLoader(testAgent)
+	controller := triggers.NewEventarcController(sessionService, agentLoader, nil, nil, runner.PluginConfig{}, defaultTriggerConfig)
+
+	// Create payload exceeding 10MB limit (10MB + 1KB)
+	largeBody := bytes.Repeat([]byte("a"), 10*1024*1024+1024)
+
+	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", bytes.NewBuffer(largeBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("ce-id", "large-payload-id")
+	req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+	rr := httptest.NewRecorder()
+
+	controller.EventarcTriggerHandler(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for oversized payload, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+}
