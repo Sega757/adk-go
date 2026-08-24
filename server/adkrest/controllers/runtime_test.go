@@ -249,8 +249,9 @@ func TestDecodeRequestBody_AcceptsFunctionCallEventID(t *testing.T) {
 		"functionCallEventId": "fce-1"
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/run", bytes.NewBufferString(body))
+	rr := httptest.NewRecorder()
 
-	got, err := decodeRequestBody(req)
+	got, err := decodeRequestBody(rr, req)
 	if err != nil {
 		t.Fatalf("decodeRequestBody: unexpected error: %v", err)
 	}
@@ -268,8 +269,20 @@ func TestDecodeRequestBody_RejectsUnknownFields(t *testing.T) {
 		"totallyMadeUpField": 123
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/run", bytes.NewBufferString(body))
+	rr := httptest.NewRecorder()
 
-	if _, err := decodeRequestBody(req); err == nil {
+	if _, err := decodeRequestBody(rr, req); err == nil {
 		t.Errorf("decodeRequestBody: expected error for unknown field, got nil")
+	}
+}
+
+func TestDecodeRequestBody_EnforcesMaxBytesReader(t *testing.T) {
+	// Create a payload > 10MB
+	largeBody := bytes.Repeat([]byte("a"), 11*1024*1024)
+	req := httptest.NewRequest(http.MethodPost, "/run", bytes.NewBuffer(largeBody))
+	rr := httptest.NewRecorder()
+
+	if _, err := decodeRequestBody(rr, req); err == nil {
+		t.Errorf("decodeRequestBody: expected error for payload > 10MB, got nil")
 	}
 }
