@@ -34,10 +34,25 @@ import (
 	"google.golang.org/adk/v2/server/agentengine/internal/routers"
 )
 
+// securityHeaders is a middleware that injects security-related HTTP headers to responses.
+func securityHeaders(inner http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		inner.ServeHTTP(w, r)
+	})
+}
+
 // NewHandler creates and returns an http.Handler for the AgentEngine API.
 // Handles both streaming and non-streaming versions
 func NewHandler(config *launcher.Config, sseWriteTimeout time.Duration, maxPayloadSize int64, agentEngineID string) (http.Handler, error) {
 	router := mux.NewRouter().StrictSlash(true)
+	router.Use(securityHeaders)
 
 	nonStreamAgentEngineController, err := controllers.NewAgentEngineAPIController(config.SessionService, sseWriteTimeout, maxPayloadSize,
 		listNonStreamHandlers(config, agentEngineID))
