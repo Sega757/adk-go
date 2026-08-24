@@ -186,9 +186,35 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
 
-			if len(pendingInterrupts) == 0 && strings.TrimSpace(userInput) == "" {
-				printUserPrompt(isTerminal())
-				continue
+			if len(pendingInterrupts) == 0 {
+				trimmed := strings.TrimSpace(userInput)
+				if trimmed == "" {
+					printUserPrompt(isTerminal())
+					continue
+				}
+				if strings.HasPrefix(trimmed, "/") {
+					switch trimmed {
+					case "/exit", "/quit":
+						fmt.Println("Exiting ADK Console...")
+						return nil
+					case "/clear":
+						fmt.Print("\033[H\033[2J")
+						printUserPrompt(isTerminal())
+						continue
+					case "/help":
+						fmt.Println("\nAvailable commands:")
+						fmt.Println("  /help  - Show this help message")
+						fmt.Println("  /clear - Clear the terminal screen")
+						fmt.Println("  /exit  - Exit the console session")
+						fmt.Println("  /quit  - Exit the console session")
+						printUserPrompt(isTerminal())
+						continue
+					default:
+						fmt.Printf("Unknown command: %s. Type /help for a list of available commands.\n", trimmed)
+						printUserPrompt(isTerminal())
+						continue
+					}
+				}
 			}
 
 			var userMsg *genai.Content
