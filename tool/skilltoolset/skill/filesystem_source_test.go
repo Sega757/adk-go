@@ -115,11 +115,20 @@ func TestFileSystemSource_LoadFrontmatter(t *testing.T) {
 			source:  NewFileSystemSource(plainFS{fstest.MapFS{}}),
 			wantErr: ErrSkillNotFound,
 		},
+		{
+			name:    "Invalid skill name with path separator",
+			source:  NewFileSystemSource(plainFS{fstest.MapFS{}}),
+			wantErr: ErrInvalidSkillName,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.source.LoadFrontmatter(t.Context(), "test-skill")
+			skillName := "test-skill"
+			if tt.name == "Invalid skill name with path separator" {
+				skillName = "../test-skill"
+			}
+			got, err := tt.source.LoadFrontmatter(t.Context(), skillName)
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("LoadFrontmatter(%q) expected error %v, got %v", "test-skill", tt.wantErr, err)
