@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"math"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -161,5 +162,93 @@ func TestCanonicalize_Primitives(t *testing.T) {
 				t.Errorf("canonicalize() = %s, want %s", string(out), tc.want)
 			}
 		})
+	}
+}
+
+func TestCanonicalize_EdgeCases(t *testing.T) {
+	// 1. Float64 edge cases: NaN and Inf should fail standard JSON serialization.
+	// Since we fall back to json.Marshal(p), let's ensure they return error.
+	_, err := canonicalize(math.NaN())
+	if err == nil {
+		t.Error("expected error for math.NaN(), got nil")
+	}
+
+	_, err = canonicalize(math.Inf(1))
+	if err == nil {
+		t.Error("expected error for math.Inf(1), got nil")
+	}
+
+	// Tiny float formatting
+	tinyVal, err := canonicalize(1e-300)
+	if err != nil {
+		t.Fatalf("unexpected error for 1e-300: %v", err)
+	}
+	expectedTiny := "1e-300"
+	if string(tinyVal) != expectedTiny {
+		t.Errorf("expected 1e-300 formatted as %q, got %q", expectedTiny, string(tinyVal))
+	}
+
+	// 2. String edge cases: check fallback on invalid UTF-8 and Unicode separators.
+	invalidUTF8, err := canonicalize("\xff")
+	if err != nil {
+		t.Fatalf("unexpected error for invalid UTF-8 string: %v", err)
+	}
+	// json.Marshal escapes invalid UTF-8 bytes to unicode replacement chars \ufffd
+	if string(invalidUTF8) != `"\ufffd"` {
+		t.Errorf("expected escaped invalid UTF-8 to be replacement char, got %s", string(invalidUTF8))
+	}
+
+	unicodeSep, err := canonicalize("\u2028\u2029")
+	if err != nil {
+		t.Fatalf("unexpected error for unicode separator string: %v", err)
+	}
+	// json.Marshal escapes \u2028 and \u2029
+	if string(unicodeSep) != `"\u2028\u2029"` {
+		t.Errorf("expected escaped unicode separators, got %s", string(unicodeSep))
+	}
+}
+
+func BenchmarkCanonicalSchemaJSON(b *testing.B) {
+	schema := &jsonschema.Schema{
+		Type: "object",
+		Properties: map[string]*jsonschema.Schema{
+			"foo": {Type: "string"},
+			"bar": {
+				Type: "object",
+				Properties: map[string]*jsonschema.Schema{
+					"inner1": {Type: "integer"},
+					"inner2": {Type: "boolean"},
+				},
+			},
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := CanonicalSchemaJSON(schema)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkCanonicalize(b *testing.B) {
+	input := map[string]any{
+		"z": map[string]any{
+			"y": map[string]any{
+				"x": "val",
+				"a": 123.0,
+			},
+			"b": true,
+		},
+		"a": "top",
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := canonicalize(input)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
