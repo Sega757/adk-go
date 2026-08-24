@@ -38,60 +38,125 @@ func CanonicalSchemaJSON(s *jsonschema.Schema) ([]byte, error) {
 }
 
 // canonicalize recursively serializes v with sorted map keys. Slices
-// keep their order. Primitive values are encoded via json.Marshal.
+// keep their order.
 func canonicalize(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := canonicalizeTo(v, &buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// canonicalizeTo serializes v to a shared buffer, dramatically reducing heap allocations.
+func canonicalizeTo(v any, buf *bytes.Buffer) error {
 	switch val := v.(type) {
 	case map[string]any:
 		if val == nil {
-			return []byte("null"), nil
+			buf.WriteString("null")
+			return nil
 		}
-		keys := make([]string, 0, len(val))
+		// Performance Optimization: Utilize a stack-allocated array for up to 16 keys
+		// to avoid heap allocation overhead of key slices.
+		var keys []string
+		var kArr [16]string
+		if len(val) <= 16 {
+			keys = kArr[:0]
+		} else {
+			keys = make([]string, 0, len(val))
+		}
 		for k := range val {
 			keys = append(keys, k)
 		}
-		sort.Strings(keys)
+		// Performance Optimization: Skip sorting if there is only 1 key or empty.
+		if len(val) > 1 {
+			sort.Strings(keys)
+		}
 
-		var buf bytes.Buffer
 		buf.WriteByte('{')
 		for i, k := range keys {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			keyBytes, err := json.Marshal(k)
-			if err != nil {
-				return nil, err
+			// Performance Optimization: Fast-path string serialization for safe ASCII keys.
+			if err := writeString(k, buf); err != nil {
+				return err
 			}
-			buf.Write(keyBytes)
 			buf.WriteByte(':')
-			valBytes, err := canonicalize(val[k])
-			if err != nil {
-				return nil, err
+			if err := canonicalizeTo(val[k], buf); err != nil {
+				return err
 			}
-			buf.Write(valBytes)
 		}
 		buf.WriteByte('}')
-		return buf.Bytes(), nil
+		return nil
 
 	case []any:
 		if val == nil {
-			return []byte("null"), nil
+			buf.WriteString("null")
+			return nil
 		}
-		var buf bytes.Buffer
 		buf.WriteByte('[')
 		for i, item := range val {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			itemBytes, err := canonicalize(item)
-			if err != nil {
-				return nil, err
+			if err := canonicalizeTo(item, buf); err != nil {
+				return err
 			}
-			buf.Write(itemBytes)
 		}
 		buf.WriteByte(']')
-		return buf.Bytes(), nil
+		return nil
+
+	case string:
+		// Performance Optimization: Fast-path string serialization for safe ASCII strings.
+		return writeString(val, buf)
+
+	case bool:
+		if val {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
+		return nil
+
+	case nil:
+		buf.WriteString("null")
+		return nil
 
 	default:
-		return json.Marshal(val)
+		// Fallback to standard json.Marshal for float64, ints, and complex types.
+		b, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		buf.Write(b)
+		return nil
 	}
+}
+
+// isSafeASCII returns true if the string consists entirely of printable, safe ASCII characters.
+// This avoids expensive json.Marshal calls for typical schema strings.
+func isSafeASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c > 0x7E || c == '\\' || c == '"' {
+			return false
+		}
+	}
+	return true
+}
+
+// writeString writes the string with proper quotes, using a fast-path for safe ASCII strings.
+func writeString(s string, buf *bytes.Buffer) error {
+	if isSafeASCII(s) {
+		buf.WriteByte('"')
+		buf.WriteString(s)
+		buf.WriteByte('"')
+		return nil
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+	buf.Write(b)
+	return nil
 }
