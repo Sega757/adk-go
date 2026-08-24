@@ -163,3 +163,53 @@ func TestCanonicalize_Primitives(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkCanonicalSchemaJSON(b *testing.B) {
+	schema := &jsonschema.Schema{
+		Type: "object",
+		Properties: map[string]*jsonschema.Schema{
+			"foo": {
+				Type: "string",
+			},
+			"bar": {
+				Type: "integer",
+			},
+			"nested": {
+				Type: "object",
+				Properties: map[string]*jsonschema.Schema{
+					"z": {Type: "string"},
+					"a": {Type: "boolean"},
+				},
+			},
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := CanonicalSchemaJSON(schema)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkCanonicalize(b *testing.B) {
+	input := map[string]any{
+		"z": map[string]any{
+			"y": map[string]any{
+				"x": "val",
+				"a": 123.0,
+			},
+			"b": true,
+		},
+		"a": "top",
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := canonicalize(input)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
