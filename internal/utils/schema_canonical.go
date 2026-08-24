@@ -22,9 +22,12 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-// canonicalSchemaJSON marshals the schema to JSON, parses it back, and
+// CanonicalSchemaJSON marshals the schema to JSON, parses it back, and
 // re-emits it with object keys sorted alphabetically (recursively).
 // Arrays are preserved in their original order.
+// Performance-optimized by Bolt: uses direct buffer writing,
+// key sorting bypass for single-property maps, stack-allocated key slices
+// for maps up to size 16, and fast-paths safe ASCII strings.
 func CanonicalSchemaJSON(s *jsonschema.Schema) ([]byte, error) {
 	raw, err := json.Marshal(s)
 	if err != nil {
@@ -34,64 +37,140 @@ func CanonicalSchemaJSON(s *jsonschema.Schema) ([]byte, error) {
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return nil, err
 	}
-	return canonicalize(v)
+	var buf bytes.Buffer
+	if err := canonicalizeTo(v, &buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // canonicalize recursively serializes v with sorted map keys. Slices
 // keep their order. Primitive values are encoded via json.Marshal.
+// Backwards compatible wrapper around canonicalizeTo.
 func canonicalize(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := canonicalizeTo(v, &buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// canonicalizeTo recursively writes the canonicalized representation of v into buf.
+func canonicalizeTo(v any, buf *bytes.Buffer) error {
 	switch val := v.(type) {
+	case nil:
+		buf.WriteString("null")
+		return nil
+
+	case bool:
+		if val {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
+		return nil
+
+	case string:
+		if isSafeASCII(val) {
+			buf.WriteByte('"')
+			buf.WriteString(val)
+			buf.WriteByte('"')
+			return nil
+		}
+		b, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		buf.Write(b)
+		return nil
+
+	case float64:
+		b, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		buf.Write(b)
+		return nil
+
 	case map[string]any:
 		if val == nil {
-			return []byte("null"), nil
+			buf.WriteString("null")
+			return nil
 		}
-		keys := make([]string, 0, len(val))
+		var keys []string
+		var arr [16]string
+		if len(val) <= 16 {
+			keys = arr[:0]
+		} else {
+			keys = make([]string, 0, len(val))
+		}
 		for k := range val {
 			keys = append(keys, k)
 		}
-		sort.Strings(keys)
+		if len(keys) > 1 {
+			sort.Strings(keys)
+		}
 
-		var buf bytes.Buffer
 		buf.WriteByte('{')
 		for i, k := range keys {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			keyBytes, err := json.Marshal(k)
-			if err != nil {
-				return nil, err
+			if isSafeASCII(k) {
+				buf.WriteByte('"')
+				buf.WriteString(k)
+				buf.WriteByte('"')
+			} else {
+				keyBytes, err := json.Marshal(k)
+				if err != nil {
+					return err
+				}
+				buf.Write(keyBytes)
 			}
-			buf.Write(keyBytes)
 			buf.WriteByte(':')
-			valBytes, err := canonicalize(val[k])
-			if err != nil {
-				return nil, err
+			if err := canonicalizeTo(val[k], buf); err != nil {
+				return err
 			}
-			buf.Write(valBytes)
 		}
 		buf.WriteByte('}')
-		return buf.Bytes(), nil
+		return nil
 
 	case []any:
 		if val == nil {
-			return []byte("null"), nil
+			buf.WriteString("null")
+			return nil
 		}
-		var buf bytes.Buffer
 		buf.WriteByte('[')
 		for i, item := range val {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			itemBytes, err := canonicalize(item)
-			if err != nil {
-				return nil, err
+			if err := canonicalizeTo(item, buf); err != nil {
+				return err
 			}
-			buf.Write(itemBytes)
 		}
 		buf.WriteByte(']')
-		return buf.Bytes(), nil
+		return nil
 
 	default:
-		return json.Marshal(val)
+		// Safe fallback for other types
+		b, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		buf.Write(b)
+		return nil
 	}
+}
+
+// isSafeASCII reports whether string contains only printable ASCII
+// characters and does not need any JSON/HTML escaping.
+func isSafeASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if b < 32 || b >= 127 || b == '"' || b == '\\' || b == '<' || b == '>' || b == '&' {
+			return false
+		}
+	}
+	return true
 }

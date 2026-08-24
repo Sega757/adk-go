@@ -7,3 +7,11 @@
 ## 2026-08-02 - JSON schema conversion and validation fast-path
 **Learning:** General-purpose type conversions and schema validations that marshal/unmarshal Go values into raw JSON strings can be extremely slow and allocation-heavy, especially for simple values like strings, float64s, and booleans. When the source and destination types are identical and safe to pass directly to a JSON Schema validation engine, we can bypass the entire JSON serialization pipeline, reducing execution time and allocation overhead significantly. However, care must be taken to only bypass checks on safe primitive types (`string`, `float64`, `bool`, and untyped `nil`) and avoid assertions on typed nil pointers (which would cause runtime type assertion errors or incorrect validation bypass).
 **Action:** Always implement a selective fast-path for JSON-safe types during validation and conversion routines to avoid JSON marshal/unmarshal rounds, but ensure other numeric types and pointers continue to fall back to standard deserialization pathways for correctness.
+
+## 2026-08-15 - Schema Canonicalization Direct Buffer and Fast-Path
+**Learning:** Canonicalizing deeply nested JSON structures (like JSON Schemas) via intermediate `json.Marshal` and recursive type serialization is an allocation-heavy task. We can reduce allocations and latency significantly by:
+1) Writing directly to a single shared `*bytes.Buffer` instead of generating intermediate `[]byte` values at every recursion level.
+2) Bypassing recursive sorting logic for empty or single-property maps.
+3) Allocating string key slices onto the stack (using a stack-allocated backing array) for maps containing up to 16 keys (common for schemas).
+4) Implementing a safe ASCII fast-path for string keys and string properties that writes standard strings directly without `json.Marshal`, fallback-safely avoiding JSON/HTML escape vulnerabilities.
+**Action:** Apply single shared buffers, stack-allocated slices for small maps, and ASCII string fast-paths in any serialization/canonicalization loops.
