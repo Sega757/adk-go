@@ -35,9 +35,13 @@ const afFunctionCallIDPrefix = "adk-"
 // the LLMAgent depends on the IDs to map FunctionCall and FunctionResponse events
 // in the event stream.
 func PopulateClientFunctionCallID(ctx context.Context, c *genai.Content) {
-	for _, fn := range FunctionCalls(c) {
-		if fn.ID == "" {
-			fn.ID = GenerateFunctionCallID(ctx)
+	if c == nil {
+		return
+	}
+	// Direct iteration over c.Parts avoids allocating temporary slices via FunctionCalls.
+	for _, p := range c.Parts {
+		if p.FunctionCall != nil && p.FunctionCall.ID == "" {
+			p.FunctionCall.ID = GenerateFunctionCallID(ctx)
 		}
 	}
 }
@@ -53,14 +57,17 @@ func GenerateFunctionCallID(ctx context.Context) string {
 // by populateClientFunctionCallID. This is necessary when FunctionCall or
 // FunctionResponse are sent back to the model.
 func RemoveClientFunctionCallID(c *genai.Content) {
-	for _, fn := range FunctionCalls(c) {
-		if strings.HasPrefix(fn.ID, afFunctionCallIDPrefix) {
-			fn.ID = ""
-		}
+	if c == nil {
+		return
 	}
-	for _, fn := range FunctionResponses(c) {
-		if strings.HasPrefix(fn.ID, afFunctionCallIDPrefix) {
-			fn.ID = ""
+	// Direct iteration over c.Parts in a single pass avoids allocating temporary slices
+	// via FunctionCalls and FunctionResponses.
+	for _, p := range c.Parts {
+		if p.FunctionCall != nil && strings.HasPrefix(p.FunctionCall.ID, afFunctionCallIDPrefix) {
+			p.FunctionCall.ID = ""
+		}
+		if p.FunctionResponse != nil && strings.HasPrefix(p.FunctionResponse.ID, afFunctionCallIDPrefix) {
+			p.FunctionResponse.ID = ""
 		}
 	}
 }
