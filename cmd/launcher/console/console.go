@@ -186,9 +186,19 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
 
-			if len(pendingInterrupts) == 0 && strings.TrimSpace(userInput) == "" {
-				printUserPrompt(isTerminal())
-				continue
+			if len(pendingInterrupts) == 0 {
+				if strings.TrimSpace(userInput) == "" {
+					printUserPrompt(isTerminal())
+					continue
+				}
+				handled, shouldExit := handleSlashCommand(userInput, isTerminal(), os.Stdout)
+				if handled {
+					if shouldExit {
+						return nil
+					}
+					printUserPrompt(isTerminal())
+					continue
+				}
 			}
 
 			var userMsg *genai.Content
@@ -382,4 +392,66 @@ func (l *consoleLauncher) Execute(ctx context.Context, config *launcher.Config, 
 		return fmt.Errorf("cannot parse all the arguments: %w", err)
 	}
 	return l.Run(ctx, config)
+}
+
+// handleSlashCommand parses and handles slash commands.
+// It returns (handled, shouldExit).
+func handleSlashCommand(input string, tty bool, w io.Writer) (bool, bool) {
+	trimmed := strings.TrimSpace(input)
+	if !strings.HasPrefix(trimmed, "/") {
+		return false, false
+	}
+	parts := strings.Fields(trimmed)
+	if len(parts) == 0 {
+		return false, false
+	}
+	cmd := parts[0]
+	switch cmd {
+	case "/exit", "/quit":
+		if tty {
+			fmt.Fprintln(w, "\033[1;33mGoodbye! 👋\033[0m")
+		} else {
+			fmt.Fprintln(w, "Goodbye!")
+		}
+		return true, true
+	case "/clear":
+		if tty {
+			fmt.Fprint(w, "\033[H\033[2J")
+		} else {
+			fmt.Fprintln(w, "--- Screen Cleared ---")
+		}
+		return true, false
+	case "/help":
+		printHelpTo(tty, w)
+		return true, false
+	default:
+		printUnrecognizedCommandTo(cmd, tty, w)
+		return true, false
+	}
+}
+
+func printHelpTo(tty bool, w io.Writer) {
+	if tty {
+		fmt.Fprintln(w, "\n\033[1;36mAvailable Console Commands:\033[0m")
+		fmt.Fprintln(w, "  \033[1;32m/help\033[0m  - Show this help message")
+		fmt.Fprintln(w, "  \033[1;32m/clear\033[0m - Clear the terminal screen")
+		fmt.Fprintln(w, "  \033[1;32m/exit\033[0m  - Exit the console application")
+		fmt.Fprintln(w, "  \033[1;32m/quit\033[0m  - Exit the console application")
+	} else {
+		fmt.Fprintln(w, "\nAvailable Console Commands:")
+		fmt.Fprintln(w, "  /help  - Show this help message")
+		fmt.Fprintln(w, "  /clear - Clear the terminal screen")
+		fmt.Fprintln(w, "  /exit  - Exit the console application")
+		fmt.Fprintln(w, "  /quit  - Exit the console application")
+	}
+}
+
+func printUnrecognizedCommandTo(cmd string, tty bool, w io.Writer) {
+	if tty {
+		fmt.Fprintf(w, "\n\033[1;31mError ❌ -> Unrecognized command: %s\033[0m\n", cmd)
+		fmt.Fprintln(w, "Type \033[1;32m/help\033[0m to see available commands.")
+	} else {
+		fmt.Fprintf(w, "\nError: Unrecognized command: %s\n", cmd)
+		fmt.Fprintln(w, "Type /help to see available commands.")
+	}
 }
