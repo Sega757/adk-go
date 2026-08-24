@@ -186,9 +186,21 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
 
-			if len(pendingInterrupts) == 0 && strings.TrimSpace(userInput) == "" {
-				printUserPrompt(isTerminal())
-				continue
+			if len(pendingInterrupts) == 0 {
+				trimmed := strings.TrimSpace(userInput)
+				if trimmed == "" {
+					printUserPrompt(isTerminal())
+					continue
+				}
+				if strings.HasPrefix(trimmed, "/") {
+					exit, handled := handleSlashCommand(os.Stdout, trimmed, isTerminal())
+					if handled {
+						if exit {
+							return nil
+						}
+						continue
+					}
+				}
 			}
 
 			var userMsg *genai.Content
@@ -294,11 +306,61 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	}
 }
 
-func printUserPrompt(tty bool) {
+func printUserPromptToWriter(w io.Writer, tty bool) {
 	if tty {
-		fmt.Print("\n\033[1;32mUser 👤 ->\033[0m ")
+		fmt.Fprint(w, "\n\033[1;32mUser 👤 ->\033[0m ")
 	} else {
-		fmt.Print("\nUser -> ")
+		fmt.Fprint(w, "\nUser -> ")
+	}
+}
+
+func printUserPrompt(tty bool) {
+	printUserPromptToWriter(os.Stdout, tty)
+}
+
+// handleSlashCommand processes interactive console slash commands (/help, /clear, /exit, /quit).
+// It returns exit=true if the console should terminate, and handled=true if the command was recognized
+// and processed.
+func handleSlashCommand(w io.Writer, command string, tty bool) (exit bool, handled bool) {
+	switch command {
+	case "/exit", "/quit":
+		if tty {
+			fmt.Fprintln(w, "\033[1;33mExiting ADK Console...\033[0m")
+		} else {
+			fmt.Fprintln(w, "Exiting ADK Console...")
+		}
+		return true, true
+
+	case "/clear":
+		fmt.Fprint(w, "\033[H\033[2J")
+		printUserPromptToWriter(w, tty)
+		return false, true
+
+	case "/help":
+		if tty {
+			fmt.Fprintln(w, "\n\033[1;36mAvailable commands:\033[0m")
+			fmt.Fprintln(w, "  \033[1;32m/help\033[0m  - Show this help message")
+			fmt.Fprintln(w, "  \033[1;32m/clear\033[0m - Clear the terminal screen")
+			fmt.Fprintln(w, "  \033[1;32m/exit\033[0m  - Exit the console session")
+			fmt.Fprintln(w, "  \033[1;32m/quit\033[0m  - Exit the console session")
+		} else {
+			fmt.Fprintln(w, "\nAvailable commands:")
+			fmt.Fprintln(w, "  /help  - Show this help message")
+			fmt.Fprintln(w, "  /clear - Clear the terminal screen")
+			fmt.Fprintln(w, "  /exit  - Exit the console session")
+			fmt.Fprintln(w, "  /quit  - Exit the console session")
+		}
+		printUserPromptToWriter(w, tty)
+		return false, true
+
+	default:
+		if tty {
+			fmt.Fprintf(w, "\033[1;31mUnknown command: %s. Type /help for a list of available commands.\033[0m\n", command)
+		} else {
+			fmt.Fprintf(w, "Unknown command: %s. Type /help for a list of available commands.\n", command)
+		}
+		printUserPromptToWriter(w, tty)
+		return false, true
 	}
 }
 
