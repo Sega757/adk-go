@@ -46,9 +46,8 @@ func (c *SessionsAPIController) CreateSessionHandler(rw http.ResponseWriter, req
 		return
 	}
 	createSessionRequest := models.CreateSessionRequest{}
-	// No state and no events, fails to decode req.Body failing with "EOF"
-	if req.ContentLength > 0 {
-		err := json.NewDecoder(req.Body).Decode(&createSessionRequest)
+	if req.Body != nil && req.Body != http.NoBody {
+		err := json.NewDecoder(http.MaxBytesReader(rw, req.Body, 10*1024*1024)).Decode(&createSessionRequest)
 		if err != nil {
 			http.Error(rw, err.Error(), http.StatusBadRequest)
 			return
