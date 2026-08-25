@@ -53,6 +53,9 @@ func NewEventarcController(sessionService session.Service, agentLoader agent.Loa
 
 // EventarcTriggerHandler handles the Eventarc trigger endpoint.
 func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *http.Request) {
+	// Limit request body size to 10MB to prevent memory exhaustion DoS.
+	body := http.MaxBytesReader(w, r.Body, 10*1024*1024)
+
 	var event models.EventarcTriggerRequest
 	contentType := r.Header.Get("Content-Type")
 	// The HTTP Content-Type header MUST be set to the media type of an event format for structured mode.
@@ -61,7 +64,7 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		// --- STRUCTURED MODE ---
 		// The entire event is in the body. Decode it.
 		// The payload (Storage or Pub/Sub) gets safely trapped in event.Data as bytes.
-		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+		if err := json.NewDecoder(body).Decode(&event); err != nil {
 			respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to unmarshal eventarc request: %v", err))
 			return
 		}
@@ -76,9 +79,9 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 
 		// The entire body is the payload.
 		// We just read it as raw bytes into event.Data.
-		bodyBytes, err := io.ReadAll(r.Body)
+		bodyBytes, err := io.ReadAll(body)
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to read body: %v", err))
+			respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to read body: %v", err))
 			return
 		}
 		event.Data = bodyBytes

@@ -142,6 +142,22 @@ func TestEventarcTriggerHandler(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:        "Structured_Mode_Exceeds_MaxBytesReader_Limit",
+			contentType: "application/cloudevents+json",
+			body:        make([]byte, 11*1024*1024),
+		},
+		{
+			name:        "Binary_Mode_Exceeds_MaxBytesReader_Limit",
+			contentType: "application/json",
+			headers: map[string]string{
+				"ce-id":          "1234-5678",
+				"ce-type":        "google.storage.object.v1.finalized",
+				"ce-source":      "//storage.googleapis.com/projects/_/buckets/sample-bucket",
+				"ce-specversion": "1.0",
+			},
+			body: make([]byte, 11*1024*1024),
+		},
 	}
 
 	for _, tc := range tests {
@@ -182,12 +198,19 @@ func TestEventarcTriggerHandler(t *testing.T) {
 
 			controller.EventarcTriggerHandler(rr, req)
 
-			if rr.Code != http.StatusOK {
-				t.Errorf("expected status 200, got %d. Body: %s", rr.Code, rr.Body.String())
+			expectedStatus := http.StatusOK
+			expectedRunCount := 1
+			if tc.expectedPayload == nil {
+				expectedStatus = http.StatusBadRequest
+				expectedRunCount = 0
 			}
 
-			if mockAgentRunCount != 1 {
-				t.Errorf("expected 1 run attempt, got %d", mockAgentRunCount)
+			if rr.Code != expectedStatus {
+				t.Errorf("expected status %d, got %d. Body: %s", expectedStatus, rr.Code, rr.Body.String())
+			}
+
+			if mockAgentRunCount != expectedRunCount {
+				t.Errorf("expected %d run attempt, got %d", expectedRunCount, mockAgentRunCount)
 			}
 
 			if tc.expectedPayload != nil {
