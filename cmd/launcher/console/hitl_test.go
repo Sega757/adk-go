@@ -498,6 +498,19 @@ func TestTerminalUX_PromptsAndHITL(t *testing.T) {
 			t.Errorf("expected TTY confirmation prompt, got %q", outConfTTY)
 		}
 
+		// Tool confirmation with original call arguments
+		argsWithOrigCall := map[string]any{
+			"toolConfirmation": map[string]any{"hint": "Delete file?"},
+			"originalFunctionCall": map[string]any{
+				"name": "delete_file",
+				"args": map[string]any{"path": "/tmp/test.txt"},
+			},
+		}
+		outConfArgs := captureStdout(t, func() { renderToolConfirmationPrompt(argsWithOrigCall, false) })
+		if !strings.Contains(outConfArgs, "Agent -> Delete file?") || !strings.Contains(outConfArgs, `Args: {"path":"/tmp/test.txt"}`) {
+			t.Errorf("expected tool confirmation with formatted args, got %q", outConfArgs)
+		}
+
 		// Generic interrupt TTY
 		outGenTTY := captureStdout(t, func() { renderGenericInterruptPrompt("some_action", args, true) })
 		if !strings.Contains(outGenTTY, "\033[1;33m") || !strings.Contains(outGenTTY, "some_action") {
