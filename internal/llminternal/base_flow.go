@@ -1044,7 +1044,19 @@ func (c *cancelledToolContext) Value(key any) any {
 // TODO: check feasibility of running tool.Run concurrently.
 func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[string]tool.Tool, resp *model.LLMResponse, toolConfirmations map[string]*toolconfirmation.ToolConfirmation, liveSess agent.LiveSession) (mergedEvent *session.Event, err error) {
 	fnCalls := utils.FunctionCalls(resp.Content)
-	toolNames := slices.Collect(maps.Keys(toolsDict))
+
+	// Lazy-initialize toolNames only if a tool lookup fails, avoiding
+	// unnecessary map-key slice allocations during normal function execution.
+	var (
+		toolNames        []string
+		getToolNamesOnce sync.Once
+	)
+	getToolNames := func() []string {
+		getToolNamesOnce.Do(func() {
+			toolNames = slices.Collect(maps.Keys(toolsDict))
+		})
+		return toolNames
+	}
 
 	// Merged span for parallel tool calls - create only if there is more than one tool call.
 	if len(fnCalls) > 1 {
@@ -1090,7 +1102,7 @@ func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[st
 				var found bool
 				curTool, found = toolsDict[fnCall.Name]
 				if !found {
-					err := newToolNotFoundError(fnCall.Name, toolNames)
+					err := newToolNotFoundError(fnCall.Name, getToolNames())
 					result, err = f.runOnToolErrorCallbacks(toolCtx, &fakeTool{name: fnCall.Name}, fnCall.Args, err)
 					if err != nil {
 						result = map[string]any{"error": err.Error()}
@@ -1151,7 +1163,7 @@ func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[st
 						}
 					}
 				} else if funcTool, ok := curTool.(toolinternal.FunctionTool); !ok {
-					err := newToolNotFoundError(fnCall.Name, toolNames)
+					err := newToolNotFoundError(fnCall.Name, getToolNames())
 					result, err = f.runOnToolErrorCallbacks(toolCtx, &fakeTool{name: fnCall.Name}, fnCall.Args, err)
 					if err != nil {
 						result = map[string]any{"error": err.Error()}
