@@ -51,7 +51,7 @@ func NewRuntimeAPIController(sessionService session.Service, memoryService memor
 
 // RunAgent executes a non-streaming agent run for a given session and message.
 func (c *RuntimeAPIController) RunHandler(rw http.ResponseWriter, req *http.Request) error {
-	runAgentRequest, err := decodeRequestBody(req)
+	runAgentRequest, err := decodeRequestBody(rw, req)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.R
 		return
 	}
 
-	runAgentRequest, err := decodeRequestBody(req)
+	runAgentRequest, err := decodeRequestBody(rw, req)
 	if err != nil {
 		http.Error(rw, "failed to decode request body: "+err.Error(), http.StatusBadRequest)
 		return
@@ -234,8 +234,9 @@ func (c *RuntimeAPIController) getRunner(req models.RunAgentRequest) (*runner.Ru
 	}, nil
 }
 
-func decodeRequestBody(req *http.Request) (models.RunAgentRequest, error) {
+func decodeRequestBody(rw http.ResponseWriter, req *http.Request) (models.RunAgentRequest, error) {
 	var runAgentRequest models.RunAgentRequest
+	req.Body = http.MaxBytesReader(rw, req.Body, 10*1024*1024)
 	d := json.NewDecoder(req.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&runAgentRequest); err != nil {
