@@ -137,12 +137,12 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 	if isTerminal() {
 		fmt.Println("\033[1;36m========================================================\033[0m")
 		fmt.Println("\033[1;32m  Welcome to ADK Console! Let's chat with your agent.  \033[0m")
-		fmt.Println("\033[1;33m  Type your message and press Enter. To exit, press Ctrl+C.\033[0m")
+		fmt.Println("\033[1;33m  Type your message or /help. To exit, type /exit or Ctrl+C.\033[0m")
 		fmt.Println("\033[1;36m========================================================\033[0m")
 	} else {
 		fmt.Println("========================================================")
 		fmt.Println("  Welcome to ADK Console! Let's chat with your agent.")
-		fmt.Println("  Type your message and press Enter. To exit, press Ctrl+C.")
+		fmt.Println("  Type your message or /help. To exit, type /exit or Ctrl+C.")
 		fmt.Println("========================================================")
 	}
 
@@ -186,9 +186,28 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 			// matches what the web UI submits (no trailing newline).
 			userInput = strings.TrimRight(userInput, "\r\n")
 
-			if len(pendingInterrupts) == 0 && strings.TrimSpace(userInput) == "" {
-				printUserPrompt(isTerminal())
-				continue
+			if len(pendingInterrupts) == 0 {
+				if strings.TrimSpace(userInput) == "" {
+					printUserPrompt(isTerminal())
+					continue
+				}
+				switch strings.ToLower(strings.TrimSpace(userInput)) {
+				case "/help":
+					printHelpMessage(isTerminal())
+					printUserPrompt(isTerminal())
+					continue
+				case "/clear":
+					printClearScreen(isTerminal())
+					printUserPrompt(isTerminal())
+					continue
+				case "/exit", "/quit":
+					if isTerminal() {
+						fmt.Println("\033[1;33mGoodbye! 👋\033[0m")
+					} else {
+						fmt.Println("Goodbye!")
+					}
+					return nil
+				}
 			}
 
 			var userMsg *genai.Content
@@ -315,6 +334,30 @@ func printErrorPrompt(tty bool, err error) {
 		fmt.Printf("\n\033[1;31mError ❌ -> %v\033[0m\n", err)
 	} else {
 		fmt.Printf("\nAGENT_ERROR: %v\n", err)
+	}
+}
+
+func printHelpMessage(tty bool) {
+	if tty {
+		fmt.Println("\033[1;35m💡 Console Commands:\033[0m")
+		fmt.Println("  \033[1;36m/help\033[0m  - Show available commands")
+		fmt.Println("  \033[1;36m/clear\033[0m - Clear terminal screen")
+		fmt.Println("  \033[1;36m/exit\033[0m  - Exit console session")
+		fmt.Println("  \033[1;36m/quit\033[0m  - Exit console session")
+	} else {
+		fmt.Println("Console Commands:")
+		fmt.Println("  /help  - Show available commands")
+		fmt.Println("  /clear - Clear terminal screen")
+		fmt.Println("  /exit  - Exit console session")
+		fmt.Println("  /quit  - Exit console session")
+	}
+}
+
+func printClearScreen(tty bool) {
+	if tty {
+		fmt.Print("\033[H\033[2J")
+	} else {
+		fmt.Println("\n--- Screen Cleared ---")
 	}
 }
 
