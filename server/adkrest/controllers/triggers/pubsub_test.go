@@ -83,6 +83,13 @@ func TestPubSubTriggerHandler(t *testing.T) {
 			expectedRunCount: 0,
 			requestData:      "",
 		},
+		{
+			name:             "Payload Exceeds MaxBytesReader Limit",
+			mockAgentResults: nil,
+			expectedCode:     http.StatusBadRequest,
+			expectedRunCount: 0,
+			requestData:      string(make([]byte, 11*1024*1024)),
+		},
 	}
 
 	for _, tc := range tests {

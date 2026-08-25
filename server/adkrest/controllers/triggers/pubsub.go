@@ -52,9 +52,9 @@ func NewPubSubController(sessionService session.Service, agentLoader agent.Loade
 
 // PubSubTriggerHandler handles the PubSub trigger endpoint.
 func (c *PubSubController) PubSubTriggerHandler(w http.ResponseWriter, r *http.Request) {
-	// Parse the request to the request model.
+	// Parse the request to the request model, capped at 10MB to prevent memory exhaustion DoS.
 	var req models.PubSubTriggerRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 10*1024*1024)).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to decode request: %v", err))
 		return
 	}
