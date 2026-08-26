@@ -202,11 +202,20 @@ func isValidStateName(varName string) bool {
 
 // InjectSessionState populates values in an instruction template from a context.
 func InjectSessionState(ctx agent.InvocationContext, template string) (string, error) {
-	// Find all matches, then iterate through them, building the result string.
-	var result strings.Builder
-	lastIndex := 0
-	matches := placeholderRegex.FindAllStringIndex(template, -1)
+	if !strings.Contains(template, "{") {
+		return template, nil
+	}
 
+	matches := placeholderRegex.FindAllStringIndex(template, -1)
+	if len(matches) == 0 {
+		return template, nil
+	}
+
+	// Pre-allocate buffer based on template length.
+	var result strings.Builder
+	result.Grow(len(template))
+
+	lastIndex := 0
 	for _, matchIndexes := range matches {
 		startIndex, endIndex := matchIndexes[0], matchIndexes[1]
 

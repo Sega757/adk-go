@@ -222,3 +222,59 @@ And another optional artifact:
 		})
 	}
 }
+
+func BenchmarkInjectSessionState(b *testing.B) {
+	sessionService := session.InMemoryService()
+	createResp, err := sessionService.Create(b.Context(), &session.CreateRequest{
+		AppName:   "testApp",
+		UserID:    "testUser",
+		SessionID: "testSession",
+		State:     map[string]any{"user_name": "Foo", "app_state": "active"},
+	})
+	if err != nil {
+		b.Fatalf("Failed to create session: %v", err)
+	}
+
+	ctx := icontext.NewInvocationContext(b.Context(), icontext.InvocationContextParams{
+		Session: createResp.Session,
+	})
+
+	template := "Hello {user_name}, you are in {app_state} state."
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, err := InjectSessionState(ctx, template)
+		if err != nil {
+			b.Fatalf("InjectSessionState error: %v", err)
+		}
+	}
+}
+
+func BenchmarkInjectSessionState_NoPlaceholders(b *testing.B) {
+	sessionService := session.InMemoryService()
+	createResp, err := sessionService.Create(b.Context(), &session.CreateRequest{
+		AppName:   "testApp",
+		UserID:    "testUser",
+		SessionID: "testSession",
+		State:     map[string]any{"user_name": "Foo", "app_state": "active"},
+	})
+	if err != nil {
+		b.Fatalf("Failed to create session: %v", err)
+	}
+
+	ctx := icontext.NewInvocationContext(b.Context(), icontext.InvocationContextParams{
+		Session: createResp.Session,
+	})
+
+	template := "You are a helpful customer service assistant."
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, err := InjectSessionState(ctx, template)
+		if err != nil {
+			b.Fatalf("InjectSessionState error: %v", err)
+		}
+	}
+}
