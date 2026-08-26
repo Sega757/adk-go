@@ -111,6 +111,20 @@ func TestLoadArtifactsTool_Run(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "path traversal in Run",
+			args: map[string]any{
+				"artifact_names": []string{"../secret.txt"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "path separator in Run",
+			args: map[string]any{
+				"artifact_names": []string{"sub/dir/file.txt"},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -226,6 +240,42 @@ func TestLoadArtifactsTool_ProcessRequest_Artifacts_LoadArtifactsFunctionCall(t 
 	}
 	if appendedContent.Parts[1].Text != "This is the content of doc1.txt" {
 		t.Errorf("Second part of appended content: got %v, want 'This is the content of doc1.txt'", appendedContent.Parts[1].Text)
+	}
+}
+
+func TestLoadArtifactsTool_ProcessRequest_PathTraversal(t *testing.T) {
+	loadArtifactsTool := loadartifactstool.New()
+
+	tc := createToolContext(t)
+
+	functionResponse := &genai.FunctionResponse{
+		Name: "load_artifacts",
+		Response: map[string]any{
+			"artifact_names": []string{"../etc/passwd"},
+		},
+	}
+	llmRequest := &model.LLMRequest{
+		Contents: []*genai.Content{
+			{
+				Role: "model",
+				Parts: []*genai.Part{
+					genai.NewPartFromFunctionResponse(functionResponse.Name, functionResponse.Response),
+				},
+			},
+		},
+	}
+
+	requestProcessor, ok := loadArtifactsTool.(toolinternal.RequestProcessor)
+	if !ok {
+		t.Fatal("loadArtifactsTool does not implement RequestProcessor")
+	}
+
+	err := requestProcessor.ProcessRequest(tc, llmRequest)
+	if err == nil {
+		t.Fatal("Expected error due to path traversal artifact name, got nil")
+	}
+	if !strings.Contains(err.Error(), "path traversal or separators not allowed") {
+		t.Errorf("Unexpected error message: %v", err)
 	}
 }
 

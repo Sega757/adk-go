@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genai"
@@ -107,6 +108,11 @@ func (t *artifactsTool) Run(ctx agent.Context, args any) (map[string]any, error)
 		// Ensure the slice is not nil if it's empty
 		if artifactNames == nil {
 			artifactNames = []string{}
+		}
+	}
+	for _, name := range artifactNames {
+		if err := validateArtifactName(name); err != nil {
+			return nil, err
 		}
 	}
 	result := map[string]any{
@@ -206,6 +212,9 @@ func (t *artifactsTool) processLoadArtifactsFunctionCall(ctx agent.Context, req 
 }
 
 func (t *artifactsTool) loadIndividualArtifact(ctx context.Context, artifactsService agent.Artifacts, artifactName string) (*genai.Content, error) {
+	if err := validateArtifactName(artifactName); err != nil {
+		return nil, err
+	}
 	resp, err := artifactsService.Load(ctx, artifactName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load artifact %s: %w", artifactName, err)
@@ -217,4 +226,11 @@ func (t *artifactsTool) loadIndividualArtifact(ctx context.Context, artifactsSer
 		},
 		Role: genai.RoleUser,
 	}, nil
+}
+
+func validateArtifactName(name string) error {
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+		return fmt.Errorf("invalid artifact name %q: path traversal or separators not allowed", name)
+	}
+	return nil
 }
