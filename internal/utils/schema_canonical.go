@@ -22,7 +22,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-// canonicalSchemaJSON marshals the schema to JSON, parses it back, and
+// CanonicalSchemaJSON marshals the schema to JSON, parses it back, and
 // re-emits it with object keys sorted alphabetically (recursively).
 // Arrays are preserved in their original order.
 func CanonicalSchemaJSON(s *jsonschema.Schema) ([]byte, error) {
@@ -34,64 +34,141 @@ func CanonicalSchemaJSON(s *jsonschema.Schema) ([]byte, error) {
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return nil, err
 	}
-	return canonicalize(v)
+	var buf bytes.Buffer
+	buf.Grow(len(raw))
+	if err := canonicalizeTo(&buf, v); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
-// canonicalize recursively serializes v with sorted map keys. Slices
-// keep their order. Primitive values are encoded via json.Marshal.
+// canonicalize recursively serializes v with sorted map keys into a byte slice.
 func canonicalize(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := canonicalizeTo(&buf, v); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// canonicalizeTo recursively writes v to buf with sorted map keys.
+// Optimized by Bolt: passes a shared bytes.Buffer down recursive steps,
+// uses stack allocation for small key slices, skips sorting for single-key maps,
+// and fast-paths string/bool/nil encoding.
+func canonicalizeTo(buf *bytes.Buffer, v any) error {
 	switch val := v.(type) {
 	case map[string]any:
 		if val == nil {
-			return []byte("null"), nil
+			buf.WriteString("null")
+			return nil
 		}
-		keys := make([]string, 0, len(val))
+		n := len(val)
+		if n == 0 {
+			buf.WriteString("{}")
+			return nil
+		}
+
+		var keys []string
+		var stackKeys [16]string
+		if n <= len(stackKeys) {
+			keys = stackKeys[:0]
+		} else {
+			keys = make([]string, 0, n)
+		}
 		for k := range val {
 			keys = append(keys, k)
 		}
-		sort.Strings(keys)
+		if n > 1 {
+			sort.Strings(keys)
+		}
 
-		var buf bytes.Buffer
 		buf.WriteByte('{')
 		for i, k := range keys {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			keyBytes, err := json.Marshal(k)
-			if err != nil {
-				return nil, err
+			if err := writeJSONString(buf, k); err != nil {
+				return err
 			}
-			buf.Write(keyBytes)
 			buf.WriteByte(':')
-			valBytes, err := canonicalize(val[k])
-			if err != nil {
-				return nil, err
+			if err := canonicalizeTo(buf, val[k]); err != nil {
+				return err
 			}
-			buf.Write(valBytes)
 		}
 		buf.WriteByte('}')
-		return buf.Bytes(), nil
+		return nil
 
 	case []any:
 		if val == nil {
-			return []byte("null"), nil
+			buf.WriteString("null")
+			return nil
 		}
-		var buf bytes.Buffer
+		if len(val) == 0 {
+			buf.WriteString("[]")
+			return nil
+		}
 		buf.WriteByte('[')
 		for i, item := range val {
 			if i > 0 {
 				buf.WriteByte(',')
 			}
-			itemBytes, err := canonicalize(item)
-			if err != nil {
-				return nil, err
+			if err := canonicalizeTo(buf, item); err != nil {
+				return err
 			}
-			buf.Write(itemBytes)
 		}
 		buf.WriteByte(']')
-		return buf.Bytes(), nil
+		return nil
+
+	case string:
+		return writeJSONString(buf, val)
+
+	case bool:
+		if val {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
+		return nil
+
+	case nil:
+		buf.WriteString("null")
+		return nil
 
 	default:
-		return json.Marshal(val)
+		b, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		buf.Write(b)
+		return nil
 	}
+}
+
+// writeJSONString writes a JSON-quoted string to buf.
+// Uses a fast-path for simple ASCII strings without escape sequences.
+func writeJSONString(buf *bytes.Buffer, s string) error {
+	if isSimpleASCIIString(s) {
+		buf.WriteByte('"')
+		buf.WriteString(s)
+		buf.WriteByte('"')
+		return nil
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+	buf.Write(b)
+	return nil
+}
+
+// isSimpleASCIIString checks if s can be quoted safely with ASCII double quotes
+// without requiring escape sequences or Unicode processing.
+func isSimpleASCIIString(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c >= 0x7f || c == '"' || c == '\\' {
+			return false
+		}
+	}
+	return true
 }
