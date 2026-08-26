@@ -11,3 +11,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** Numerical out-of-bounds, NaN (Not-a-Number) values, or nil dereferences in decision packets could bypass reasoning and safety validation steps. Specifically, invalid/NaN `Confidence` or `VulnerabilityScore` metrics could cause undefined validation behavior, possibly allowing unsafe executions to proceed undetected.
 **Learning:** Checking for standard bounds (`0.0 <= score <= 1.0`) is not sufficient because standard float comparison operators (`<`, `>`) evaluate to false when one operand is `NaN`. Thus, `NaN` values bypass threshold checks unless explicitly handled.
 **Prevention:** Use `math.IsNaN()` to explicitly check and reject any `NaN` values in floating-point security metrics before performing range comparisons, and always validate input structures for `nil` pointers before field dereferencing.
+
+## 2024-03-22 - [Memory Exhaustion] Prevent DoS via Unbounded Payloads
+**Vulnerability:** Found unconstrained `io.ReadAll` and `json.NewDecoder` usage on `http.Request.Body` in trigger handlers (Eventarc & PubSub).
+**Learning:** This exposes the server to DoS attacks by allowing an attacker to send arbitrarily large payloads that exhaust server memory before the request can be processed.
+**Prevention:** Always wrap `http.Request.Body` with `http.MaxBytesReader` to set a hard limit (e.g. 10MB) before reading or decoding HTTP payload streams.
