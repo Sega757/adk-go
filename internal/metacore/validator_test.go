@@ -185,6 +185,83 @@ func TestNormalWithModifications(t *testing.T) {
 	}
 }
 
+func TestContextTriggersAlreadyModify(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	packet := &metacore.DecisionPacket{
+		Goal:       "excessive notifications",
+		Plan:       []string{"send batch messages"},
+		Confidence: 0.9,
+	}
+
+	empathy := &metacore.EmpathyOutput{
+		Status:             "modify",
+		VulnerabilityScore: 0.3,
+		Reason:             "Pre-modified",
+	}
+
+	kOut, err := v.ValidatePipeline(packet, empathy)
+	if err != nil {
+		t.Fatalf("Unexpected validation error: %v", err)
+	}
+
+	if kOut.Status != "approved" {
+		t.Errorf("Expected approved status, got %s", kOut.Status)
+	}
+}
+
+func TestVulnerabilityAlreadyModify(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	packet := &metacore.DecisionPacket{
+		Goal:       "send message",
+		Plan:       []string{"notify subscriber"},
+		Confidence: 0.9,
+	}
+
+	empathy := &metacore.EmpathyOutput{
+		Status:             "modify",
+		VulnerabilityScore: 0.8,
+		Reason:             "Pre-modified by upstream",
+	}
+
+	kOut, err := v.ValidatePipeline(packet, empathy)
+	if err != nil {
+		t.Fatalf("Unexpected validation error: %v", err)
+	}
+
+	if kOut.Status != "approved" {
+		t.Errorf("Expected approved status, got %s", kOut.Status)
+	}
+}
+
+func TestContextTriggersEmpathyModify(t *testing.T) {
+	v := metacore.NewValidator(0.7, 100.0, 3)
+	packet := &metacore.DecisionPacket{
+		Goal:       "excessive notifications",
+		Plan:       []string{"send batch messages"},
+		Confidence: 0.9,
+	}
+
+	empathy := &metacore.EmpathyOutput{
+		Status:             "pass",
+		VulnerabilityScore: 0.3,
+	}
+
+	kOut, err := v.ValidatePipeline(packet, empathy)
+	if err != nil {
+		t.Fatalf("Unexpected validation error: %v", err)
+	}
+
+	if empathy.Status != "modify" {
+		t.Errorf("Expected empathy status 'modify' due to overload trigger, got %s", empathy.Status)
+	}
+	if empathy.Reason != "Context triggers detected: forced modify" {
+		t.Errorf("Expected reason 'Context triggers detected: forced modify', got %s", empathy.Reason)
+	}
+	if kOut.Status != "approved" {
+		t.Errorf("Expected approved status, got %s", kOut.Status)
+	}
+}
+
 func TestScenario3HumanitarianVeto(t *testing.T) {
 	v := metacore.NewValidator(0.7, 100.0, 3)
 	packet := &metacore.DecisionPacket{
@@ -239,7 +316,7 @@ func TestScenario2LawViolationAndEthical6Fields(t *testing.T) {
 		{
 			name: "Psychological Well-being",
 			packet: &metacore.DecisionPacket{
-				Goal:       "harass user repeatedly",
+				Goal:       "harass user repeatedly causing stress and panic",
 				Plan:       []string{"send gaslight messages"},
 				Confidence: 0.95,
 			},
