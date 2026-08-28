@@ -494,11 +494,11 @@ func TestTerminalUX_PromptsAndHITL(t *testing.T) {
 
 		// Tool confirmation TTY
 		outConfTTY := captureStdout(t, func() { renderToolConfirmationPrompt(args, true) })
-		if !strings.Contains(outConfTTY, "\033[1;33m") || !strings.Contains(outConfTTY, "🤝") {
-			t.Errorf("expected TTY confirmation prompt, got %q", outConfTTY)
+		if !strings.Contains(outConfTTY, "\033[1;33m") || !strings.Contains(outConfTTY, "🤝") || !strings.Contains(outConfTTY, "\033[1;32m'y'\033[0m or \033[1;32m'yes'\033[0m") {
+			t.Errorf("expected TTY confirmation prompt with styled y/yes option, got %q", outConfTTY)
 		}
 
-		// Tool confirmation with original tool arguments
+		// Tool confirmation with original tool arguments (No TTY)
 		confArgs := map[string]any{
 			"toolConfirmation": map[string]any{"hint": "Delete file?"},
 			"originalFunctionCall": map[string]any{
@@ -507,8 +507,8 @@ func TestTerminalUX_PromptsAndHITL(t *testing.T) {
 			},
 		}
 		outConfWithArgs := captureStdout(t, func() { renderToolConfirmationPrompt(confArgs, false) })
-		if !strings.Contains(outConfWithArgs, "Agent -> Delete file?") || !strings.Contains(outConfWithArgs, `  Args: {"path":"/tmp/test.txt"}`) {
-			t.Errorf("expected tool confirmation prompt with original args, got %q", outConfWithArgs)
+		if !strings.Contains(outConfWithArgs, "Agent -> Delete file?") || !strings.Contains(outConfWithArgs, `  Args: {"path":"/tmp/test.txt"}`) || !strings.Contains(outConfWithArgs, "Type 'y' or 'yes' to confirm") {
+			t.Errorf("expected tool confirmation prompt with original args and plain y/yes prompt, got %q", outConfWithArgs)
 		}
 
 		// Generic interrupt TTY
