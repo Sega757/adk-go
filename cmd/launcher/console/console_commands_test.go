@@ -24,11 +24,11 @@ func TestConsoleCommands_HelpMessage(t *testing.T) {
 		out := captureStdout(t, func() {
 			printHelpMessage(false)
 		})
-		if !strings.Contains(out, "Console Commands:") {
+		if !strings.Contains(out, "Console Commands & Shortcuts:") {
 			t.Errorf("expected plain help title, got: %q", out)
 		}
-		if !strings.Contains(out, "/help") || !strings.Contains(out, "/clear") || !strings.Contains(out, "/exit") {
-			t.Errorf("expected help commands list, got: %q", out)
+		if !strings.Contains(out, "/help") || !strings.Contains(out, "/clear") || !strings.Contains(out, "/exit") || !strings.Contains(out, "Ctrl+C") {
+			t.Errorf("expected help commands and shortcut list, got: %q", out)
 		}
 		if strings.Contains(out, "\033") {
 			t.Errorf("expected non-TTY help output to not contain ANSI escape codes, got: %q", out)
@@ -39,11 +39,14 @@ func TestConsoleCommands_HelpMessage(t *testing.T) {
 		out := captureStdout(t, func() {
 			printHelpMessage(true)
 		})
-		if !strings.Contains(out, "💡 Console Commands:") {
+		if !strings.Contains(out, "💡 Console Commands & Shortcuts:") {
 			t.Errorf("expected TTY help title with emoji, got: %q", out)
 		}
 		if !strings.Contains(out, "\033[1;35m") || !strings.Contains(out, "\033[1;36m") {
 			t.Errorf("expected ANSI color codes in TTY mode, got: %q", out)
+		}
+		if !strings.Contains(out, "Ctrl+C") {
+			t.Errorf("expected shortcut information in TTY mode, got: %q", out)
 		}
 	})
 }

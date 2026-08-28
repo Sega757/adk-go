@@ -339,17 +339,17 @@ func printErrorPrompt(tty bool, err error) {
 
 func printHelpMessage(tty bool) {
 	if tty {
-		fmt.Println("\033[1;35m💡 Console Commands:\033[0m")
-		fmt.Println("  \033[1;36m/help\033[0m  - Show available commands")
-		fmt.Println("  \033[1;36m/clear\033[0m - Clear terminal screen")
-		fmt.Println("  \033[1;36m/exit\033[0m  - Exit console session")
-		fmt.Println("  \033[1;36m/quit\033[0m  - Exit console session")
+		fmt.Println("\033[1;35m💡 Console Commands & Shortcuts:\033[0m")
+		fmt.Println("  \033[1;36m/help\033[0m  - Display this help message")
+		fmt.Println("  \033[1;36m/clear\033[0m - Clear the terminal screen")
+		fmt.Println("  \033[1;36m/exit\033[0m  - Exit console session (or press Ctrl+C)")
+		fmt.Println("  \033[1;36m/quit\033[0m  - Exit console session (or press Ctrl+C)")
 	} else {
-		fmt.Println("Console Commands:")
-		fmt.Println("  /help  - Show available commands")
-		fmt.Println("  /clear - Clear terminal screen")
-		fmt.Println("  /exit  - Exit console session")
-		fmt.Println("  /quit  - Exit console session")
+		fmt.Println("Console Commands & Shortcuts:")
+		fmt.Println("  /help  - Display this help message")
+		fmt.Println("  /clear - Clear the terminal screen")
+		fmt.Println("  /exit  - Exit console session (or press Ctrl+C)")
+		fmt.Println("  /quit  - Exit console session (or press Ctrl+C)")
 	}
 }
 
