@@ -113,8 +113,8 @@ func (req *SaveRequest) Validate() error {
 }
 
 func validateFileName(name string) error {
-	if strings.Contains(name, "/") || strings.Contains(name, "\\") {
-		return fmt.Errorf("invalid name: filename cannot contain path separators")
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+		return fmt.Errorf("invalid name: filename cannot contain path separators or path traversal sequences")
 	}
 	return nil
 }

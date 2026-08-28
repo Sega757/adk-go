@@ -120,7 +120,19 @@ func TestSaveRequest_Validate(t *testing.T) {
 				Part:      genai.NewPartFromBytes([]byte("data"), "text/plain"),
 			},
 			wantErr:    true,
-			wantErrMsg: "invalid name: filename cannot contain path separators",
+			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
+		},
+		{
+			name: "FileName with path traversal",
+			req: &SaveRequest{
+				AppName:   "MyApp",
+				UserID:    "user-123",
+				SessionID: "sess-abc",
+				FileName:  "../secret.txt",
+				Part:      genai.NewPartFromBytes([]byte("data"), "text/plain"),
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
 		},
 	}
 	executeValidatorTestCases(t, "SaveRequest", testCases)
@@ -173,7 +185,18 @@ func TestLoadRequest_Validate(t *testing.T) {
 				FileName:  "a/b.txt",
 			},
 			wantErr:    true,
-			wantErrMsg: "invalid name: filename cannot contain path separators",
+			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
+		},
+		{
+			name: "FileName with path traversal",
+			req: &LoadRequest{
+				AppName:   "MyApp",
+				UserID:    "user-123",
+				SessionID: "sess-abc",
+				FileName:  "../etc/passwd",
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
 		},
 	}
 	executeValidatorTestCases(t, "LoadRequest", testCases)
@@ -226,7 +249,18 @@ func TestDeleteRequest_Validate(t *testing.T) {
 				FileName:  "dir/file.txt",
 			},
 			wantErr:    true,
-			wantErrMsg: "invalid name: filename cannot contain path separators",
+			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
+		},
+		{
+			name: "FileName with path traversal",
+			req: &DeleteRequest{
+				AppName:   "MyApp",
+				UserID:    "user-123",
+				SessionID: "sess-abc",
+				FileName:  "..",
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
 		},
 	}
 	executeValidatorTestCases(t, "DeleteRequest", testCases)
@@ -319,7 +353,18 @@ func TestVersionsRequest_Validate(t *testing.T) {
 				FileName:  "folder/file.txt",
 			},
 			wantErr:    true,
-			wantErrMsg: "invalid name: filename cannot contain path separators",
+			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
+		},
+		{
+			name: "FileName with path traversal",
+			req: &VersionsRequest{
+				AppName:   "MyApp",
+				UserID:    "user-123",
+				SessionID: "sess-abc",
+				FileName:  "..file.txt",
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
 		},
 	}
 	executeValidatorTestCases(t, "VersionsRequest", testCases)
@@ -372,7 +417,18 @@ func TestGetArtifactVersionRequest_Validate(t *testing.T) {
 				FileName:  "folder/file.txt",
 			},
 			wantErr:    true,
-			wantErrMsg: "invalid name: filename cannot contain path separators",
+			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
+		},
+		{
+			name: "FileName with path traversal",
+			req: &GetArtifactVersionRequest{
+				AppName:   "MyApp",
+				UserID:    "user-123",
+				SessionID: "sess-abc",
+				FileName:  "../secret",
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
 		},
 	}
 	executeValidatorTestCases(t, "GetArtifactVersionRequest", testCases)
