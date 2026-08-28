@@ -115,11 +115,21 @@ func TestFileSystemSource_LoadFrontmatter(t *testing.T) {
 			source:  NewFileSystemSource(plainFS{fstest.MapFS{}}),
 			wantErr: ErrSkillNotFound,
 		},
+		{
+			name:    "Path traversal in skill name",
+			source:  NewFileSystemSource(plainFS{fstest.MapFS{}}),
+			want:    nil,
+			wantErr: ErrInvalidSkillName,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.source.LoadFrontmatter(t.Context(), "test-skill")
+			skillName := "test-skill"
+			if tt.name == "Path traversal in skill name" {
+				skillName = "../other-skill"
+			}
+			got, err := tt.source.LoadFrontmatter(t.Context(), skillName)
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("LoadFrontmatter(%q) expected error %v, got %v", "test-skill", tt.wantErr, err)
@@ -266,6 +276,14 @@ func TestFileSystemSource_LoadResource(t *testing.T) {
 			wantErr: ErrInvalidResourcePath,
 		},
 		{
+			name:         "Error Skill Name Traversal",
+			resourcePath: "assets/image.png",
+			source: NewFileSystemSource(plainFS{fstest.MapFS{
+				"test-skill/SKILL.md": &fstest.MapFile{Data: []byte("---\nname: test-skill\ndescription: test\n---\n")},
+			}}),
+			wantErr: ErrInvalidSkillName,
+		},
+		{
 			name:         "Error Unauthorized Directory",
 			resourcePath: "unauthorized/file.txt",
 			source: NewFileSystemSource(plainFS{fstest.MapFS{
@@ -286,7 +304,11 @@ func TestFileSystemSource_LoadResource(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			resource, err := tc.source.LoadResource(t.Context(), "test-skill", tc.resourcePath)
+			skillName := "test-skill"
+			if tc.name == "Error Skill Name Traversal" {
+				skillName = "../test-skill"
+			}
+			resource, err := tc.source.LoadResource(t.Context(), skillName, tc.resourcePath)
 
 			if !errors.Is(err, tc.wantErr) {
 				t.Errorf("LoadResource(%q, %q) error = %v, want %v", "test-skill", tc.resourcePath, err, tc.wantErr)

@@ -206,6 +206,9 @@ func (f *fileSystemSource) validateSkill(name string) error {
 // returns the frontmatter, a buffered reader for the rest of the file, and a
 // closer for the file.
 func (f *fileSystemSource) readSkill(name string) (*Frontmatter, *bufio.Reader, io.Closer, error) {
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+		return nil, nil, nil, fmt.Errorf("%w: %q contains invalid path characters", ErrInvalidSkillName, name)
+	}
 	skillFilePath := path.Join(name, "SKILL.md")
 	file, err := f.filesystem.Open(skillFilePath)
 	if err != nil {
