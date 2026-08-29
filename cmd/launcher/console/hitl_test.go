@@ -513,8 +513,14 @@ func TestTerminalUX_PromptsAndHITL(t *testing.T) {
 
 		// Generic interrupt TTY
 		outGenTTY := captureStdout(t, func() { renderGenericInterruptPrompt("some_action", args, true) })
-		if !strings.Contains(outGenTTY, "\033[1;33m") || !strings.Contains(outGenTTY, "some_action") {
-			t.Errorf("expected TTY generic prompt, got %q", outGenTTY)
+		if !strings.Contains(outGenTTY, "\033[1;33m") || !strings.Contains(outGenTTY, "some_action") || !strings.Contains(outGenTTY, "JSON object") {
+			t.Errorf("expected TTY generic prompt with guidance, got %q", outGenTTY)
+		}
+
+		// Generic interrupt No TTY
+		outGenNoTTY := captureStdout(t, func() { renderGenericInterruptPrompt("some_action", args, false) })
+		if !strings.Contains(outGenNoTTY, "Agent -> waiting for response") || !strings.Contains(outGenNoTTY, "Type a JSON object or plain text to reply.") {
+			t.Errorf("expected plain generic prompt with guidance, got %q", outGenNoTTY)
 		}
 	})
 }
