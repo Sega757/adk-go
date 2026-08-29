@@ -16,6 +16,7 @@ package conformance
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"google.golang.org/adk/v2/agent"
@@ -42,7 +43,7 @@ func NewConformanceAgentLoader(agentMap map[string]agent.Agent) (agent.Loader, e
 
 // conformanceAgentLoader implements AgentLoader. Returns the list of all agents' names (including root agent)
 func (m *conformanceAgentLoader) ListAgents() []string {
-	return m.agentsNames
+	return slices.Clone(m.agentsNames)
 }
 
 // conformanceAgentLoader implements LoadAgent. Returns an agent with given name or error if no such an agent is found
