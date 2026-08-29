@@ -266,6 +266,12 @@ func RegisterToolFactory(name string, factory ToolFactory) error {
 }
 
 func RegisterToolsetFactory(name string, factory ToolsetFactory) error {
+	if name == "" {
+		return fmt.Errorf("RegisterToolsetFactory called with empty name")
+	}
+	if factory == nil {
+		return fmt.Errorf("RegisterToolsetFactory called with nil factory for %s", name)
+	}
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if _, dup := toolRegistry[name]; dup {
@@ -276,6 +282,12 @@ func RegisterToolsetFactory(name string, factory ToolsetFactory) error {
 }
 
 func RegisterCallback(name string, callback any) error {
+	if name == "" {
+		return fmt.Errorf("RegisterCallback called with empty name")
+	}
+	if callback == nil {
+		return fmt.Errorf("RegisterCallback called with nil callback for %s", name)
+	}
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if _, dup := callbackRegistry[name]; dup {
