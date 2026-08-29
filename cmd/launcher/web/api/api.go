@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -50,17 +51,59 @@ func (a *apiLauncher) CommandLineSyntax() string {
 	return util.FormatFlagUsage(a.flags)
 }
 
+// isOriginAllowed validates the request origin against the configured frontend address.
+// Supports both schemed (http://localhost:8080) and scheme-less (localhost:8080) addresses.
+func isOriginAllowed(originHeader, frontendAddress string) bool {
+	if originHeader == "" || frontendAddress == "" {
+		return false
+	}
+
+	reqOriginURL, err := url.Parse(originHeader)
+	if err != nil || reqOriginURL.Host == "" {
+		return false
+	}
+
+	reqScheme := strings.ToLower(reqOriginURL.Scheme)
+	reqHost := strings.ToLower(reqOriginURL.Host)
+
+	if strings.Contains(frontendAddress, "://") {
+		allowedURL, err := url.Parse(frontendAddress)
+		if err != nil || allowedURL.Host == "" {
+			return false
+		}
+
+		allowedScheme := strings.ToLower(allowedURL.Scheme)
+		allowedHost := strings.ToLower(allowedURL.Host)
+
+		return reqScheme == allowedScheme && reqHost == allowedHost
+	}
+
+	if reqScheme != "http" && reqScheme != "https" {
+		return false
+	}
+
+	allowedHost := strings.ToLower(strings.TrimRight(frontendAddress, "/"))
+	return reqHost == allowedHost
+}
+
 // Adds CORS headers which allow calling ADK REST API from another web app (like ADK WebUI)
 func corsWithArgs(frontendAddress string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendAddress)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Add("Vary", "Origin")
+			origin := r.Header.Get("Origin")
+
+			if origin != "" && isOriginAllowed(origin, frontendAddress) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			}
+
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
+
 			next.ServeHTTP(w, r)
 		})
 	}
