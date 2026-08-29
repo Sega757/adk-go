@@ -88,7 +88,16 @@ func main() {
 	log.Println("API available at http://localhost:8080/api/")
 	log.Println("Health check at http://localhost:8080/health")
 
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
