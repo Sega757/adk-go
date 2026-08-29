@@ -16,6 +16,8 @@ package llminternal
 
 import (
 	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/model"
+	"google.golang.org/adk/v2/tool"
 )
 
 // mockLLMAgent satisfies both agent.Agent (via embedding) and llminternal.Agent (via internal() implementation)
@@ -28,4 +30,9 @@ var _ Agent = (*mockLLMAgent)(nil)
 
 func (m *mockLLMAgent) internal() *State {
 	return m.s
+}
+
+// ExportAppendTools exports appendTools for testing in llminternal_test package.
+func ExportAppendTools(r *model.LLMRequest, tools ...tool.Tool) error {
+	return appendTools(r, tools...)
 }

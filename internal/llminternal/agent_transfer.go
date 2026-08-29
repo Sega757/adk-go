@@ -260,6 +260,20 @@ func appendTools(r *model.LLMRequest, tools ...tool.Tool) error {
 		r.Tools = make(map[string]any)
 	}
 
+	seenNames := make(map[string]struct{})
+	if r.Config != nil {
+		for _, gt := range r.Config.Tools {
+			if gt == nil {
+				continue
+			}
+			for _, decl := range gt.FunctionDeclarations {
+				if decl != nil && decl.Name != "" {
+					seenNames[decl.Name] = struct{}{}
+				}
+			}
+		}
+	}
+
 	var declarations []*genai.FunctionDeclaration
 
 	for i, tool := range tools {
@@ -274,7 +288,12 @@ func appendTools(r *model.LLMRequest, tools ...tool.Tool) error {
 
 		if fnTool, ok := tool.(toolinternal.FunctionTool); ok {
 			if decl := fnTool.Declaration(); decl != nil {
-				// TODO: verify for duplicates.
+				if decl.Name != "" {
+					if _, ok := seenNames[decl.Name]; ok {
+						return fmt.Errorf("duplicate function declaration: %q", decl.Name)
+					}
+					seenNames[decl.Name] = struct{}{}
+				}
 				declarations = append(declarations, decl)
 			}
 		}
@@ -288,7 +307,7 @@ func appendTools(r *model.LLMRequest, tools ...tool.Tool) error {
 	// Find an existing genai.Tool with FunctionDeclarations
 	var funcTool *genai.Tool
 	for _, gt := range r.Config.Tools {
-		if gt.FunctionDeclarations != nil {
+		if gt != nil && gt.FunctionDeclarations != nil {
 			funcTool = gt
 			break
 		}
