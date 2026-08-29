@@ -136,8 +136,16 @@ func TestRecordPlugin(t *testing.T) {
 		// 6. afterRun
 		p.AfterRunCallback()(invContext)
 
-		// Verify created YAML content
+		// Verify created YAML content and permissions
 		filePath := filepath.Join(tempDir, "generated-recordings.yaml")
+		info, err := os.Stat(filePath)
+		if err != nil {
+			t.Fatalf("failed to stat recordings file: %v", err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Errorf("expected file permissions 0600, got %o", info.Mode().Perm())
+		}
+
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			t.Fatalf("failed to read recordings file: %v", err)
