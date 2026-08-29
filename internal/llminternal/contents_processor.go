@@ -111,15 +111,15 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 
 	// Aggregate transcription events (convert to text parts on the fly)
 	var processedEvents []*session.Event
-	var accumulatedInputTranscription string
-	var accumulatedOutputTranscription string
+	var inputBuilder strings.Builder
+	var outputBuilder strings.Builder
 
 	for i := 0; i < len(filtered); i++ {
 		ev := filtered[i]
 		content := utils.Content(ev)
 		if content == nil || len(content.Parts) == 0 {
 			if ev.LLMResponse.InputTranscription != nil && ev.LLMResponse.InputTranscription.Text != "" {
-				accumulatedInputTranscription += ev.LLMResponse.InputTranscription.Text
+				inputBuilder.WriteString(ev.LLMResponse.InputTranscription.Text)
 				if i != len(filtered)-1 &&
 					filtered[i+1].LLMResponse.InputTranscription != nil &&
 					filtered[i+1].LLMResponse.InputTranscription.Text != "" {
@@ -130,12 +130,12 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 				newEv.LLMResponse.InputTranscription = nil
 				newEv.LLMResponse.Content = &genai.Content{
 					Role:  genai.RoleUser,
-					Parts: []*genai.Part{{Text: accumulatedInputTranscription}},
+					Parts: []*genai.Part{{Text: inputBuilder.String()}},
 				}
 				ev = newEv
-				accumulatedInputTranscription = ""
+				inputBuilder.Reset()
 			} else if ev.LLMResponse.OutputTranscription != nil && ev.LLMResponse.OutputTranscription.Text != "" {
-				accumulatedOutputTranscription += ev.LLMResponse.OutputTranscription.Text
+				outputBuilder.WriteString(ev.LLMResponse.OutputTranscription.Text)
 				if i != len(filtered)-1 &&
 					filtered[i+1].LLMResponse.OutputTranscription != nil &&
 					filtered[i+1].LLMResponse.OutputTranscription.Text != "" {
@@ -146,10 +146,10 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 				newEv.LLMResponse.OutputTranscription = nil
 				newEv.LLMResponse.Content = &genai.Content{
 					Role:  "model",
-					Parts: []*genai.Part{{Text: accumulatedOutputTranscription}},
+					Parts: []*genai.Part{{Text: outputBuilder.String()}},
 				}
 				ev = newEv
-				accumulatedOutputTranscription = ""
+				outputBuilder.Reset()
 			}
 		}
 		processedEvents = append(processedEvents, ev)
