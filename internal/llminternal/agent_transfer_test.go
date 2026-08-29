@@ -623,6 +623,164 @@ func TestTransferToAgentToolRun(t *testing.T) {
 	})
 }
 
+func TestAppendToolsDuplicateFunctionDeclaration(t *testing.T) {
+	createFuncTool := func(name string) tool.Tool {
+		t.Helper()
+		ft, err := functiontool.New(functiontool.Config{
+			Name:        name,
+			Description: "test tool " + name,
+		}, func(ctx agent.Context, input struct{}) (string, error) {
+			return "ok", nil
+		})
+		if err != nil {
+			t.Fatalf("failed to create functiontool: %v", err)
+		}
+		return ft
+	}
+
+	t.Run("HappyPath_DistinctDeclarations", func(t *testing.T) {
+		tool1 := createFuncTool("tool1")
+		tool2 := createFuncTool("tool2")
+
+		var req model.LLMRequest
+		rp1 := tool1.(toolinternal.RequestProcessor)
+		if err := rp1.ProcessRequest(nil, &req); err != nil {
+			t.Fatalf("unexpected error processing tool1: %v", err)
+		}
+
+		rp2 := tool2.(toolinternal.RequestProcessor)
+		if err := rp2.ProcessRequest(nil, &req); err != nil {
+			t.Fatalf("unexpected error processing tool2: %v", err)
+		}
+
+		functions := utils.FunctionDecls(req.Config)
+		if len(functions) != 2 {
+			t.Fatalf("expected 2 function declarations, got %d", len(functions))
+		}
+	})
+
+	t.Run("PreExistingCollision", func(t *testing.T) {
+		tool1 := createFuncTool("fn_dup")
+		tool2 := createFuncTool("fn_dup")
+
+		var req model.LLMRequest
+		req.Config = &genai.GenerateContentConfig{
+			Tools: []*genai.Tool{
+				{
+					FunctionDeclarations: []*genai.FunctionDeclaration{
+						{Name: "fn_dup", Description: "pre-existing decl"},
+					},
+				},
+			},
+		}
+
+		rp1 := tool1.(toolinternal.RequestProcessor)
+		err := rp1.ProcessRequest(nil, &req)
+		if err == nil {
+			t.Fatalf("expected error due to pre-existing duplicate declaration, got nil")
+		}
+		if !strings.Contains(err.Error(), `duplicate function declaration: "fn_dup"`) {
+			t.Errorf("unexpected error message: %v", err)
+		}
+
+		// Also check tool2
+		rp2 := tool2.(toolinternal.RequestProcessor)
+		err = rp2.ProcessRequest(nil, &req)
+		if err == nil {
+			t.Fatalf("expected error due to pre-existing duplicate declaration, got nil")
+		}
+	})
+
+	t.Run("BatchCollision", func(t *testing.T) {
+		tool1 := createFuncTool("fn_batch_dup")
+		tool2 := createFuncTool("fn_batch_dup")
+
+		// Create a separate tool struct with a different tool.Name() but returning the same decl.Name
+		tool1DifferentToolName := &customFuncTool{
+			toolName: "tool_name_1",
+			decl:     &genai.FunctionDeclaration{Name: "shared_decl_name"},
+		}
+		tool2DifferentToolName := &customFuncTool{
+			toolName: "tool_name_2",
+			decl:     &genai.FunctionDeclaration{Name: "shared_decl_name"},
+		}
+
+		var req model.LLMRequest
+		rp1 := tool1DifferentToolName.(toolinternal.RequestProcessor)
+		// Process first tool in batch / single call
+		if err := rp1.ProcessRequest(nil, &req); err != nil {
+			t.Fatalf("unexpected error processing tool1DifferentToolName: %v", err)
+		}
+
+		rp2 := tool2DifferentToolName.(toolinternal.RequestProcessor)
+		err := rp2.ProcessRequest(nil, &req)
+		if err == nil {
+			t.Fatalf("expected error due to duplicate declaration in sequential batch processing, got nil")
+		}
+		if !strings.Contains(err.Error(), `duplicate function declaration: "shared_decl_name"`) {
+			t.Errorf("unexpected error message: %v", err)
+		}
+
+		_ = tool1
+		_ = tool2
+	})
+
+	t.Run("MixedTools", func(t *testing.T) {
+		var req model.LLMRequest
+		req.Config = &genai.GenerateContentConfig{
+			Tools: []*genai.Tool{
+				nil,
+				{
+					CodeExecution: &genai.CodeExecution{},
+				},
+				{
+					FunctionDeclarations: []*genai.FunctionDeclaration{
+						nil,
+						{Name: "existing_decl"},
+					},
+				},
+			},
+		}
+
+		toolNew := createFuncTool("existing_decl_tool")
+		// Force toolNew to have decl.Name == "existing_decl" but tool.Name == "existing_decl_tool"
+		customTool := &customFuncTool{
+			toolName: "existing_decl_tool",
+			decl:     &genai.FunctionDeclaration{Name: "existing_decl"},
+		}
+
+		err := customTool.ProcessRequest(nil, &req)
+		if err == nil {
+			t.Fatalf("expected error when colliding with existing_decl in mixed tools, got nil")
+		}
+		if !strings.Contains(err.Error(), `duplicate function declaration: "existing_decl"`) {
+			t.Errorf("unexpected error message: %v", err)
+		}
+
+		_ = toolNew
+	})
+}
+
+type customFuncTool struct {
+	toolName string
+	decl     *genai.FunctionDeclaration
+}
+
+func (c *customFuncTool) Name() string                               { return c.toolName }
+func (c *customFuncTool) Description() string                        { return "custom func tool" }
+func (c *customFuncTool) IsLongRunning() bool                        { return false }
+func (c *customFuncTool) Declaration() *genai.FunctionDeclaration   { return c.decl }
+func (c *customFuncTool) ProcessRequest(ctx agent.Context, req *model.LLMRequest) error {
+	return llminternal.ExportAppendTools(req, c)
+}
+func (c *customFuncTool) Run(ctx agent.Context, args any) (map[string]any, error) {
+	return nil, nil
+}
+
+var _ tool.Tool = (*customFuncTool)(nil)
+var _ toolinternal.FunctionTool = (*customFuncTool)(nil)
+var _ toolinternal.RequestProcessor = (*customFuncTool)(nil)
+
 func stringify(v any) string {
 	s, _ := json.Marshal(v)
 	return string(s)
