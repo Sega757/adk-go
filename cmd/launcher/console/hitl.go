@@ -211,7 +211,11 @@ func renderToolConfirmationPrompt(args map[string]any, tty bool) {
 			fmt.Printf("  Args: %v\n", oc.Args)
 		}
 	}
-	fmt.Println("  Type 'yes' to confirm, anything else to reject.")
+	if tty {
+		fmt.Println("  Type \033[1;32m'y'\033[0m or \033[1;32m'yes'\033[0m to confirm, anything else to reject.")
+	} else {
+		fmt.Println("  Type 'y' or 'yes' to confirm, anything else to reject.")
+	}
 }
 
 // toolConfirmationResponseFromUserInput maps yes-ish answers
