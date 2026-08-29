@@ -11,3 +11,7 @@
 ## 2026-08-24 - Lazy map key collection for error reporting
 **Learning:** Collecting all map keys into a slice upfront (e.g., using `slices.Collect(maps.Keys(m))`) when preparing metadata for rare error messages causes unnecessary heap allocations and iteration overhead on every normal/happy execution path. Wrapping map key collection in a lazy `sync.Once` closure defers iteration and slice allocations exclusively to the error handling path.
 **Action:** When map keys or descriptive string arrays are only consumed in error formatting / fallback paths, use lazy evaluation to eliminate allocations on standard execution paths.
+
+## 2026-09-15 - strings.Builder for multi-chunk streaming transcription aggregation
+**Learning:** In event loops that aggregate multi-turn streaming text chunks (such as audio transcriptions), using string concatenation (`+=`) causes $O(N^2)$ repeated memory allocations and heap copying. Replacing string variables with `strings.Builder` (`var sb strings.Builder`) allows continuous chunk appending via `.WriteString()` without intermediate allocations. Calling `.Reset()` clears the internal buffer between events, preventing memory leaks while retaining underlying slice capacity.
+**Action:** Always prefer `strings.Builder` over string concatenation (`+=`) when accumulating text chunks across sequential events or loops.
