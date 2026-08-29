@@ -28,7 +28,10 @@ import (
 	"google.golang.org/adk/v2/session"
 )
 
-const eventArcDefaultUserID = "eventarc-caller"
+const (
+	eventArcDefaultUserID = "eventarc-caller"
+	maxEventarcBodyBytes  = 10 * 1024 * 1024 // 10MB limit
+)
 
 // EventarcController handles the Eventarc trigger endpoints.
 type EventarcController struct {
@@ -53,6 +56,7 @@ func NewEventarcController(sessionService session.Service, agentLoader agent.Loa
 
 // EventarcTriggerHandler handles the Eventarc trigger endpoint.
 func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxEventarcBodyBytes)
 	var event models.EventarcTriggerRequest
 	contentType := r.Header.Get("Content-Type")
 	// The HTTP Content-Type header MUST be set to the media type of an event format for structured mode.

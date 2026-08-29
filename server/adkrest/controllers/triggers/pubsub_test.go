@@ -124,6 +124,23 @@ func TestPubSubTriggerHandler(t *testing.T) {
 	}
 }
 
+func TestPubSubTriggerHandler_BodyTooLarge(t *testing.T) {
+	apiController := setupTest(t, nil)
+	largeBody := bytes.NewBuffer(make([]byte, 10*1024*1024+1))
+	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/pubsub", largeBody)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+	rr := httptest.NewRecorder()
+
+	apiController.PubSubTriggerHandler(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d for oversized body, got %d", http.StatusBadRequest, rr.Code)
+	}
+}
+
 func setupTest(t *testing.T, a agent.Agent) *triggers.PubSubController {
 	t.Helper()
 	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}

@@ -202,3 +202,23 @@ func TestEventarcTriggerHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestEventarcTriggerHandler_BodyTooLarge(t *testing.T) {
+	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}
+	controller := triggers.NewEventarcController(sessionService, nil, nil, nil, runner.PluginConfig{}, defaultTriggerConfig)
+
+	largeBody := bytes.NewBuffer(make([]byte, 10*1024*1024+1))
+	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", largeBody)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/cloudevents+json")
+	req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+	rr := httptest.NewRecorder()
+
+	controller.EventarcTriggerHandler(rr, req)
+
+	if rr.Code == http.StatusOK {
+		t.Errorf("expected error status for oversized body, got %d", rr.Code)
+	}
+}
