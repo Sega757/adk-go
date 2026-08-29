@@ -154,17 +154,25 @@ func trimTempDeltaState(event *session.Event) *session.Event {
 		return event
 	}
 
-	// Iterate over the map and build a new one with the keys we want to keep.
-	filteredStateDelta := make(map[string]any)
+	// Fast path: scan to check if any key starts with session.KeyPrefixTemp.
+	// If none do, avoid allocating a map and return the original event directly.
+	hasTempKey := false
+	for key := range event.Actions.StateDelta {
+		if strings.HasPrefix(key, session.KeyPrefixTemp) {
+			hasTempKey = true
+			break
+		}
+	}
+	if !hasTempKey {
+		return event
+	}
+
+	// Iterate over the map and build a new one with non-temp keys. Pre-allocate capacity.
+	filteredStateDelta := make(map[string]any, len(event.Actions.StateDelta))
 	for key, value := range event.Actions.StateDelta {
 		if !strings.HasPrefix(key, session.KeyPrefixTemp) {
 			filteredStateDelta[key] = value
 		}
-	}
-
-	// If no keys were filtered out, return the original event without copying.
-	if len(filteredStateDelta) == len(event.Actions.StateDelta) {
-		return event
 	}
 
 	// Create a copy of the event to avoid mutating the original.
