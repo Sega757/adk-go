@@ -87,9 +87,13 @@ func (r *restRequester) Get(ctx context.Context, resourcePath string, params url
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	const maxResponseBodyBytes = 10 * 1024 * 1024 // 10 MiB limit to mitigate DoS
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes+1))
 	if err != nil {
 		return fmt.Errorf("agentregistry: reading response body: %w", err)
+	}
+	if int64(len(body)) > maxResponseBodyBytes {
+		return fmt.Errorf("agentregistry: response body exceeds max size limit of %d bytes", maxResponseBodyBytes)
 	}
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
