@@ -115,10 +115,10 @@ func TestListAgents(t *testing.T) {
 	t.Run("alphabetical ordering", func(t *testing.T) {
 		t.Parallel()
 		agents := map[string]agent.Agent{
-			"zebra":   createTestAgent(t, "zebra"),
-			"apple":   createTestAgent(t, "apple"),
-			"Mango":   createTestAgent(t, "Mango"),
-			"banana":  createTestAgent(t, "banana"),
+			"zebra":    createTestAgent(t, "zebra"),
+			"apple":    createTestAgent(t, "apple"),
+			"Mango":    createTestAgent(t, "Mango"),
+			"banana":   createTestAgent(t, "banana"),
 			"123agent": createTestAgent(t, "123agent"),
 		}
 
@@ -208,6 +208,49 @@ func TestLoadAgent(t *testing.T) {
 		}
 	})
 
+	t.Run("empty string lookup", func(t *testing.T) {
+		t.Parallel()
+		a, err := loader.LoadAgent("")
+		if err == nil {
+			t.Fatalf("expected error for empty string lookup, got agent %v", a)
+		}
+		if !strings.Contains(err.Error(), "agent  not found") {
+			t.Errorf("unexpected error format: %v", err)
+		}
+	})
+
+	t.Run("lookup on empty loader", func(t *testing.T) {
+		t.Parallel()
+		emptyLoader, err := conformance.NewConformanceAgentLoader(map[string]agent.Agent{})
+		if err != nil {
+			t.Fatalf("failed to create empty loader: %v", err)
+		}
+		a, err := emptyLoader.LoadAgent("agentX")
+		if err == nil {
+			t.Fatalf("expected error for lookup on empty loader, got agent %v", a)
+		}
+		if !strings.Contains(err.Error(), "Please specify one of those: []") {
+			t.Errorf("expected empty available agent list in error, got: %v", err)
+		}
+	})
+
+	t.Run("nil agent map entry", func(t *testing.T) {
+		t.Parallel()
+		nilMapLoader, err := conformance.NewConformanceAgentLoader(map[string]agent.Agent{
+			"nilAgent": nil,
+		})
+		if err != nil {
+			t.Fatalf("failed to create loader with nil map entry: %v", err)
+		}
+		a, err := nilMapLoader.LoadAgent("nilAgent")
+		if err != nil {
+			t.Fatalf("unexpected error loading registered nil agent: %v", err)
+		}
+		if a != nil {
+			t.Errorf("expected nil agent for registered nil entry, got %v", a)
+		}
+	})
+
 	t.Run("case sensitivity", func(t *testing.T) {
 		t.Parallel()
 		tests := []struct {
@@ -244,6 +287,53 @@ func TestLoadAgent(t *testing.T) {
 					t.Errorf("LoadAgent(%q) name = %q, want %q", tc.lookup, a.Name(), tc.lookup)
 				}
 			})
+		}
+	})
+}
+
+func TestRootAgent(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty loader returns nil", func(t *testing.T) {
+		t.Parallel()
+		loader, err := conformance.NewConformanceAgentLoader(map[string]agent.Agent{})
+		if err != nil {
+			t.Fatalf("failed to create loader: %v", err)
+		}
+		if root := loader.RootAgent(); root != nil {
+			t.Errorf("expected nil RootAgent for empty loader, got %v", root)
+		}
+	})
+
+	t.Run("first agent in sorted order is root", func(t *testing.T) {
+		t.Parallel()
+		agentB := createTestAgent(t, "beta")
+		agentA := createTestAgent(t, "alpha")
+		loader, err := conformance.NewConformanceAgentLoader(map[string]agent.Agent{
+			"beta":  agentB,
+			"alpha": agentA,
+		})
+		if err != nil {
+			t.Fatalf("failed to create loader: %v", err)
+		}
+		root := loader.RootAgent()
+		if root == nil || root.Name() != "alpha" {
+			t.Errorf("expected RootAgent 'alpha', got %v", root)
+		}
+	})
+
+	t.Run("first agent in sorted order is nil entry", func(t *testing.T) {
+		t.Parallel()
+		loader, err := conformance.NewConformanceAgentLoader(map[string]agent.Agent{
+			"a_nil":   nil,
+			"b_agent": createTestAgent(t, "b_agent"),
+		})
+		if err != nil {
+			t.Fatalf("failed to create loader: %v", err)
+		}
+		root := loader.RootAgent()
+		if root != nil {
+			t.Errorf("expected nil RootAgent for nil entry, got %v", root)
 		}
 	})
 }
