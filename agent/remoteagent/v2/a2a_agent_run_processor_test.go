@@ -326,3 +326,147 @@ func TestA2AAgentRunProcessor_aggregatePartial(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkArtifactAggregation(b *testing.B) {
+	makeEvents := func(n int, alternateThought bool) []*session.Event {
+		events := make([]*session.Event, n)
+		for i := 0; i < n; i++ {
+			thought := false
+			if alternateThought {
+				thought = (i%2 == 1)
+			}
+			events[i] = &session.Event{
+				LLMResponse: model.LLMResponse{
+					Content: &genai.Content{
+						Parts: []*genai.Part{
+							{Text: "some chunk of text for aggregation ", Thought: thought},
+						},
+					},
+				},
+			}
+		}
+		return events
+	}
+
+	scenarios := []struct {
+		name             string
+		n                int
+		alternateThought bool
+	}{
+		{name: "Contiguous_1000", n: 1000, alternateThought: false},
+		{name: "Contiguous_10000", n: 10000, alternateThought: false},
+		{name: "Alternating_1000", n: 1000, alternateThought: true},
+		{name: "Alternating_10000", n: 10000, alternateThought: true},
+	}
+
+	for _, sc := range scenarios {
+		events := makeEvents(sc.n, sc.alternateThought)
+		b.Run(sc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				p := newRunProcessor(A2AConfig{}, nil)
+				agg := &artifactAggregation{}
+				aid := a2a.ArtifactID("art-1")
+				p.aggregations[aid] = agg
+				for _, ev := range events {
+					p.updateAggregation(aid, agg, ev)
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateAggregation_EdgeCases(t *testing.T) {
+	t.Run("empty parts and empty text parts", func(t *testing.T) {
+		p := newRunProcessor(A2AConfig{}, nil)
+		agg := &artifactAggregation{}
+		aid := a2a.ArtifactID("art-edge-1")
+		p.aggregations[aid] = agg
+
+		emptyTextPart := &genai.Part{Text: ""}
+		ev := &session.Event{
+			LLMResponse: model.LLMResponse{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						emptyTextPart,
+						{Text: "chunk 1", Thought: false},
+						emptyTextPart,
+						{Text: "chunk 2", Thought: false},
+					},
+				},
+			},
+		}
+
+		p.updateAggregation(aid, agg, ev)
+
+		if len(agg.parts) != 4 {
+			t.Fatalf("expected 4 aggregated parts, got %d", len(agg.parts))
+		}
+		if agg.parts[0] != emptyTextPart {
+			t.Errorf("expected emptyTextPart at index 0, got %v", agg.parts[0])
+		}
+		if agg.parts[1].Text != "chunk 1" {
+			t.Errorf("expected 'chunk 1', got %q", agg.parts[1].Text)
+		}
+		if agg.parts[2] != emptyTextPart {
+			t.Errorf("expected emptyTextPart at index 2, got %v", agg.parts[2])
+		}
+		if agg.parts[3].Text != "chunk 2" {
+			t.Errorf("expected 'chunk 2', got %q", agg.parts[3].Text)
+		}
+	})
+
+	t.Run("mixed content types and single non-merging parts", func(t *testing.T) {
+		p := newRunProcessor(A2AConfig{}, nil)
+		agg := &artifactAggregation{}
+		aid := a2a.ArtifactID("art-edge-2")
+		p.aggregations[aid] = agg
+
+		mediaPart := &genai.Part{InlineData: &genai.Blob{MIMEType: "image/png", Data: []byte("img")}}
+		ev := &session.Event{
+			LLMResponse: model.LLMResponse{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{Text: "text A", Thought: false},
+						mediaPart,
+						{Text: "text B", Thought: false},
+						{Text: "text C", Thought: false},
+					},
+				},
+			},
+		}
+
+		p.updateAggregation(aid, agg, ev)
+
+		if len(agg.parts) != 3 {
+			t.Fatalf("expected 3 aggregated parts, got %d", len(agg.parts))
+		}
+		if agg.parts[0].Text != "text A" {
+			t.Errorf("expected 'text A', got %q", agg.parts[0].Text)
+		}
+		if agg.parts[1] != mediaPart {
+			t.Errorf("expected mediaPart at index 1, got %v", agg.parts[1])
+		}
+		if agg.parts[2].Text != "text Btext C" {
+			t.Errorf("expected 'text Btext C', got %q", agg.parts[2].Text)
+		}
+	})
+
+	t.Run("nil and empty content events", func(t *testing.T) {
+		p := newRunProcessor(A2AConfig{}, nil)
+		agg := &artifactAggregation{}
+		aid := a2a.ArtifactID("art-edge-3")
+		p.aggregations[aid] = agg
+
+		evNil := &session.Event{}
+		evEmptyContent := &session.Event{LLMResponse: model.LLMResponse{Content: &genai.Content{}}}
+
+		p.updateAggregation(aid, agg, evNil)
+		p.updateAggregation(aid, agg, evEmptyContent)
+
+		if len(agg.parts) != 0 {
+			t.Fatalf("expected 0 aggregated parts, got %d", len(agg.parts))
+		}
+	})
+}
