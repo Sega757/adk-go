@@ -191,7 +191,8 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 					printUserPrompt(isTerminal())
 					continue
 				}
-				switch strings.ToLower(strings.TrimSpace(userInput)) {
+				cmd := strings.TrimSpace(userInput)
+				switch strings.ToLower(cmd) {
 				case "/help":
 					printHelpMessage(isTerminal())
 					printUserPrompt(isTerminal())
@@ -207,6 +208,12 @@ func (l *consoleLauncher) Run(ctx context.Context, config *launcher.Config) erro
 						fmt.Println("Goodbye!")
 					}
 					return nil
+				default:
+					if strings.HasPrefix(cmd, "/") && !strings.Contains(cmd[1:], "/") && !strings.Contains(cmd, " ") {
+						printUnknownCommand(isTerminal(), cmd)
+						printUserPrompt(isTerminal())
+						continue
+					}
 				}
 			}
 
@@ -334,6 +341,14 @@ func printErrorPrompt(tty bool, err error) {
 		fmt.Printf("\n\033[1;31mError ❌ -> %v\033[0m\n", err)
 	} else {
 		fmt.Printf("\nAGENT_ERROR: %v\n", err)
+	}
+}
+
+func printUnknownCommand(tty bool, cmd string) {
+	if tty {
+		fmt.Printf("\033[1;31mUnknown command %q. Type \033[1;36m/help\033[1;31m for available commands.\033[0m\n", cmd)
+	} else {
+		fmt.Printf("Unknown command %q. Type /help for available commands.\n", cmd)
 	}
 }
 

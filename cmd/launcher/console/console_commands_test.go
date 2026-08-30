@@ -51,6 +51,32 @@ func TestConsoleCommands_HelpMessage(t *testing.T) {
 	})
 }
 
+func TestConsoleCommands_UnknownCommand(t *testing.T) {
+	t.Run("Non-TTY mode", func(t *testing.T) {
+		out := captureStdout(t, func() {
+			printUnknownCommand(false, "/foo")
+		})
+		if !strings.Contains(out, `Unknown command "/foo". Type /help for available commands.`) {
+			t.Errorf("expected plain unknown command notice, got: %q", out)
+		}
+		if strings.Contains(out, "\033") {
+			t.Errorf("expected non-TTY unknown command output to not contain ANSI escape codes, got: %q", out)
+		}
+	})
+
+	t.Run("TTY mode", func(t *testing.T) {
+		out := captureStdout(t, func() {
+			printUnknownCommand(true, "/foo")
+		})
+		if !strings.Contains(out, `Unknown command "/foo"`) || !strings.Contains(out, "/help") {
+			t.Errorf("expected TTY unknown command message, got: %q", out)
+		}
+		if !strings.Contains(out, "\033[1;31m") || !strings.Contains(out, "\033[1;36m") {
+			t.Errorf("expected ANSI color codes in TTY mode, got: %q", out)
+		}
+	})
+}
+
 func TestConsoleCommands_ClearScreen(t *testing.T) {
 	t.Run("Non-TTY mode", func(t *testing.T) {
 		out := captureStdout(t, func() {
