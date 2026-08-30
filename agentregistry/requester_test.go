@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -152,5 +153,23 @@ func TestRestRequester_Get_NoUserProjectHeaderWhenEmpty(t *testing.T) {
 	}
 	if hadHeader {
 		t.Error("x-goog-user-project header set, want it omitted when userProject is empty")
+	}
+}
+
+func TestRestRequester_Get_ResponseBodyTooLarge(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Write 10 MiB + 2 bytes
+		buf := make([]byte, 10*1024*1024+2)
+		_, _ = w.Write(buf)
+	}))
+	defer srv.Close()
+
+	err := newTestRequester(srv).Get(context.Background(), "agents", nil, nil)
+	if err == nil {
+		t.Fatal("Get() error = nil, want body too large error")
+	}
+	want := "exceeds max size limit"
+	if got := err.Error(); !strings.Contains(got, want) {
+		t.Errorf("Get() error = %q, want error containing %q", got, want)
 	}
 }
