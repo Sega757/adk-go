@@ -128,6 +128,55 @@ func TestRegisterCallback(t *testing.T) {
 	})
 }
 
+func TestRegisterToolFactory(t *testing.T) {
+	resetRegistries(t)
+
+	t.Run("EmptyNameValidation", func(t *testing.T) {
+		factory := func(ctx context.Context, args map[string]any) (tool.Tool, error) {
+			return nil, nil
+		}
+		err := RegisterToolFactory("", factory)
+		if err == nil {
+			t.Errorf("expected error when registering tool factory with empty name, got nil")
+		}
+	})
+
+	t.Run("NilFactoryValidation", func(t *testing.T) {
+		err := RegisterToolFactory("test_nil_tool", nil)
+		if err == nil {
+			t.Errorf("expected error when registering nil tool factory, got nil")
+		}
+	})
+
+	t.Run("HappyPathAndDuplicateRejection", func(t *testing.T) {
+		name := "test_tool_factory"
+		factory1 := func(ctx context.Context, args map[string]any) (tool.Tool, error) {
+			return nil, nil
+		}
+		factory2 := func(ctx context.Context, args map[string]any) (tool.Tool, error) {
+			return nil, fmt.Errorf("factory2")
+		}
+
+		err := RegisterToolFactory(name, factory1)
+		if err != nil {
+			t.Fatalf("unexpected error registering tool factory: %v", err)
+		}
+
+		err = RegisterToolFactory(name, factory2)
+		if err == nil {
+			t.Fatalf("expected error on duplicate tool factory registration, got nil")
+		}
+
+		tl, toolset, err := ResolveToolReference(context.Background(), name, nil)
+		if err != nil {
+			t.Fatalf("unexpected error resolving registered tool factory: %v", err)
+		}
+		if tl != nil || toolset != nil {
+			t.Fatalf("expected tool and toolset to be nil from dummy factory")
+		}
+	})
+}
+
 func TestRegisterToolsetFactory(t *testing.T) {
 	resetRegistries(t)
 

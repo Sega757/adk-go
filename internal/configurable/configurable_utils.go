@@ -256,6 +256,12 @@ func Register(name string, factory AgentFactory) error {
 
 // RegisterToolFactory allows concrete implementations to add themselves to the system.
 func RegisterToolFactory(name string, factory ToolFactory) error {
+	if name == "" {
+		return fmt.Errorf("RegisterToolFactory called with empty name")
+	}
+	if factory == nil {
+		return fmt.Errorf("RegisterToolFactory called with nil factory for %s", name)
+	}
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if _, dup := toolRegistry[name]; dup {
