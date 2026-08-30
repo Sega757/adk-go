@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"google.golang.org/genai"
 
@@ -100,5 +101,13 @@ func main() {
 	})
 
 	fmt.Println("Serving UI on http://localhost:8081")
-	log.Fatal(http.ListenAndServe(":8081", nil))
+	server := &http.Server{
+		Addr:              ":8081",
+		Handler:           nil,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	log.Fatal(server.ListenAndServe())
 }
