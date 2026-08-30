@@ -249,6 +249,11 @@ func renderGenericInterruptPrompt(name string, args map[string]any, tty bool) {
 			fmt.Printf("  Args: %v\n", args)
 		}
 	}
+	if tty {
+		fmt.Println("  Type a \033[1;32mJSON object\033[0m (e.g. {\"key\":\"val\"}) or \033[1;32mplain text\033[0m to reply.")
+	} else {
+		fmt.Println("  Type a JSON object or plain text to reply.")
+	}
 }
 
 // genericResponseFromUserInput shapes the operator's reply for
