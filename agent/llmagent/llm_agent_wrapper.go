@@ -304,11 +304,11 @@ func findUnresolvedTaskDelegations(sess session.Session, owner string, toolsDict
 		return nil
 	}
 	// pendingFCs preserves discovery order (the order the LLM emitted
-	// the FCs); fcOrder maps FC id → its index in pendingFCs so we can
-	// drop entries when we later see a matching FR.
+	// the FCs). Tracking sets and maps are allocated lazily to prevent heap
+	// allocations when session history contains no task delegations.
 	var pendingFCs []*genai.FunctionCall
-	fcOrder := map[string]int{}
-	resolvedIDs := map[string]struct{}{}
+	var seenFCs map[string]struct{}
+	var resolvedIDs map[string]struct{}
 
 	for ev := range sess.Events().All() {
 		if ev == nil || ev.Content == nil {
@@ -322,15 +322,29 @@ func findUnresolvedTaskDelegations(sess session.Session, owner string, toolsDict
 				continue
 			}
 			if fc := p.FunctionCall; fc != nil && fc.ID != "" && isTaskDelegationTool(toolsDict, fc.Name) {
-				if _, seen := fcOrder[fc.ID]; !seen {
-					fcOrder[fc.ID] = len(pendingFCs)
+				if seenFCs == nil {
+					seenFCs = make(map[string]struct{})
+				}
+				if _, seen := seenFCs[fc.ID]; !seen {
+					seenFCs[fc.ID] = struct{}{}
 					pendingFCs = append(pendingFCs, fc)
 				}
 			}
 			if fr := p.FunctionResponse; fr != nil && fr.ID != "" {
+				if resolvedIDs == nil {
+					resolvedIDs = make(map[string]struct{})
+				}
 				resolvedIDs[fr.ID] = struct{}{}
 			}
 		}
+	}
+
+	if len(pendingFCs) == 0 {
+		return nil
+	}
+	// Fast-path: if no function responses were found, all pending FCs are unresolved.
+	if len(resolvedIDs) == 0 {
+		return pendingFCs
 	}
 
 	out := make([]*genai.FunctionCall, 0, len(pendingFCs))
