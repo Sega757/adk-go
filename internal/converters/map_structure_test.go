@@ -287,3 +287,54 @@ func TestMapStructureRoundTrip(t *testing.T) {
 		t.Errorf("RoundTrip mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func BenchmarkToMapStructure(b *testing.B) {
+	s := sampleStruct{
+		Name: "Alice",
+		Age:  30,
+		Nested: &nestedStruct{
+			Key: "value",
+		},
+		Tags: []string{"admin", "user"},
+		Meta: map[string]any{
+			"role": "owner",
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = ToMapStructure(s)
+	}
+}
+
+func BenchmarkToMapStructure_Nil(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = ToMapStructure(nil)
+	}
+}
+
+func BenchmarkFromMapStructure(b *testing.B) {
+	input := map[string]any{
+		"name": "Charlie",
+		"age":  25,
+		"nested": map[string]any{
+			"key": "sub_value",
+		},
+		"tags": []any{"dev"},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = FromMapStructure[sampleStruct](input)
+	}
+}
+
+func BenchmarkFromMapStructure_Nil(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = FromMapStructure[sampleStruct](nil)
+	}
+}
