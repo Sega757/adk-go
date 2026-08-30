@@ -23,6 +23,19 @@ import (
 // don't have proper field tags.
 // TODO(yarolegovich): field annotation PR for genai types.
 func ToMapStructure(data any) (map[string]any, error) {
+	// Fast-path: return early for nil or empty map inputs to avoid json.Marshal/Unmarshal allocations.
+	if data == nil {
+		return nil, nil
+	}
+	if m, ok := data.(map[string]any); ok {
+		if m == nil {
+			return nil, nil
+		}
+		if len(m) == 0 {
+			return map[string]any{}, nil
+		}
+	}
+
 	bytes, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
@@ -40,6 +53,12 @@ func ToMapStructure(data any) (map[string]any, error) {
 // don't have proper field tags.
 // TODO(yarolegovich): field annotation PR for genai types.
 func FromMapStructure[T any](data map[string]any) (*T, error) {
+	// Fast-path: return zero value struct pointer for nil or empty map inputs to avoid json.Marshal/Unmarshal allocations.
+	if len(data) == 0 {
+		var zero T
+		return &zero, nil
+	}
+
 	bytes, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
