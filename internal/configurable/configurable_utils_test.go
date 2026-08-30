@@ -175,6 +175,35 @@ func TestRegisterToolsetFactory(t *testing.T) {
 			t.Fatalf("expected toolset to be nil from dummy factory")
 		}
 	})
+
+	t.Run("CrossTypeCollisionWithToolFactory", func(t *testing.T) {
+		toolName := "cross_collision_tool"
+		toolFactory := func(ctx context.Context, args map[string]any) (tool.Tool, error) {
+			return nil, nil
+		}
+		toolsetFactory := func(ctx context.Context, args map[string]any) (tool.Toolset, error) {
+			return nil, nil
+		}
+
+		if err := RegisterToolFactory(toolName, toolFactory); err != nil {
+			t.Fatalf("unexpected error registering tool factory: %v", err)
+		}
+
+		err := RegisterToolsetFactory(toolName, toolsetFactory)
+		if err == nil {
+			t.Fatalf("expected error registering toolset factory with duplicate tool name, got nil")
+		}
+
+		toolsetName := "cross_collision_toolset"
+		if err := RegisterToolsetFactory(toolsetName, toolsetFactory); err != nil {
+			t.Fatalf("unexpected error registering toolset factory: %v", err)
+		}
+
+		err = RegisterToolFactory(toolsetName, toolFactory)
+		if err == nil {
+			t.Fatalf("expected error registering tool factory with duplicate toolset name, got nil")
+		}
+	})
 }
 
 func TestConcurrentRegistration(t *testing.T) {
