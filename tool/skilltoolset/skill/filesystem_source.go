@@ -100,9 +100,12 @@ func (f *fileSystemSource) LoadInstructions(ctx context.Context, name string) (s
 		_ = closer.Close() // Ignore error as read success is what matters.
 	}()
 
-	instructions, err := io.ReadAll(reader)
+	instructions, err := io.ReadAll(io.LimitReader(reader, maxResourceSize+1))
 	if err != nil {
 		return "", fmt.Errorf("read instructions: %w", err)
+	}
+	if int64(len(instructions)) > maxResourceSize {
+		return "", fmt.Errorf("instructions for skill %q exceed %d bytes limit", name, maxResourceSize)
 	}
 	return string(instructions), nil
 }
