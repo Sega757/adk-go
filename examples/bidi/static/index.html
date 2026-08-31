@@ -70,11 +70,11 @@
     </div>
 
     <!-- Camera Preview Modal -->
-    <div id="cameraModal" class="modal">
+    <div id="cameraModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Camera Preview</h3>
-          <button id="closeCameraModal" class="close-btn">&times;</button>
+          <h3 id="cameraModalTitle">Camera Preview</h3>
+          <button id="closeCameraModal" class="close-btn" aria-label="Close camera preview">&times;</button>
         </div>
         <div class="modal-body">
           <video id="cameraPreview" autoplay playsinline></video>

@@ -1192,9 +1192,15 @@ fileInput.addEventListener("change", (event) => {
   reader.readAsDataURL(file);
 });
 
-// Close modal when clicking outside of it
+// Close modal when clicking outside of it or pressing Escape
 cameraModal.addEventListener("click", (event) => {
   if (event.target === cameraModal) {
+    closeCameraPreview();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && cameraModal.classList.contains("show")) {
     closeCameraPreview();
   }
 });
