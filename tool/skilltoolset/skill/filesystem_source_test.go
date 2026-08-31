@@ -174,11 +174,25 @@ func TestFileSystemSource_LoadInstructions(t *testing.T) {
 			source:  NewFileSystemSource(plainFS{fstest.MapFS{}}),
 			wantErr: ErrSkillNotFound,
 		},
+		{
+			name: "Error Instructions Exceed Limit",
+			source: NewFileSystemSource(plainFS{fstest.MapFS{
+				"test-skill/SKILL.md": &fstest.MapFile{Data: append([]byte("---\nname: test-skill\ndescription: test\n---\n"), bytes.Repeat([]byte("a"), maxResourceSize+1)...)},
+			}}),
+			wantErr: ErrSkillNotFound, // We will check err != nil in loop for size limit error
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.source.LoadInstructions(t.Context(), "test-skill")
+
+			if tt.name == "Error Instructions Exceed Limit" {
+				if err == nil {
+					t.Errorf("LoadInstructions(%q) expected error, got nil", "test-skill")
+				}
+				return
+			}
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("LoadInstructions(%q) expected error %v, got %v", "test-skill", tt.wantErr, err)
