@@ -180,7 +180,7 @@ func TestFileSystemSource_LoadInstructions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.source.LoadInstructions(t.Context(), "test-skill")
 
-			if !errors.Is(err, tt.wantErr) {
+			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
 				t.Errorf("LoadInstructions(%q) expected error %v, got %v", "test-skill", tt.wantErr, err)
 			}
 			if got != tt.want {
@@ -188,6 +188,17 @@ func TestFileSystemSource_LoadInstructions(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("Exceeds max resource size limit", func(t *testing.T) {
+		largeData := append([]byte("---\nname: test-skill\ndescription: test\n---\n"), bytes.Repeat([]byte("a"), int(maxResourceSize)+1)...)
+		source := NewFileSystemSource(plainFS{fstest.MapFS{
+			"test-skill/SKILL.md": &fstest.MapFile{Data: largeData},
+		}})
+		_, err := source.LoadInstructions(t.Context(), "test-skill")
+		if err == nil {
+			t.Errorf("LoadInstructions() expected error for instructions exceeding maxResourceSize, got nil")
+		}
+	})
 }
 
 func TestFileSystemSource_LoadResource(t *testing.T) {
