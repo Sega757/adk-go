@@ -52,9 +52,24 @@ func PackTool(req *model.LLMRequest, t Tool) error {
 	if req.Config == nil {
 		req.Config = &genai.GenerateContentConfig{}
 	}
-	if decl := t.Declaration(); decl == nil {
+	decl := t.Declaration()
+	if decl == nil {
 		return nil
 	}
+
+	if decl.Name != "" {
+		for _, tool := range req.Config.Tools {
+			if tool == nil {
+				continue
+			}
+			for _, existingDecl := range tool.FunctionDeclarations {
+				if existingDecl != nil && existingDecl.Name == decl.Name {
+					return fmt.Errorf("duplicate function declaration: %q", decl.Name)
+				}
+			}
+		}
+	}
+
 	// Find an existing genai.Tool with FunctionDeclarations
 	var funcTool *genai.Tool
 	for _, tool := range req.Config.Tools {
@@ -65,10 +80,10 @@ func PackTool(req *model.LLMRequest, t Tool) error {
 	}
 	if funcTool == nil {
 		req.Config.Tools = append(req.Config.Tools, &genai.Tool{
-			FunctionDeclarations: []*genai.FunctionDeclaration{t.Declaration()},
+			FunctionDeclarations: []*genai.FunctionDeclaration{decl},
 		})
 	} else {
-		funcTool.FunctionDeclarations = append(funcTool.FunctionDeclarations, t.Declaration())
+		funcTool.FunctionDeclarations = append(funcTool.FunctionDeclarations, decl)
 	}
 	return nil
 }

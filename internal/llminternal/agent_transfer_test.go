@@ -706,13 +706,13 @@ func TestAppendToolsDuplicateFunctionDeclaration(t *testing.T) {
 		}
 
 		var req model.LLMRequest
-		rp1 := tool1DifferentToolName.(toolinternal.RequestProcessor)
+		var rp1 toolinternal.RequestProcessor = tool1DifferentToolName
 		// Process first tool in batch / single call
 		if err := rp1.ProcessRequest(nil, &req); err != nil {
 			t.Fatalf("unexpected error processing tool1DifferentToolName: %v", err)
 		}
 
-		rp2 := tool2DifferentToolName.(toolinternal.RequestProcessor)
+		var rp2 toolinternal.RequestProcessor = tool2DifferentToolName
 		err := rp2.ProcessRequest(nil, &req)
 		if err == nil {
 			t.Fatalf("expected error due to duplicate declaration in sequential batch processing, got nil")
@@ -731,7 +731,7 @@ func TestAppendToolsDuplicateFunctionDeclaration(t *testing.T) {
 			Tools: []*genai.Tool{
 				nil,
 				{
-					CodeExecution: &genai.CodeExecution{},
+					GoogleSearch: &genai.GoogleSearch{},
 				},
 				{
 					FunctionDeclarations: []*genai.FunctionDeclaration{
