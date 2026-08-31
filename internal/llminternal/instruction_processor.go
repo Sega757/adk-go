@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"iter"
 	"regexp"
-	"slices"
 	"strings"
 	"unicode"
 
@@ -160,7 +159,13 @@ func replaceMatch(ctx agent.InvocationContext, match string) (string, error) {
 		return "", nil
 	}
 
-	return fmt.Sprintf("%v", value), nil
+	// Fast-path string values to avoid fmt.Sprintf reflection and allocations.
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	default:
+		return fmt.Sprintf("%v", v), nil
+	}
 }
 
 // isIdentifier checks if a string is a valid Go identifier.
@@ -184,20 +189,22 @@ func isIdentifier(s string) bool {
 }
 
 // isValidStateName checks if the variable name is a valid state name.
+// Optimized with zero allocations by using strings.Cut and a static switch
+// instead of strings.Split and slice literals.
 func isValidStateName(varName string) bool {
-	parts := strings.Split(varName, ":")
-	if len(parts) == 1 {
+	prefix, identifier, found := strings.Cut(varName, ":")
+	if !found {
 		return isIdentifier(varName)
 	}
-
-	if len(parts) == 2 {
-		prefix := parts[0] + ":"
-		validPrefixes := []string{appPrefix, userPrefix, tempPrefix}
-		if slices.Contains(validPrefixes, prefix) {
-			return isIdentifier(parts[1])
-		}
+	if strings.ContainsRune(identifier, ':') {
+		return false
 	}
-	return false
+	switch prefix {
+	case "app", "user", "temp":
+		return isIdentifier(identifier)
+	default:
+		return false
+	}
 }
 
 // InjectSessionState populates values in an instruction template from a context.

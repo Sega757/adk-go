@@ -305,6 +305,17 @@ func TestRootAgent(t *testing.T) {
 		}
 	})
 
+	t.Run("nil agent map returns nil", func(t *testing.T) {
+		t.Parallel()
+		loader, err := conformance.NewConformanceAgentLoader(nil)
+		if err != nil {
+			t.Fatalf("unexpected error creating loader: %v", err)
+		}
+		if root := loader.RootAgent(); root != nil {
+			t.Errorf("expected nil RootAgent for nil map, got %v", root.Name())
+		}
+	})
+
 	t.Run("first agent in sorted order is root", func(t *testing.T) {
 		t.Parallel()
 		agentB := createTestAgent(t, "beta")
@@ -334,6 +345,22 @@ func TestRootAgent(t *testing.T) {
 		root := loader.RootAgent()
 		if root != nil {
 			t.Errorf("expected nil RootAgent for nil entry, got %v", root)
+		}
+	})
+
+	t.Run("key mismatch in agentMap returns nil", func(t *testing.T) {
+		t.Parallel()
+		agentX := createTestAgent(t, "agentX")
+		m := map[string]agent.Agent{
+			"agentX": agentX,
+		}
+		loader2, err := conformance.NewConformanceAgentLoader(m)
+		if err != nil {
+			t.Fatalf("unexpected error creating loader: %v", err)
+		}
+		delete(m, "agentX")
+		if root := loader2.RootAgent(); root != nil {
+			t.Errorf("expected nil RootAgent when key is missing from agentMap, got %v", root.Name())
 		}
 	})
 }
@@ -392,106 +419,4 @@ func TestConcurrency(t *testing.T) {
 	}
 
 	wg.Wait()
-}
-
-func TestRootAgent(t *testing.T) {
-	t.Parallel()
-
-	t.Run("empty agent map returns nil", func(t *testing.T) {
-		t.Parallel()
-		loader, err := conformance.NewConformanceAgentLoader(map[string]agent.Agent{})
-		if err != nil {
-			t.Fatalf("unexpected error creating loader: %v", err)
-		}
-		if root := loader.RootAgent(); root != nil {
-			t.Errorf("expected nil RootAgent for empty map, got %v", root.Name())
-		}
-	})
-
-	t.Run("nil agent map returns nil", func(t *testing.T) {
-		t.Parallel()
-		loader, err := conformance.NewConformanceAgentLoader(nil)
-		if err != nil {
-			t.Fatalf("unexpected error creating loader: %v", err)
-		}
-		if root := loader.RootAgent(); root != nil {
-			t.Errorf("expected nil RootAgent for nil map, got %v", root.Name())
-		}
-	})
-
-	t.Run("single agent registered", func(t *testing.T) {
-		t.Parallel()
-		soloAgent := createTestAgent(t, "solo")
-		loader, err := conformance.NewConformanceAgentLoader(map[string]agent.Agent{
-			"solo": soloAgent,
-		})
-		if err != nil {
-			t.Fatalf("unexpected error creating loader: %v", err)
-		}
-
-		root := loader.RootAgent()
-		if root == nil {
-			t.Fatal("expected non-nil RootAgent")
-		}
-		if root.Name() != "solo" {
-			t.Errorf("expected RootAgent name %q, got %q", "solo", root.Name())
-		}
-	})
-
-	t.Run("multiple agents registered returns first in alphabetical order", func(t *testing.T) {
-		t.Parallel()
-		agentZ := createTestAgent(t, "zebra")
-		agentA := createTestAgent(t, "apple")
-		agentM := createTestAgent(t, "mango")
-
-		loader, err := conformance.NewConformanceAgentLoader(map[string]agent.Agent{
-			"zebra": agentZ,
-			"apple": agentA,
-			"mango": agentM,
-		})
-		if err != nil {
-			t.Fatalf("unexpected error creating loader: %v", err)
-		}
-
-		root := loader.RootAgent()
-		if root == nil {
-			t.Fatal("expected non-nil RootAgent")
-		}
-		if root.Name() != "apple" {
-			t.Errorf("expected RootAgent name %q, got %q", "apple", root.Name())
-		}
-	})
-
-	t.Run("key mismatch in agentMap returns nil", func(t *testing.T) {
-		t.Parallel()
-		// Construct loader with agentsNames set, but missing corresponding key in agentMap
-		agentX := createTestAgent(t, "agentX")
-		loader, err := conformance.NewConformanceAgentLoader(map[string]agent.Agent{
-			"agentX": agentX,
-		})
-		if err != nil {
-			t.Fatalf("unexpected error creating loader: %v", err)
-		}
-
-		// Valid loader returns agentX as root
-		if root := loader.RootAgent(); root == nil || root.Name() != "agentX" {
-			t.Fatalf("expected root agentX, got %v", root)
-		}
-
-		// Mutate map directly or test missing key via struct if package-internal test,
-		// but since we are in package conformance_test, we can test missing key by deleting from passed map
-		// wait, NewConformanceAgentLoader stores the map reference directly: agentMap: agentMap.
-		// Let us verify if deleting "agentX" from the map leaves agentsNames[0] == "agentX" but map lookup fails!
-		m := map[string]agent.Agent{
-			"agentX": agentX,
-		}
-		loader2, err := conformance.NewConformanceAgentLoader(m)
-		if err != nil {
-			t.Fatalf("unexpected error creating loader: %v", err)
-		}
-		delete(m, "agentX")
-		if root := loader2.RootAgent(); root != nil {
-			t.Errorf("expected nil RootAgent when key is missing from agentMap, got %v", root.Name())
-		}
-	})
 }
