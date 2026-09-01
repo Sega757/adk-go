@@ -30,7 +30,7 @@
 
     <div class="main-layout">
       <div class="container">
-        <div id="messages"></div>
+        <div id="messages" role="log" aria-label="Chat messages" aria-live="polite"></div>
 
 
         <div class="input-container">
@@ -41,6 +41,7 @@
                 id="message"
                 name="message"
                 placeholder="Type your message here..."
+                aria-label="Type a message"
                 autocomplete="off"
               />
               <button type="submit" id="sendButton" disabled>Send</button>
@@ -62,10 +63,10 @@
               <input type="checkbox" id="showAudioEvents">
               <span>Show audio</span>
             </label>
-            <button id="clearConsole" class="console-clear-btn">Clear</button>
+            <button id="clearConsole" class="console-clear-btn" aria-label="Clear event console">Clear</button>
           </div>
         </div>
-        <div id="consoleContent" class="console-content"></div>
+        <div id="consoleContent" class="console-content" role="log" aria-label="Event log"></div>
       </div>
     </div>
 
