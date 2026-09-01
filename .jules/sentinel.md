@@ -21,3 +21,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** Found `http.ListenAndServe` in REST API example which launches a server without explicit timeouts.
 **Learning:** By default, Go's `net/http` package does not set timeouts for reading headers, reading the body, or writing responses. This exposes the server to slow-client Denial of Service (DoS) attacks, such as Slowloris, where an attacker intentionally sends data very slowly to exhaust the server's connection pool.
 **Prevention:** Always instantiate an explicit `http.Server` and set `ReadHeaderTimeout`, `ReadTimeout`, `WriteTimeout`, and `IdleTimeout` fields before calling `ListenAndServe()`.
+
+## 2026-09-01 - [Missing ReadHeaderTimeout Config]
+**Vulnerability:** The HTTP server implementation in `cmd/launcher/web/web.go` was previously not explicitly configuring `ReadHeaderTimeout`.
+**Learning:** A missing `ReadHeaderTimeout` in `http.Server` makes the server vulnerable to Slowloris-style denial-of-service (DoS) attacks, in which an attacker sends request headers very slowly, keeping the connection open and exhausting server resources.
+**Prevention:** Ensured `ReadHeaderTimeout` is exposed via a configurable command-line flag (`-read-header-timeout`, with a safe default of `5s`) and explicitly applied to `http.Server` initialization.
