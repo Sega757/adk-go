@@ -80,6 +80,8 @@ func createInvocationContext(t *testing.T, agnt agent.Agent, sess session.Sessio
 }
 
 func TestRequestConfirmationRequestProcessor(t *testing.T) {
+	t.Parallel()
+
 	// 1. Setup shared data and helpers used across test cases
 	originalFunctionCall := &genai.FunctionCall{
 		Name: mockToolName,
@@ -233,11 +235,47 @@ func TestRequestConfirmationRequestProcessor(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "TrailingEventsIgnored",
+			events: append(createConfirmationEvents(true), &session.Event{
+				Author: "agent",
+				LLMResponse: model.LLMResponse{
+					Content: &genai.Content{
+						Parts: []*genai.Part{
+							{
+								Text: "trailing event following confirmation",
+							},
+						},
+					},
+				},
+			}),
+			wantEvents: []*session.Event{
+				{
+					Author: "testAgent",
+					LLMResponse: model.LLMResponse{
+						Content: &genai.Content{
+							Parts: []*genai.Part{
+								{
+									FunctionResponse: &genai.FunctionResponse{
+										Name:     mockToolName,
+										ID:       mockFunctionCallID,
+										Response: map[string]any{"result": "Mock tool result with test"},
+									},
+								},
+							},
+							Role: "user",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	// 3. Execution Loop
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			agnt, tools, err := newMockLlmAgent()
 			if err != nil {
 				t.Fatalf("error creating mock llmagent: %v", err)

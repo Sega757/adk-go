@@ -106,8 +106,7 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 			return
 		}
 
-		// TODO could we skip events for >= confirmationEventIndex
-		for k := len(events) - 2; k >= 0; k-- {
+		for k := confirmationEventIndex - 1; k >= 0; k-- {
 			event := events[k]
 			// Find the system generated FunctionCall event requesting the tool confirmation
 			calls := utils.FunctionCalls(event.Content)
