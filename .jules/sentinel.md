@@ -26,3 +26,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** The HTTP server implementation in `cmd/launcher/web/web.go` was previously not explicitly configuring `ReadHeaderTimeout`.
 **Learning:** A missing `ReadHeaderTimeout` in `http.Server` makes the server vulnerable to Slowloris-style denial-of-service (DoS) attacks, in which an attacker sends request headers very slowly, keeping the connection open and exhausting server resources.
 **Prevention:** Ensured `ReadHeaderTimeout` is exposed via a configurable command-line flag (`-read-header-timeout`, with a safe default of `5s`) and explicitly applied to `http.Server` initialization.
+
+## 2026-09-01 - [Consistent Logging in Instruction Template Processing]
+**Vulnerability/Issue:** Silent failure during instruction placeholder variable injection for optional artifacts and optional session state keys made debugging missing state/artifacts difficult without surfacing errors to the LLM flow.
+**Learning:** Optional template variables (`{artifact.foo?}` or `{bar?}`) should gracefully resolve to empty strings when missing or when benign lookup errors occur, but unexpected errors (such as artifact loading failures or session state query errors other than `session.ErrStateKeyNotExist`) must be logged for operator visibility.
+**Prevention:** Always use standard `log.Printf` to log unexpected optional lookup failures while preserving fallback behavior (`return "", nil`), ensuring `session.ErrStateKeyNotExist` remains silently ignored as expected missing state.

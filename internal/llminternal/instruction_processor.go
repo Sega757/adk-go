@@ -15,8 +15,10 @@
 package llminternal
 
 import (
+	"errors"
 	"fmt"
 	"iter"
+	"log"
 	"regexp"
 	"strings"
 	"unicode"
@@ -134,7 +136,7 @@ func replaceMatch(ctx agent.InvocationContext, match string) (string, error) {
 		resp, err := ctx.Artifacts().Load(ctx, fileName)
 		if err != nil {
 			if optional {
-				// TODO: consistent logging approach in adk-go
+				log.Printf("failed to load optional artifact %s: %v", fileName, err)
 				return "", nil
 			}
 			return "", fmt.Errorf("failed to load artifact %s: %w", fileName, err)
@@ -149,7 +151,9 @@ func replaceMatch(ctx agent.InvocationContext, match string) (string, error) {
 	value, err := ctx.Session().State().Get(varName)
 	if err != nil {
 		if optional {
-			// TODO: log error when !errors.Is(err, session.ErrStateKeyNotExist)
+			if !errors.Is(err, session.ErrStateKeyNotExist) {
+				log.Printf("failed to get optional state key %s: %v", varName, err)
+			}
 			return "", nil
 		}
 		return "", err
