@@ -15,6 +15,10 @@
 package llminternal
 
 import (
+	"bytes"
+	"errors"
+	"log"
+	"os"
 	"strings"
 	"testing"
 
@@ -277,4 +281,145 @@ func BenchmarkInjectSessionState_NoPlaceholders(b *testing.B) {
 			b.Fatalf("InjectSessionState error: %v", err)
 		}
 	}
+}
+
+type mockErrorStateSession struct {
+	session.Session
+	getErr error
+}
+
+func (m *mockErrorStateSession) State() session.State {
+	return &mockErrorState{
+		State:  m.Session.State(),
+		getErr: m.getErr,
+	}
+}
+
+type mockErrorState struct {
+	session.State
+	getErr error
+}
+
+func (m *mockErrorState) Get(key string) (any, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	return m.State.Get(key)
+}
+
+func TestInjectSessionState_Logging(t *testing.T) {
+	t.Run("logs optional artifact loading failure", func(t *testing.T) {
+		var buf bytes.Buffer
+		log.SetOutput(&buf)
+		t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+		sessionService := session.InMemoryService()
+		createResp, err := sessionService.Create(t.Context(), &session.CreateRequest{
+			AppName:   "testApp",
+			UserID:    "testUser",
+			SessionID: "testSession",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		artifacts := &artifactinternal.Artifacts{
+			Service:   artifact.InMemoryService(),
+			AppName:   "testApp",
+			UserID:    "testUser",
+			SessionID: "testSession",
+		}
+
+		ctx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{
+			Artifacts: artifacts,
+			Session:   createResp.Session,
+		})
+
+		template := "Optional artifact: {artifact.missing_file?}"
+		got, err := InjectSessionState(ctx, template)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "Optional artifact: " {
+			t.Errorf("got %q, want %q", got, "Optional artifact: ")
+		}
+
+		logOutput := buf.String()
+		if !strings.Contains(logOutput, "failed to load optional artifact missing_file:") {
+			t.Errorf("expected log output to contain optional artifact warning, got: %q", logOutput)
+		}
+	})
+
+	t.Run("logs optional state retrieval error when not ErrStateKeyNotExist", func(t *testing.T) {
+		var buf bytes.Buffer
+		log.SetOutput(&buf)
+		t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+		sessionService := session.InMemoryService()
+		createResp, err := sessionService.Create(t.Context(), &session.CreateRequest{
+			AppName:   "testApp",
+			UserID:    "testUser",
+			SessionID: "testSession",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		mockSess := &mockErrorStateSession{
+			Session: createResp.Session,
+			getErr:  errors.New("db connection timeout"),
+		}
+
+		ctx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{
+			Session: mockSess,
+		})
+
+		template := "Optional value: {err_key?}"
+		got, err := InjectSessionState(ctx, template)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "Optional value: " {
+			t.Errorf("got %q, want %q", got, "Optional value: ")
+		}
+
+		logOutput := buf.String()
+		if !strings.Contains(logOutput, "failed to get optional state key err_key: db connection timeout") {
+			t.Errorf("expected log output to contain optional state error, got: %q", logOutput)
+		}
+	})
+
+	t.Run("does not log optional state when error is ErrStateKeyNotExist", func(t *testing.T) {
+		var buf bytes.Buffer
+		log.SetOutput(&buf)
+		t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+		sessionService := session.InMemoryService()
+		createResp, err := sessionService.Create(t.Context(), &session.CreateRequest{
+			AppName:   "testApp",
+			UserID:    "testUser",
+			SessionID: "testSession",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		ctx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{
+			Session: createResp.Session,
+		})
+
+		template := "Optional value: {missing_key?}"
+		got, err := InjectSessionState(ctx, template)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "Optional value: " {
+			t.Errorf("got %q, want %q", got, "Optional value: ")
+		}
+
+		logOutput := buf.String()
+		if logOutput != "" {
+			t.Errorf("expected empty log output for missing state key, got: %q", logOutput)
+		}
+	})
 }
