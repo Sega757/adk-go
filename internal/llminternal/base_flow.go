@@ -506,7 +506,6 @@ func (f *Flow) RunLive(ctx agent.InvocationContext) (agent.LiveSession, iter.Seq
 								}
 							}
 							if isTaskCompleted {
-								time.Sleep(100 * time.Millisecond)
 								cleanup()
 								return
 							}
