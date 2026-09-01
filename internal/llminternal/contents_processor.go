@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -176,9 +175,7 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 		}
 
 		// gemini 3 in streaming returns a last response with an empty part. We need to filter it out.
-		content.Parts = slices.DeleteFunc(content.Parts, func(p *genai.Part) bool {
-			return p == nil || reflect.ValueOf(*p).IsZero()
-		})
+		content.Parts = slices.DeleteFunc(content.Parts, utils.IsZeroPart)
 		if len(content.Parts) == 0 {
 			continue
 		}

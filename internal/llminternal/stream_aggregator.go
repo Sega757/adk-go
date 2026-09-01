@@ -18,12 +18,12 @@ import (
 	"context"
 	"iter"
 	"maps"
-	"reflect"
 	"strings"
 
 	"google.golang.org/genai"
 
 	"google.golang.org/adk/v2/internal/llminternal/converters"
+	"google.golang.org/adk/v2/internal/utils"
 	"google.golang.org/adk/v2/model"
 )
 
@@ -97,7 +97,7 @@ func (s *streamingResponseAggregator) aggregateResponse(llmResponse *model.LLMRe
 
 	for _, part := range llmResponse.Content.Parts {
 		// gemini 3 in streaming returns a last response with an empty part. We will filter it out.
-		if reflect.ValueOf(*part).IsZero() {
+		if utils.IsZeroPart(part) {
 			continue
 		}
 		if len(part.ThoughtSignature) > 0 {

@@ -94,6 +94,59 @@ func TestRemoveClientFunctionCallID(t *testing.T) {
 	}
 }
 
+func TestIsZeroPart(t *testing.T) {
+	tests := []struct {
+		name string
+		part *genai.Part
+		want bool
+	}{
+		{
+			name: "nil part",
+			part: nil,
+			want: true,
+		},
+		{
+			name: "empty struct part",
+			part: &genai.Part{},
+			want: true,
+		},
+		{
+			name: "text part",
+			part: &genai.Part{Text: "hello"},
+			want: false,
+		},
+		{
+			name: "thought part",
+			part: &genai.Part{Thought: true},
+			want: false,
+		},
+		{
+			name: "thought signature part",
+			part: &genai.Part{ThoughtSignature: []byte("sig")},
+			want: false,
+		},
+		{
+			name: "function call part",
+			part: &genai.Part{FunctionCall: &genai.FunctionCall{Name: "fn"}},
+			want: false,
+		},
+		{
+			name: "part metadata part",
+			part: &genai.Part{PartMetadata: map[string]any{"key": "val"}},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := utils.IsZeroPart(tt.part)
+			if got != tt.want {
+				t.Errorf("IsZeroPart(%v) = %v, want %v", tt.part, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHelperFunctions(t *testing.T) {
 	content := &genai.Content{
 		Parts: []*genai.Part{
@@ -163,5 +216,15 @@ func BenchmarkRemoveClientFunctionCallID(b *testing.B) {
 			},
 		}
 		utils.RemoveClientFunctionCallID(content)
+	}
+}
+
+func BenchmarkIsZeroPart(b *testing.B) {
+	part := &genai.Part{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = utils.IsZeroPart(part)
 	}
 }

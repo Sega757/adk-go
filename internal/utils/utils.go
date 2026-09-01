@@ -137,6 +137,28 @@ func TextParts(c *genai.Content) (ret []string) {
 	return ret
 }
 
+// IsZeroPart reports whether p is nil or points to a zero-value genai.Part.
+// It provides a reflection-free, zero-allocation alternative to reflect.ValueOf(*p).IsZero().
+func IsZeroPart(p *genai.Part) bool {
+	if p == nil {
+		return true
+	}
+	return p.Text == "" &&
+		!p.Thought &&
+		len(p.ThoughtSignature) == 0 &&
+		p.FunctionCall == nil &&
+		p.FunctionResponse == nil &&
+		p.InlineData == nil &&
+		p.FileData == nil &&
+		p.ExecutableCode == nil &&
+		p.CodeExecutionResult == nil &&
+		p.MediaResolution == nil &&
+		p.VideoMetadata == nil &&
+		p.ToolCall == nil &&
+		p.ToolResponse == nil &&
+		len(p.PartMetadata) == 0
+}
+
 // FunctionDecls extracts all Function declarations from the GenerateContentConfig.
 func FunctionDecls(c *genai.GenerateContentConfig) (ret []*genai.FunctionDeclaration) {
 	if c == nil {
