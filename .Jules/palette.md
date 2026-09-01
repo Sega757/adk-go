@@ -19,3 +19,7 @@ This journal documents critical UX and accessibility learnings, patterns, and in
 ## 2026-03-25 - Invalid CLI Command Feedback & Prompt Safeguards
 **Learning:** In interactive CLI agent prompts, mistyped slash commands (e.g. `/hepl`, `/foo`) sent directly to backend LLMs waste latency and create confusing LLM responses. Intercepting unrecognized single-word slash commands (excluding path inputs with slash separators like `/tmp/file`) locally, providing immediate color-coded hint feedback, and re-prompting the user avoids unnecessary agent processing and improves CLI feedback loops.
 **Action:** When processing interactive command line input loops, intercept single-token slash prefixes locally, surface clear helper guidance, and prevent invalid slash command typos from being sent to backend agent handlers.
+
+## 2026-09-01 - Web UI Chat Stream Accessibility & Focus-Visible States
+**Learning:** Live-updating streaming containers (chat messages, event logs) that omit `role="log"` and `aria-live="polite"` prevent screen readers from dynamically announcing updates. Pairing live region roles with explicit `aria-label`s on controls and explicit CSS `:focus-visible` outline rules for interactive buttons ensures both screen reader users and keyboard navigators receive immediate focus and feedback cues.
+**Action:** Always assign `role="log"` and `aria-live="polite"` to dynamically updated message/console logs and define CSS `:focus-visible` indicators for interactive elements.
