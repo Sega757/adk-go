@@ -41,13 +41,13 @@ func TestSecurityHeaders(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	expectedHeaders := map[string]string{
-		"X-Frame-Options":           "DENY",
-		"X-Content-Type-Options":    "nosniff",
-		"X-XSS-Protection":          "1; mode=block",
-		"Referrer-Policy":           "strict-origin-when-cross-origin",
-		"Cache-Control":             "no-store, no-cache, must-revalidate, proxy-revalidate",
-		"Pragma":                    "no-cache",
-		"Expires":                   "0",
+		"X-Frame-Options":        "DENY",
+		"X-Content-Type-Options": "nosniff",
+		"X-XSS-Protection":       "1; mode=block",
+		"Referrer-Policy":        "strict-origin-when-cross-origin",
+		"Cache-Control":          "no-store, no-cache, must-revalidate, proxy-revalidate",
+		"Pragma":                 "no-cache",
+		"Expires":                "0",
 	}
 
 	for header, want := range expectedHeaders {

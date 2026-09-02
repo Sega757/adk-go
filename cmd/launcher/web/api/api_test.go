@@ -22,14 +22,14 @@ import (
 
 func TestCorsWithArgs(t *testing.T) {
 	tests := []struct {
-		name                 string
-		frontendAddress      string
-		requestOrigin        string
-		requestMethod        string
-		wantAllowedOrigin    string
-		wantMethodsHeader    bool
-		wantVaryHeader       bool
-		wantStatus           int
+		name              string
+		frontendAddress   string
+		requestOrigin     string
+		requestMethod     string
+		wantAllowedOrigin string
+		wantMethodsHeader bool
+		wantVaryHeader    bool
+		wantStatus        int
 	}{
 		{
 			name:              "Allowed origin with schemed frontend address",
