@@ -974,6 +974,7 @@ function closeCameraPreview() {
     isVideoStreaming = false;
     streamVideoButton.textContent = "📹 Stream Video";
     streamVideoButton.classList.remove("active");
+    streamVideoButton.setAttribute("aria-pressed", "false");
     addSystemMessage("Video streaming stopped");
   }
 
@@ -1145,6 +1146,7 @@ function startStreamingLoop() {
   isVideoStreaming = true;
   streamVideoButton.textContent = "⏹️ Stop Video";
   streamVideoButton.classList.add("active");
+  streamVideoButton.setAttribute("aria-pressed", "true");
   addSystemMessage("Video streaming started");
 
   // 1 FPS = 1000ms interval
@@ -1268,6 +1270,7 @@ async function toggleAudioStreaming() {
     // Keep audioPlayerContext open so we can still hear the agent
     startAudioButton.textContent = "🎤 Start Voice";
     startAudioButton.classList.remove("active");
+    startAudioButton.setAttribute("aria-pressed", "false");
     addSystemMessage("Audio streaming stopped");
     addConsoleEntry('outgoing', 'Audio Mode Disabled', { status: 'Audio stopped' }, '🎤', 'system');
   } else {
@@ -1277,6 +1280,7 @@ async function toggleAudioStreaming() {
       is_audio = true;
       startAudioButton.textContent = "⏹️ Stop Voice";
       startAudioButton.classList.add("active");
+      startAudioButton.setAttribute("aria-pressed", "true");
       addSystemMessage("Audio mode enabled - you can now speak to the agent");
       addConsoleEntry('outgoing', 'Audio Mode Enabled', {
         status: 'Audio worklets started',
@@ -1289,6 +1293,7 @@ async function toggleAudioStreaming() {
       is_audio = false;
       startAudioButton.textContent = "🎤 Start Voice";
       startAudioButton.classList.remove("active");
+      startAudioButton.setAttribute("aria-pressed", "false");
       addConsoleEntry('error', 'Failed to enable audio mode', { error: error.message }, '⚠️', 'system');
     }
   }

@@ -45,11 +45,11 @@
                 autocomplete="off"
               />
               <button type="submit" id="sendButton" disabled>Send</button>
-              <button type="button" id="startAudioButton">Start Audio</button>
-              <button type="button" id="cameraButton">📷 Camera</button>
-              <button type="button" id="streamVideoButton">📹 Stream Video</button>
-              <button type="button" id="sendFileButton">📁 Send File</button>
-              <input type="file" id="fileInput" style="display: none;" accept="image/jpeg,image/png">
+              <button type="button" id="startAudioButton" aria-pressed="false" aria-label="Toggle voice input">🎤 Start Voice</button>
+              <button type="button" id="cameraButton" aria-label="Open camera preview">📷 Camera</button>
+              <button type="button" id="streamVideoButton" aria-pressed="false" aria-label="Toggle video streaming">📹 Stream Video</button>
+              <button type="button" id="sendFileButton" aria-label="Send image file">📁 Send File</button>
+              <input type="file" id="fileInput" style="display: none;" accept="image/jpeg,image/png" aria-label="Select image file to send">
             </div>
           </form>
         </div>
