@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -533,4 +534,196 @@ name: test
 
 		wg.Wait()
 	})
+}
+
+type dummyTool struct {
+	tool.Tool
+	name string
+}
+
+func (d *dummyTool) Name() string {
+	return d.name
+}
+
+type dummyToolset struct {
+	tool.Toolset
+	name string
+}
+
+func (d *dummyToolset) Name() string {
+	return d.name
+}
+
+type ctxKey string
+
+func TestResolveToolReference(t *testing.T) {
+	testErr := fmt.Errorf("factory execution failed")
+	customKey := ctxKey("trace-id")
+	customVal := "trace-12345"
+
+	tests := []struct {
+		name          string
+		toolName      string
+		setupRegistry func(t *testing.T)
+		ctx           context.Context
+		args          map[string]any
+		wantTool      tool.Tool
+		wantToolset   tool.Toolset
+		wantErr       bool
+		errSubstring  string
+	}{
+		{
+			name:          "Empty tool name returns validation error",
+			toolName:      "",
+			setupRegistry: func(t *testing.T) {},
+			ctx:           context.Background(),
+			args:          nil,
+			wantTool:      nil,
+			wantToolset:   nil,
+			wantErr:       true,
+			errSubstring:  "tool name cannot be empty",
+		},
+		{
+			name:          "Unregistered tool lookup returns not found error",
+			toolName:      "non_existent_tool",
+			setupRegistry: func(t *testing.T) {},
+			ctx:           context.Background(),
+			args:          nil,
+			wantTool:      nil,
+			wantToolset:   nil,
+			wantErr:       true,
+			errSubstring:  "tool 'non_existent_tool' not found",
+		},
+		{
+			name:     "Successful ToolFactory execution",
+			toolName: "valid_tool",
+			setupRegistry: func(t *testing.T) {
+				expectedTool := &dummyTool{name: "my_tool"}
+				_ = RegisterToolFactory("valid_tool", func(ctx context.Context, args map[string]any) (tool.Tool, error) {
+					return expectedTool, nil
+				})
+			},
+			ctx:         context.Background(),
+			args:        map[string]any{"param": "value"},
+			wantTool:    &dummyTool{name: "my_tool"},
+			wantToolset: nil,
+			wantErr:     false,
+		},
+		{
+			name:     "ToolFactory returns error and propagates properly",
+			toolName: "failing_tool",
+			setupRegistry: func(t *testing.T) {
+				_ = RegisterToolFactory("failing_tool", func(ctx context.Context, args map[string]any) (tool.Tool, error) {
+					return nil, testErr
+				})
+			},
+			ctx:          context.Background(),
+			args:         nil,
+			wantTool:     nil,
+			wantToolset:  nil,
+			wantErr:      true,
+			errSubstring: "factory execution failed",
+		},
+		{
+			name:     "Successful ToolsetFactory execution",
+			toolName: "valid_toolset",
+			setupRegistry: func(t *testing.T) {
+				expectedToolset := &dummyToolset{name: "my_toolset"}
+				_ = RegisterToolsetFactory("valid_toolset", func(ctx context.Context, args map[string]any) (tool.Toolset, error) {
+					return expectedToolset, nil
+				})
+			},
+			ctx:         context.Background(),
+			args:        map[string]any{"config_flag": true},
+			wantTool:    nil,
+			wantToolset: &dummyToolset{name: "my_toolset"},
+			wantErr:     false,
+		},
+		{
+			name:     "ToolsetFactory returns error and propagates properly",
+			toolName: "failing_toolset",
+			setupRegistry: func(t *testing.T) {
+				_ = RegisterToolsetFactory("failing_toolset", func(ctx context.Context, args map[string]any) (tool.Toolset, error) {
+					return nil, testErr
+				})
+			},
+			ctx:          context.Background(),
+			args:         nil,
+			wantTool:     nil,
+			wantToolset:  nil,
+			wantErr:      true,
+			errSubstring: "factory execution failed",
+		},
+		{
+			name:     "Invalid registry entry type returns error without panic",
+			toolName: "invalid_type_tool",
+			setupRegistry: func(t *testing.T) {
+				registryMu.Lock()
+				toolRegistry["invalid_type_tool"] = struct{ name string }{"not-a-factory"}
+				registryMu.Unlock()
+			},
+			ctx:          context.Background(),
+			args:         nil,
+			wantTool:     nil,
+			wantToolset:  nil,
+			wantErr:      true,
+			errSubstring: "is not a tool or toolset factory",
+		},
+		{
+			name:     "Context and args are accurately passed to factory",
+			toolName: "context_args_verifier",
+			setupRegistry: func(t *testing.T) {
+				_ = RegisterToolFactory("context_args_verifier", func(ctx context.Context, args map[string]any) (tool.Tool, error) {
+					if ctxVal := ctx.Value(customKey); ctxVal != customVal {
+						return nil, fmt.Errorf("context value mismatch: got %v, want %v", ctxVal, customVal)
+					}
+					if val, ok := args["expected_key"].(string); !ok || val != "expected_value" {
+						return nil, fmt.Errorf("args value mismatch: got %v", args["expected_key"])
+					}
+					return &dummyTool{name: "verified_tool"}, nil
+				})
+			},
+			ctx:         context.WithValue(context.Background(), customKey, customVal),
+			args:        map[string]any{"expected_key": "expected_value"},
+			wantTool:    &dummyTool{name: "verified_tool"},
+			wantToolset: nil,
+			wantErr:     false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			resetRegistries(t)
+			tc.setupRegistry(t)
+
+			gotTool, gotToolset, err := ResolveToolReference(tc.ctx, tc.toolName, tc.args)
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("ResolveToolReference(%q) expected error, got nil", tc.toolName)
+				}
+				if tc.errSubstring != "" && !strings.Contains(err.Error(), tc.errSubstring) {
+					t.Errorf("ResolveToolReference(%q) error = %q, expected containing %q", tc.toolName, err.Error(), tc.errSubstring)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("ResolveToolReference(%q) unexpected error: %v", tc.toolName, err)
+			}
+
+			if (gotTool == nil) != (tc.wantTool == nil) {
+				t.Errorf("ResolveToolReference(%q) gotTool = %v, want %v", tc.toolName, gotTool, tc.wantTool)
+			} else if gotTool != nil && gotTool.Name() != tc.wantTool.Name() {
+				t.Errorf("ResolveToolReference(%q) gotTool.Name() = %q, want %q", tc.toolName, gotTool.Name(), tc.wantTool.Name())
+			}
+
+			if (gotToolset == nil) != (tc.wantToolset == nil) {
+				t.Errorf("ResolveToolReference(%q) gotToolset = %v, want %v", tc.toolName, gotToolset, tc.wantToolset)
+			} else if gotToolset != nil && gotToolset.Name() != tc.wantToolset.Name() {
+				t.Errorf("ResolveToolReference(%q) gotToolset.Name() = %q, want %q", tc.toolName, gotToolset.Name(), tc.wantToolset.Name())
+			}
+		})
+	}
 }
