@@ -360,6 +360,34 @@ button:focus-visible {
   opacity: 0.6;
 }
 
+/* Active streaming toggle button indicators */
+button.active {
+  animation: pulse-active 2s infinite;
+}
+
+#startAudioButton.active,
+#streamVideoButton.active {
+  background-color: #ea4335;
+  color: white;
+}
+
+#startAudioButton.active:hover:not(:disabled),
+#streamVideoButton.active:hover:not(:disabled) {
+  background-color: #d93025;
+}
+
+@keyframes pulse-active {
+  0% {
+    box-shadow: 0 0 0 0 rgba(234, 67, 53, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(234, 67, 53, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(234, 67, 53, 0);
+  }
+}
+
 #startAudioButton {
   background-color: #34a853;
   color: white;

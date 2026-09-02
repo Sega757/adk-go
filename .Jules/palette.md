@@ -23,3 +23,7 @@ This journal documents critical UX and accessibility learnings, patterns, and in
 ## 2026-09-01 - Web UI Chat Stream Accessibility & Focus-Visible States
 **Learning:** Live-updating streaming containers (chat messages, event logs) that omit `role="log"` and `aria-live="polite"` prevent screen readers from dynamically announcing updates. Pairing live region roles with explicit `aria-label`s on controls and explicit CSS `:focus-visible` outline rules for interactive buttons ensures both screen reader users and keyboard navigators receive immediate focus and feedback cues.
 **Action:** Always assign `role="log"` and `aria-live="polite"` to dynamically updated message/console logs and define CSS `:focus-visible` indicators for interactive elements.
+
+## 2026-09-02 - Web UI Streaming Toggle Accessibility & Active Recording Feedback
+**Learning:** For interactive media streaming controls (like voice input or camera video toggles), omission of `aria-pressed` prevents screen reader users from identifying whether recording/streaming is currently live. Updating `aria-pressed` dynamically in JavaScript alongside CSS keyframe pulse animations on active `.active` toggle buttons provides unambiguous visual and assistive technology feedback during live recording sessions.
+**Action:** Always include initial `aria-pressed="false"` on stateful toggle buttons, sync `aria-pressed` dynamically in toggle handlers, and pair active states with high-contrast visual indicators such as subtle keyframe pulse shadows.
