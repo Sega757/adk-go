@@ -15,10 +15,10 @@
 package remoteagent
 
 import (
-	"strings"
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"google.golang.org/genai"

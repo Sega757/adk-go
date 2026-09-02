@@ -766,10 +766,10 @@ type customFuncTool struct {
 	decl     *genai.FunctionDeclaration
 }
 
-func (c *customFuncTool) Name() string                               { return c.toolName }
-func (c *customFuncTool) Description() string                        { return "custom func tool" }
-func (c *customFuncTool) IsLongRunning() bool                        { return false }
-func (c *customFuncTool) Declaration() *genai.FunctionDeclaration   { return c.decl }
+func (c *customFuncTool) Name() string                            { return c.toolName }
+func (c *customFuncTool) Description() string                     { return "custom func tool" }
+func (c *customFuncTool) IsLongRunning() bool                     { return false }
+func (c *customFuncTool) Declaration() *genai.FunctionDeclaration { return c.decl }
 func (c *customFuncTool) ProcessRequest(ctx agent.Context, req *model.LLMRequest) error {
 	return llminternal.ExportAppendTools(req, c)
 }

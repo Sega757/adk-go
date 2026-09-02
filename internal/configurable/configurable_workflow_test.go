@@ -20,6 +20,7 @@ import (
 	"iter"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -586,4 +587,42 @@ edges:
 	if val, ok := toolOut["result"].(string); !ok || val != "tool_output" {
 		t.Errorf("expected tool output result 'tool_output', got %v", toolOut["result"])
 	}
+}
+
+func TestRegisterNodeFunctionValidation(t *testing.T) {
+	t.Run("empty name", func(t *testing.T) {
+		err := RegisterNodeFunction("", upperFn)
+		if err == nil || err.Error() != "RegisterNodeFunction called with empty name" {
+			t.Errorf("expected empty name error, got %v", err)
+		}
+	})
+
+	t.Run("nil function", func(t *testing.T) {
+		err := RegisterNodeFunction("test_nil_fn", nil)
+		if err == nil || err.Error() != "RegisterNodeFunction called with nil function for test_nil_fn" {
+			t.Errorf("expected nil function error, got %v", err)
+		}
+	})
+
+	t.Run("unsupported signature", func(t *testing.T) {
+		err := RegisterNodeFunction("test_unsupported_fn", "not_a_function")
+		if err == nil || !strings.Contains(err.Error(), "has unsupported signature") {
+			t.Errorf("expected unsupported signature error, got %v", err)
+		}
+	})
+
+	t.Run("duplicate registration", func(t *testing.T) {
+		const dupName = "dup_test_fn"
+		validFn := func(ctx agent.Context, input any) (any, error) { return input, nil }
+
+		err1 := RegisterNodeFunction(dupName, validFn)
+		if err1 != nil {
+			t.Fatalf("first registration failed: %v", err1)
+		}
+
+		err2 := RegisterNodeFunction(dupName, validFn)
+		if err2 == nil || err2.Error() != "RegisterNodeFunction called twice for function "+dupName {
+			t.Errorf("expected duplicate registration error, got %v", err2)
+		}
+	})
 }

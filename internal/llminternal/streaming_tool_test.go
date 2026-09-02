@@ -15,7 +15,9 @@
 package llminternal
 
 import (
+	"context"
 	"fmt"
+	"google.golang.org/adk/v2/session"
 	"iter"
 	"sync"
 	"testing"
@@ -318,5 +320,71 @@ func TestHandleFunctionCalls_LiveControlPlane(t *testing.T) {
 	liveSess.mu.Unlock()
 	if len(tasksAfter) != 0 {
 		t.Errorf("expected registry to be empty after cancellation, got: %v", tasksAfter)
+	}
+}
+
+func TestLiveSessionImpl_ContextCancellationTeardown(t *testing.T) {
+	sess := newLiveSessionImpl()
+	defer sess.Close()
+
+	ev := &session.Event{ID: "ev_1"}
+	go func() {
+		for i := 0; i < 5; i++ {
+			if !sess.pushEvent(ev) {
+				return
+			}
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	consumed := 0
+	for event, err := range sess.recvIter() {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event != nil {
+			consumed++
+		}
+		if consumed == 2 {
+			cancel()
+			_ = sess.Close()
+			break
+		}
+		_ = ctx
+	}
+
+	if consumed != 2 {
+		t.Errorf("consumed = %d, want 2", consumed)
+	}
+}
+
+func TestLiveSessionImpl_DownstreamErrorTeardown(t *testing.T) {
+	sess := newLiveSessionImpl()
+
+	errSent := make(chan struct{})
+	go func() {
+		_ = sess.pushError(fmt.Errorf("downstream error"))
+		close(errSent)
+	}()
+
+	var gotErr error
+	for event, err := range sess.recvIter() {
+		if err != nil {
+			gotErr = err
+			_ = sess.Close()
+			break
+		}
+		_ = event
+	}
+
+	if gotErr == nil || gotErr.Error() != "downstream error" {
+		t.Fatalf("expected 'downstream error', got: %v", gotErr)
+	}
+
+	select {
+	case <-errSent:
+		// Producer unblocked and finished cleanly
+	case <-time.After(1 * time.Second):
+		t.Fatal("producer goroutine blocked on pushError")
 	}
 }

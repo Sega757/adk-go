@@ -16,6 +16,7 @@ package runconfig
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/adk/v2/agent"
 )
@@ -31,6 +32,7 @@ const (
 type RunConfig struct {
 	StreamingMode StreamingMode
 	Live          *agent.LiveRunConfig
+	ToolTimeout   time.Duration
 }
 
 func ToContext(ctx context.Context, cfg *RunConfig) context.Context {

@@ -386,7 +386,10 @@ func (f *Flow) RunLive(ctx agent.InvocationContext) (agent.LiveSession, iter.Seq
 				for {
 					resp, err := liveConn.Recv(connCtx)
 					if err != nil {
-						errChan <- err
+						select {
+						case errChan <- err:
+						case <-connCtx.Done():
+						}
 						return
 					}
 					if resp != nil {
@@ -427,7 +430,10 @@ func (f *Flow) RunLive(ctx agent.InvocationContext) (agent.LiveSession, iter.Seq
 						}
 						if req.Content != nil {
 							if err := liveConn.SendContent(connCtx, req.Content); err != nil {
-								errChan <- err
+								select {
+								case errChan <- err:
+								case <-connCtx.Done():
+								}
 								return
 							}
 						}
@@ -436,7 +442,10 @@ func (f *Flow) RunLive(ctx agent.InvocationContext) (agent.LiveSession, iter.Seq
 								sess.audioMgr.CacheInput(ctx, blob.Data, blob.MIMEType)
 							}
 							if err := liveConn.SendRealtime(connCtx, req.RealtimeInput); err != nil {
-								errChan <- err
+								select {
+								case errChan <- err:
+								case <-connCtx.Done():
+								}
 								return
 							}
 						}
@@ -575,6 +584,12 @@ func (f *Flow) runOneStep(ctx agent.InvocationContext) iter.Seq2[*session.Event,
 		if ctx.Ended() {
 			return
 		}
+		tools, err := extractTools(req.Tools)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+
 		// Create event to pass to callback state delta
 		stateDelta := make(map[string]any)
 		artifactDelta := make(map[string]int64)
@@ -593,19 +608,6 @@ func (f *Flow) runOneStep(ctx agent.InvocationContext) iter.Seq2[*session.Event,
 			// adk-python src/google/adk/flows/llm_flows/base_llm_flow.py BaseLlmFlow._postprocess_async.
 			if resp.Content == nil && resp.ErrorCode == "" && !resp.Interrupted {
 				continue
-			}
-
-			// TODO: temporarily convert
-			tools := make(map[string]tool.Tool)
-			for k, v := range req.Tools {
-				tool, ok := v.(tool.Tool)
-				if !ok {
-					if !yield(nil, fmt.Errorf("unexpected tool type %T for tool %v", v, k)) {
-						return
-					}
-					continue
-				}
-				tools[k] = tool
 			}
 
 			// Build the event and yield.
@@ -778,7 +780,10 @@ func (f *Flow) callLLM(ctx agent.InvocationContext, req *model.LLMRequest, state
 		// to help with slicing the billing reports on a per-agent basis.
 
 		// TODO: RunLive mode when invocation_context.run_config.support_cfc is true.
-		useStream := runconfig.FromContext(ctx).StreamingMode == runconfig.StreamingModeSSE
+		useStream := false
+		if runCfg := runconfig.FromContext(ctx); runCfg != nil {
+			useStream = runCfg.StreamingMode == runconfig.StreamingModeSSE
+		}
 
 		for resp, err := range generateContent(ctx, f.Model, req, useStream) {
 			if err != nil {
@@ -799,7 +804,9 @@ func (f *Flow) callLLM(ctx agent.InvocationContext, req *model.LLMRequest, state
 			}
 			// Function call ID is optional in genai API and some models do not use the field.
 			// Set it in case after model callbacks use it.
-			utils.PopulateClientFunctionCallID(ctx, resp.Content)
+			if resp != nil {
+				utils.PopulateClientFunctionCallID(ctx, resp.Content)
+			}
 
 			callbackResp, callbackErr := f.runAfterModelCallbacks(ctx, resp.LLMResponse, stateDelta, artifactDelta, err)
 			// TODO: check if we should stop iterator on the first error from stream or continue yielding next results.
@@ -974,6 +981,22 @@ func (f *Flow) finalizeModelResponseEvent(ctx agent.InvocationContext, resp *res
 	return ev
 }
 
+// extractTools extracts and validates tool.Tool instances from the request tool map.
+func extractTools(toolsMap map[string]any) (map[string]tool.Tool, error) {
+	if len(toolsMap) == 0 {
+		return nil, nil
+	}
+	tools := make(map[string]tool.Tool, len(toolsMap))
+	for k, v := range toolsMap {
+		tool, ok := v.(tool.Tool)
+		if !ok {
+			return nil, fmt.Errorf("unexpected tool type %T for tool %v", v, k)
+		}
+		tools[k] = tool
+	}
+	return tools, nil
+}
+
 // findLongRunningFunctionCallIDs iterates over the FunctionCalls and
 // returns the callIDs of the long running functions
 func findLongRunningFunctionCallIDs(c *genai.Content, tools map[string]tool.Tool) []string {
@@ -1045,6 +1068,11 @@ func (c *cancelledToolContext) Value(key any) any {
 func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[string]tool.Tool, resp *model.LLMResponse, toolConfirmations map[string]*toolconfirmation.ToolConfirmation, liveSess agent.LiveSession) (mergedEvent *session.Event, err error) {
 	fnCalls := utils.FunctionCalls(resp.Content)
 
+	var toolTimeout time.Duration
+	if runCfg := runconfig.FromContext(ctx); runCfg != nil {
+		toolTimeout = runCfg.ToolTimeout
+	}
+
 	// Lazy-initialize toolNames only if a tool lookup fails, avoiding
 	// unnecessary map-key slice allocations during normal function execution.
 	var (
@@ -1075,7 +1103,14 @@ func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[st
 	tasks := make([]func(context.Context), len(fnCalls))
 	for i, fnCall := range fnCalls {
 		tasks[i] = func(taskCtx context.Context) {
-			sctx, span := telemetry.StartExecuteToolSpan(taskCtx, telemetry.StartExecuteToolSpanParams{
+			execCtx := taskCtx
+			if toolTimeout > 0 {
+				var cancel context.CancelFunc
+				execCtx, cancel = context.WithTimeout(taskCtx, toolTimeout)
+				defer cancel()
+			}
+
+			sctx, span := telemetry.StartExecuteToolSpan(execCtx, telemetry.StartExecuteToolSpanParams{
 				ToolName: fnCall.Name,
 				Args:     fnCall.Args,
 			})
@@ -1156,9 +1191,15 @@ func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[st
 								result = map[string]any{"error": err.Error()}
 								break
 							}
+							if execCtx.Err() != nil {
+								result = map[string]any{"error": fmt.Sprintf("tool execution timed out: %v", execCtx.Err())}
+								break
+							}
 							sb.WriteString(chunk)
 						}
-						if result == nil {
+						if result == nil && execCtx.Err() != nil {
+							result = map[string]any{"error": fmt.Sprintf("tool execution timed out: %v", execCtx.Err())}
+						} else if result == nil {
 							result = map[string]any{"result": sb.String()}
 						}
 					}
@@ -1171,6 +1212,10 @@ func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[st
 				} else {
 					result = f.callTool(toolCtx, funcTool, fnCall.Args)
 				}
+			}
+
+			if execCtx.Err() != nil {
+				result = map[string]any{"error": fmt.Sprintf("tool execution timed out: %v", execCtx.Err())}
 			}
 
 			if result == nil {

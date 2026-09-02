@@ -35,16 +35,28 @@ var (
 )
 
 // RegisterNodeFunction registers a custom node function so it can be referenced inside Workflow YAML configurations.
-func RegisterNodeFunction(name string, fn any) {
-	registryMu.Lock()
-	defer registryMu.Unlock()
+func RegisterNodeFunction(name string, fn any) error {
+	if name == "" {
+		return fmt.Errorf("RegisterNodeFunction called with empty name")
+	}
+	if fn == nil {
+		return fmt.Errorf("RegisterNodeFunction called with nil function for %s", name)
+	}
 
 	typedFn, err := castNodeFunction(name, fn)
 	if err != nil {
-		panic(fmt.Sprintf("RegisterNodeFunction failed for %q: %v", name, err))
+		return err
+	}
+
+	registryMu.Lock()
+	defer registryMu.Unlock()
+
+	if _, dup := nodeFunctionRegistry[name]; dup {
+		return fmt.Errorf("RegisterNodeFunction called twice for function %s", name)
 	}
 
 	nodeFunctionRegistry[name] = typedFn
+	return nil
 }
 
 // workflowYAMLConfig represents the YAML schema for a Workflow agent.

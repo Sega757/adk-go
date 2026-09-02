@@ -26,3 +26,23 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** The HTTP server implementation in `cmd/launcher/web/web.go` was previously not explicitly configuring `ReadHeaderTimeout`.
 **Learning:** A missing `ReadHeaderTimeout` in `http.Server` makes the server vulnerable to Slowloris-style denial-of-service (DoS) attacks, in which an attacker sends request headers very slowly, keeping the connection open and exhausting server resources.
 **Prevention:** Ensured `ReadHeaderTimeout` is exposed via a configurable command-line flag (`-read-header-timeout`, with a safe default of `5s`) and explicitly applied to `http.Server` initialization.
+
+## 2026-09-02 - [Upfront Typed Tool Extraction in Flow Loop]
+**Vulnerability / Inefficiency:** Converting dynamic request parameters (such as  map of ) to strongly-typed internal interfaces () inside a model response streaming loop caused repeated map allocations and type checks per chunk, and delayed tool validation until LLM responses were processed.
+**Learning:** Extracting and validating dynamic tool maps once prior to entering the LLM execution/streaming loop guarantees that tool map contents implement expected interfaces upfront, failing fast on invalid tool configurations before model response streaming starts.
+**Prevention:** Always extract and validate dynamic map types upfront into strongly-typed maps once prior to execution loops.
+
+## 2026-09-02 - [Stream Consumer Channel Teardown & Goroutine Leaks]
+**Vulnerability / Concurrency Defect:** Unbuffered channel sends on  or  within streaming background goroutines in  lacked  guards against context cancellation (). If a consumer stopped listening mid-stream or encountered an error, the background producer goroutine would block indefinitely, leaking memory and connections.
+**Learning:** Background producer goroutines writing stream events or errors onto channels must always write using  with  or  to guarantee non-blocking exit when consumers cancel or fail.
+**Prevention:** Always pair unbuffered channel sends in streaming producer goroutines with  listening on context cancellation ().
+
+## 2026-09-02 - [Tool Execution Timeout Enforcement]
+**Vulnerability / Flow Stall:** Unbounded or slow third-party tool execution could hang multi-step agent flow execution indefinitely if a tool failed to respond or blocked on I/O.
+**Learning:** Configured  in  must be enforced per tool call task using a child context (). If  is unset or zero, the parent context deadline is preserved as the fallback (rather than forcing an arbitrary default timeout), and timeout expiration is returned as an error response payload event () so the model can inspect and recover gracefully.
+**Prevention:** Always bound tool task execution using child contexts derived from  (falling back to parent context deadline when zero), capturing deadline expiration as structured tool error payloads.
+
+## 2026-09-02 - [Panic-Free Conformance Loader & Node Registration]
+**Vulnerability / Panic Exposure:** Registering custom node functions or initializing conformance loaders with empty names, nil function pointers, or duplicate identifiers previously caused panics instead of returning Go  types, exposing configuration/loader callers to runtime crashes.
+**Learning:** Loader utilities and registry functions (, , ) must perform pre-lock input validation (checking for empty names,  function pointers,  agent map entries) and return explicit, descriptive Go  values rather than panicking.
+**Prevention:** Always validate loader inputs and registration parameters upfront and propagate structured Go  returns instead of invoking .

@@ -28,8 +28,11 @@ type conformanceAgentLoader struct {
 }
 
 // NewConformanceAgentLoader returns a new AgentLoader with the given root Agent and other agents.
-// Returns an error if more than one agent (including root) shares the same name
+// Returns an error if agentMap is nil or any agent in agentMap is nil.
 func NewConformanceAgentLoader(agentMap map[string]agent.Agent) (agent.Loader, error) {
+	if agentMap == nil {
+		agentMap = map[string]agent.Agent{}
+	}
 	agentsNames := make([]string, 0, len(agentMap))
 	for name := range agentMap {
 		agentsNames = append(agentsNames, name)
@@ -48,11 +51,14 @@ func (m *conformanceAgentLoader) ListAgents() []string {
 
 // conformanceAgentLoader implements LoadAgent. Returns an agent with given name or error if no such an agent is found
 func (m *conformanceAgentLoader) LoadAgent(name string) (agent.Agent, error) {
-	agent, ok := m.agentMap[name]
+	if m == nil || m.agentMap == nil {
+		return nil, fmt.Errorf("agent loader is not initialized")
+	}
+	ag, ok := m.agentMap[name]
 	if !ok {
 		return nil, fmt.Errorf("agent %s not found. Please specify one of those: %v", name, m.ListAgents())
 	}
-	return agent, nil
+	return ag, nil
 }
 
 // conformanceAgentLoader implements LoadAgent.

@@ -15,8 +15,14 @@
 package llminternal
 
 import (
+	"context"
 	"errors"
+	"google.golang.org/adk/v2/internal/agent/runconfig"
+	"google.golang.org/adk/v2/tool/functiontool"
+	"iter"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/genai"
@@ -802,4 +808,343 @@ func TestIsThoughtOnlyTurn(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExtractTools(t *testing.T) {
+	mock1 := &mockFunctionTool{name: "tool1"}
+	mock2 := &mockFunctionTool{name: "tool2"}
+
+	tests := []struct {
+		name     string
+		toolsMap map[string]any
+		want     map[string]tool.Tool
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name:     "nil map",
+			toolsMap: nil,
+			want:     nil,
+			wantErr:  false,
+		},
+		{
+			name:     "empty map",
+			toolsMap: map[string]any{},
+			want:     nil,
+			wantErr:  false,
+		},
+		{
+			name: "valid tool map",
+			toolsMap: map[string]any{
+				"tool1": mock1,
+				"tool2": mock2,
+			},
+			want: map[string]tool.Tool{
+				"tool1": mock1,
+				"tool2": mock2,
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid tool type",
+			toolsMap: map[string]any{
+				"validTool": mock1,
+				"badTool":   "not-a-tool-instance",
+			},
+			want:    nil,
+			wantErr: true,
+			errMsg:  "unexpected tool type string for tool badTool",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := extractTools(tc.toolsMap)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("extractTools() error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if tc.wantErr {
+				if err.Error() != tc.errMsg {
+					t.Errorf("extractTools() error msg = %q, want %q", err.Error(), tc.errMsg)
+				}
+				return
+			}
+			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(mockFunctionTool{})); diff != "" {
+				t.Errorf("extractTools() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+type mockLLMWithTools struct {
+	name string
+}
+
+func (m *mockLLMWithTools) Name() string { return m.name }
+func (m *mockLLMWithTools) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		yield(&model.LLMResponse{
+			Content: &genai.Content{
+				Parts: []*genai.Part{{Text: "hello"}},
+			},
+		}, nil)
+	}
+}
+
+func TestRunOneStep_InvalidToolType(t *testing.T) {
+	invalidProcessor := func(ctx agent.InvocationContext, req *model.LLMRequest, f *Flow) iter.Seq2[*session.Event, error] {
+		return func(yield func(*session.Event, error) bool) {
+			if req.Tools == nil {
+				req.Tools = make(map[string]any)
+			}
+			req.Tools["invalid_tool"] = 12345
+		}
+	}
+
+	mockAgent, err := agent.New(agent.Config{Name: "test-agent"})
+	if err != nil {
+		t.Fatalf("agent.New failed: %v", err)
+	}
+
+	f := &Flow{
+		Model:             &mockLLMWithTools{name: "test-model"},
+		RequestProcessors: []func(ctx agent.InvocationContext, req *model.LLMRequest, f *Flow) iter.Seq2[*session.Event, error]{invalidProcessor},
+	}
+
+	ctx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{Agent: mockAgent})
+
+	var gotErr error
+	for _, err := range f.runOneStep(ctx) {
+		if err != nil {
+			gotErr = err
+			break
+		}
+	}
+
+	if gotErr == nil {
+		t.Fatal("expected error for invalid tool type, got nil")
+	}
+	wantMsg := "unexpected tool type int for tool invalid_tool"
+	if gotErr.Error() != wantMsg {
+		t.Errorf("error = %q, want %q", gotErr.Error(), wantMsg)
+	}
+}
+
+func TestHandleFunctionCalls_ToolTimeout(t *testing.T) {
+	slowSyncTool, err := functiontool.New(functiontool.Config{
+		Name:        "slow_sync",
+		Description: "slow sync tool",
+	}, func(ctx agent.Context, args map[string]any) (map[string]any, error) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+			return map[string]any{"result": "ok"}, nil
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	slowStreamTool, err := functiontool.NewStreaming(functiontool.Config{
+		Name:        "slow_stream",
+		Description: "slow stream tool",
+	}, func(ctx agent.Context, args map[string]any) iter.Seq2[string, error] {
+		return func(yield func(string, error) bool) {
+			select {
+			case <-ctx.Done():
+				yield("", ctx.Err())
+				return
+			case <-time.After(200 * time.Millisecond):
+				yield("chunk1", nil)
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	toolsDict := map[string]tool.Tool{
+		"slow_sync":   slowSyncTool,
+		"slow_stream": slowStreamTool,
+	}
+
+	t.Run("Configured ToolTimeout on Synchronous Tool", func(t *testing.T) {
+		runCfg := &runconfig.RunConfig{ToolTimeout: 30 * time.Millisecond}
+		parentCtx := runconfig.ToContext(t.Context(), runCfg)
+		invCtx := icontext.NewInvocationContext(parentCtx, icontext.InvocationContextParams{
+			InvocationID: "inv_timeout_1",
+			Agent:        &mockAgent{name: "agent_1"},
+		})
+
+		flow := &Flow{Tools: []tool.Tool{slowSyncTool}}
+		resp := &model.LLMResponse{
+			Content: &genai.Content{
+				Parts: []*genai.Part{
+					{FunctionCall: &genai.FunctionCall{ID: "c1", Name: "slow_sync", Args: map[string]any{}}},
+				},
+			},
+		}
+
+		mergedEvent, err := flow.handleFunctionCalls(invCtx, toolsDict, resp, nil, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if mergedEvent == nil || len(mergedEvent.LLMResponse.Content.Parts) != 1 {
+			t.Fatalf("invalid merged event: %#v", mergedEvent)
+		}
+
+		fr := mergedEvent.LLMResponse.Content.Parts[0].FunctionResponse
+		if fr == nil {
+			t.Fatal("expected function response")
+		}
+		errStr, ok := fr.Response["error"].(string)
+		if !ok || !strings.Contains(errStr, "tool execution timed out") {
+			t.Errorf("expected timeout error in response, got: %v", fr.Response)
+		}
+	})
+
+	t.Run("Configured ToolTimeout on Streaming Tool", func(t *testing.T) {
+		runCfg := &runconfig.RunConfig{ToolTimeout: 30 * time.Millisecond}
+		parentCtx := runconfig.ToContext(t.Context(), runCfg)
+		invCtx := icontext.NewInvocationContext(parentCtx, icontext.InvocationContextParams{
+			InvocationID: "inv_timeout_2",
+			Agent:        &mockAgent{name: "agent_2"},
+		})
+
+		flow := &Flow{Tools: []tool.Tool{slowStreamTool}}
+		resp := &model.LLMResponse{
+			Content: &genai.Content{
+				Parts: []*genai.Part{
+					{FunctionCall: &genai.FunctionCall{ID: "c2", Name: "slow_stream", Args: map[string]any{}}},
+				},
+			},
+		}
+
+		mergedEvent, err := flow.handleFunctionCalls(invCtx, toolsDict, resp, nil, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if mergedEvent == nil || len(mergedEvent.LLMResponse.Content.Parts) != 1 {
+			t.Fatalf("invalid merged event: %#v", mergedEvent)
+		}
+
+		fr := mergedEvent.LLMResponse.Content.Parts[0].FunctionResponse
+		if fr == nil {
+			t.Fatal("expected function response")
+		}
+		errStr, ok := fr.Response["error"].(string)
+		if !ok || !strings.Contains(errStr, "tool execution timed out") {
+			t.Errorf("expected timeout error in response, got: %v", fr.Response)
+		}
+	})
+
+	t.Run("Fallback to Parent Context Deadline when ToolTimeout is zero", func(t *testing.T) {
+		timeoutCtx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+		defer cancel()
+
+		invCtx := icontext.NewInvocationContext(timeoutCtx, icontext.InvocationContextParams{
+			InvocationID: "inv_timeout_3",
+			Agent:        &mockAgent{name: "agent_3"},
+		})
+
+		flow := &Flow{Tools: []tool.Tool{slowSyncTool}}
+		resp := &model.LLMResponse{
+			Content: &genai.Content{
+				Parts: []*genai.Part{
+					{FunctionCall: &genai.FunctionCall{ID: "c3", Name: "slow_sync", Args: map[string]any{}}},
+				},
+			},
+		}
+
+		mergedEvent, err := flow.handleFunctionCalls(invCtx, toolsDict, resp, nil, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if mergedEvent == nil || len(mergedEvent.LLMResponse.Content.Parts) != 1 {
+			t.Fatalf("invalid merged event: %#v", mergedEvent)
+		}
+
+		fr := mergedEvent.LLMResponse.Content.Parts[0].FunctionResponse
+		if fr == nil {
+			t.Fatal("expected function response")
+		}
+		errStr, ok := fr.Response["error"].(string)
+		if !ok || !strings.Contains(errStr, "tool execution timed out") {
+			t.Errorf("expected timeout error in response, got: %v", fr.Response)
+		}
+	})
+}
+
+type mockFailingLLM struct {
+	model.LLM
+}
+
+func (m *mockFailingLLM) Name() string { return "failing-model" }
+
+func (m *mockFailingLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		if !yield(&model.LLMResponse{Content: &genai.Content{Parts: []*genai.Part{{Text: "chunk1"}}}}, nil) {
+			return
+		}
+		yield(nil, errors.New("model stream failure"))
+	}
+}
+
+func TestCallLLM_StreamAndCallbackErrorTeardown(t *testing.T) {
+	t.Run("model stream error halts iteration immediately", func(t *testing.T) {
+		f := &Flow{Model: &mockFailingLLM{}}
+		invCtx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{
+			InvocationID: "inv_err_1",
+			Agent:        &mockAgent{name: "agent_1"},
+		})
+		req := &model.LLMRequest{Model: f.Model.Name()}
+
+		var receivedChunks int
+		var gotErr error
+		for resp, err := range f.callLLM(invCtx, req, make(map[string]any), make(map[string]int64)) {
+			if err != nil {
+				gotErr = err
+				break
+			}
+			if resp != nil {
+				receivedChunks++
+			}
+		}
+
+		if receivedChunks != 1 {
+			t.Errorf("receivedChunks = %d, want 1", receivedChunks)
+		}
+		if gotErr == nil || gotErr.Error() != "model stream failure" {
+			t.Errorf("expected 'model stream failure', got %v", gotErr)
+		}
+	})
+
+	t.Run("after model callback error halts stream immediately", func(t *testing.T) {
+		f := &Flow{
+			Model: &mockLLMWithTools{name: "ok-model"},
+			AfterModelCallbacks: []AfterModelCallback{
+				func(ctx agent.Context, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error) {
+					return nil, errors.New("after model callback error")
+				},
+			},
+		}
+		invCtx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{
+			InvocationID: "inv_err_2",
+			Agent:        &mockAgent{name: "agent_2"},
+		})
+		req := &model.LLMRequest{Model: f.Model.Name()}
+
+		var gotErr error
+		for _, err := range f.callLLM(invCtx, req, make(map[string]any), make(map[string]int64)) {
+			if err != nil {
+				gotErr = err
+				break
+			}
+		}
+
+		if gotErr == nil || gotErr.Error() != "after model callback error" {
+			t.Errorf("expected 'after model callback error', got %v", gotErr)
+		}
+	})
 }
