@@ -57,3 +57,20 @@ func TestBuildBaseRouter_SecurityHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestNewLauncher_ParseFlags(t *testing.T) {
+	l := web.NewLauncher()
+	args := []string{"-read-header-timeout", "10s", "-port", "9090"}
+	remaining, err := l.Parse(args)
+	if err != nil {
+		t.Fatalf("unexpected error parsing flags: %v", err)
+	}
+	if len(remaining) != 0 {
+		t.Errorf("expected 0 remaining args, got %d", len(remaining))
+	}
+
+	syntax := l.CommandLineSyntax()
+	if syntax == "" {
+		t.Error("expected non-empty command line syntax")
+	}
+}
