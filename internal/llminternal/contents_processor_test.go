@@ -1502,6 +1502,45 @@ func BenchmarkBuildContentsDefault_Transcriptions(b *testing.B) {
 	}
 }
 
+func BenchmarkBuildContentsDefault_StandardHistory(b *testing.B) {
+	testAgent := utils.Must(llmagent.New(llmagent.Config{
+		Name:  "testAgent",
+		Model: &testModel{},
+	}))
+
+	const numTurns = 100
+	events := make([]*session.Event, 0, numTurns*2)
+	for i := 0; i < numTurns; i++ {
+		events = append(events, &session.Event{
+			Author: "user",
+			LLMResponse: model.LLMResponse{
+				Content: genai.NewContentFromText("user query message", "user"),
+			},
+		})
+		events = append(events, &session.Event{
+			Author: "testAgent",
+			LLMResponse: model.LLMResponse{
+				Content: genai.NewContentFromText("agent response message", "model"),
+			},
+		})
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		ctx := icontext.NewInvocationContext(b.Context(), icontext.InvocationContextParams{
+			Agent:   testAgent,
+			Session: &fakeSession{events: events},
+		})
+		req := &model.LLMRequest{}
+		for _, err := range llminternal.ContentsRequestProcessor(ctx, req, &llminternal.Flow{}) {
+			if err != nil {
+				b.Fatalf("ContentsRequestProcessor failed: %v", err)
+			}
+		}
+	}
+}
+
 func wantWithContinuation(want []*genai.Content) []*genai.Content {
 	if len(want) > 0 {
 		if last := want[len(want)-1]; last != nil && last.Role != "user" {

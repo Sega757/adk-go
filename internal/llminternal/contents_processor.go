@@ -108,7 +108,8 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 		}
 	}
 
-	// Aggregate transcription events (convert to text parts on the fly)
+	// Aggregate transcription events (convert to text parts on the fly).
+	// Lazily allocate processedEvents slice only when a transcription-only event is encountered.
 	var processedEvents []*session.Event
 	var inputBuilder strings.Builder
 	var outputBuilder strings.Builder
@@ -118,6 +119,10 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 		content := utils.Content(ev)
 		if content == nil || len(content.Parts) == 0 {
 			if ev.LLMResponse.InputTranscription != nil && ev.LLMResponse.InputTranscription.Text != "" {
+				if processedEvents == nil {
+					processedEvents = make([]*session.Event, 0, len(filtered))
+					processedEvents = append(processedEvents, filtered[:i]...)
+				}
 				inputBuilder.WriteString(ev.LLMResponse.InputTranscription.Text)
 				if i != len(filtered)-1 &&
 					filtered[i+1].LLMResponse.InputTranscription != nil &&
@@ -134,6 +139,10 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 				ev = newEv
 				inputBuilder.Reset()
 			} else if ev.LLMResponse.OutputTranscription != nil && ev.LLMResponse.OutputTranscription.Text != "" {
+				if processedEvents == nil {
+					processedEvents = make([]*session.Event, 0, len(filtered))
+					processedEvents = append(processedEvents, filtered[:i]...)
+				}
 				outputBuilder.WriteString(ev.LLMResponse.OutputTranscription.Text)
 				if i != len(filtered)-1 &&
 					filtered[i+1].LLMResponse.OutputTranscription != nil &&
@@ -151,9 +160,13 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 				outputBuilder.Reset()
 			}
 		}
-		processedEvents = append(processedEvents, ev)
+		if processedEvents != nil {
+			processedEvents = append(processedEvents, ev)
+		}
 	}
-	filtered = processedEvents
+	if processedEvents != nil {
+		filtered = processedEvents
+	}
 
 	//  src/google/adk/flows/llm_flows/contents.py
 	// 	 - _rearrange_events_for_async_function_response
@@ -360,15 +373,23 @@ func rearrangeEventsForFunctionResponsesInHistory(events []*session.Event) ([]*s
 	}
 
 	// Create a map to store the index of the event containing each function response.
-	callIDToResponseEventIndex := make(map[string]int)
+	// Lazily allocate the map and return early if no function responses exist in history.
+	var callIDToResponseEventIndex map[string]int
 	for i, event := range events {
 		responses := utils.FunctionResponses(event.Content)
 
 		if len(responses) > 0 {
+			if callIDToResponseEventIndex == nil {
+				callIDToResponseEventIndex = make(map[string]int)
+			}
 			for _, res := range responses {
 				callIDToResponseEventIndex[res.ID] = i
 			}
 		}
+	}
+
+	if len(callIDToResponseEventIndex) == 0 {
+		return events, nil
 	}
 
 	// Rebuild the event list
