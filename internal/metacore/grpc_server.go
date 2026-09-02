@@ -67,15 +67,15 @@ func NewServer(cfg GRPCServerConfig) *Server {
 
 // ActionEvaluationRequest mirrors the protobuf ActionEvaluationRequest struct.
 type ActionEvaluationRequest struct {
-	AgentID         string                 `json:"agent_id"`
-	SessionID       string                 `json:"session_id"`
-	Goal            string                 `json:"goal"`
-	PlanSteps       []string               `json:"plan_steps"`
-	ExpectedOutcome string                 `json:"expected_outcome"`
-	RiskProfile     RiskProfile            `json:"risk_profile"`
-	ResourceCost    ResourceCost           `json:"resource_cost"`
-	Confidence      float64                `json:"confidence"`
-	EmpathyInput    *EmpathyOutput         `json:"empathy_input,omitempty"`
+	AgentID         string         `json:"agent_id"`
+	SessionID       string         `json:"session_id"`
+	Goal            string         `json:"goal"`
+	PlanSteps       []string       `json:"plan_steps"`
+	ExpectedOutcome string         `json:"expected_outcome"`
+	RiskProfile     RiskProfile    `json:"risk_profile"`
+	ResourceCost    ResourceCost   `json:"resource_cost"`
+	Confidence      float64        `json:"confidence"`
+	EmpathyInput    *EmpathyOutput `json:"empathy_input,omitempty"`
 }
 
 // ActionEvaluationResponse mirrors the protobuf ActionEvaluationResponse struct.

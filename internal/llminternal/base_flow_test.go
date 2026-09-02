@@ -15,13 +15,16 @@
 package llminternal
 
 import (
+	"context"
 	"errors"
+	"iter"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/genai"
 
 	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/internal/agent/runconfig"
 	icontext "google.golang.org/adk/v2/internal/context"
 	"google.golang.org/adk/v2/internal/toolinternal"
 	"google.golang.org/adk/v2/model"
@@ -802,4 +805,171 @@ func TestIsThoughtOnlyTurn(t *testing.T) {
 			}
 		})
 	}
+}
+
+type mockStreamingModel struct {
+	name      string
+	responses []*model.LLMResponse
+	errors    []error
+}
+
+func (m *mockStreamingModel) Name() string {
+	if m.name != "" {
+		return m.name
+	}
+	return "mock-streaming-model"
+}
+
+func (m *mockStreamingModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		for i := 0; i < len(m.responses) || i < len(m.errors); i++ {
+			var resp *model.LLMResponse
+			var err error
+			if i < len(m.responses) {
+				resp = m.responses[i]
+			}
+			if i < len(m.errors) {
+				err = m.errors[i]
+			}
+			if !yield(resp, err) {
+				return
+			}
+		}
+	}
+}
+
+func TestCallLLM_StreamErrorHandling(t *testing.T) {
+	t.Run("ImmediateIteratorTerminationOnStreamError", func(t *testing.T) {
+		errStream := errors.New("stream error")
+		resp1 := &model.LLMResponse{Content: genai.NewContentFromText("chunk 1", "model")}
+		resp2 := &model.LLMResponse{Content: genai.NewContentFromText("chunk 2 (should not be reached)", "model")}
+
+		mockM := &mockStreamingModel{
+			responses: []*model.LLMResponse{resp1, nil, resp2},
+			errors:    []error{nil, errStream, nil},
+		}
+
+		f := &Flow{Model: mockM}
+		testAgent, _ := agent.New(agent.Config{Name: "test-agent"})
+		baseCtx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{Agent: testAgent})
+		ctx := baseCtx.WithContext(runconfig.ToContext(baseCtx, &runconfig.RunConfig{
+			StreamingMode: runconfig.StreamingModeSSE,
+		}))
+		req := &model.LLMRequest{}
+
+		var yieldedResps []*model.LLMResponse
+		var yieldedErrs []error
+
+		for resp, err := range f.callLLM(ctx, req, make(map[string]any), make(map[string]int64)) {
+			if resp != nil {
+				yieldedResps = append(yieldedResps, resp.LLMResponse)
+			}
+			if err != nil {
+				yieldedErrs = append(yieldedErrs, err)
+			}
+		}
+
+		if len(yieldedResps) != 1 {
+			t.Fatalf("got %d responses, want 1", len(yieldedResps))
+		}
+		if len(yieldedErrs) != 1 {
+			t.Fatalf("got %d errors, want 1", len(yieldedErrs))
+		}
+		if !errors.Is(yieldedErrs[0], errStream) {
+			t.Errorf("got error %v, want %v", yieldedErrs[0], errStream)
+		}
+	})
+
+	t.Run("CallbackFailurePropagation", func(t *testing.T) {
+		errCallback := errors.New("after model callback error")
+		resp1 := &model.LLMResponse{Content: genai.NewContentFromText("chunk 1", "model")}
+
+		mockM := &mockStreamingModel{
+			responses: []*model.LLMResponse{resp1},
+			errors:    []error{nil},
+		}
+
+		f := &Flow{
+			Model: mockM,
+			AfterModelCallbacks: []AfterModelCallback{
+				func(ctx agent.Context, llmResp *model.LLMResponse, llmErr error) (*model.LLMResponse, error) {
+					return nil, errCallback
+				},
+			},
+		}
+		testAgent, _ := agent.New(agent.Config{Name: "test-agent"})
+		baseCtx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{Agent: testAgent})
+		ctx := baseCtx.WithContext(runconfig.ToContext(baseCtx, &runconfig.RunConfig{
+			StreamingMode: runconfig.StreamingModeSSE,
+		}))
+		req := &model.LLMRequest{}
+
+		var yieldedErrs []error
+		for _, err := range f.callLLM(ctx, req, make(map[string]any), make(map[string]int64)) {
+			if err != nil {
+				yieldedErrs = append(yieldedErrs, err)
+			}
+		}
+
+		if len(yieldedErrs) != 1 {
+			t.Fatalf("got %d errors, want 1", len(yieldedErrs))
+		}
+		if !errors.Is(yieldedErrs[0], errCallback) {
+			t.Errorf("got error %v, want %v", yieldedErrs[0], errCallback)
+		}
+	})
+
+	t.Run("ErrorRecoveryViaOnModelErrorCallback", func(t *testing.T) {
+		errStream := errors.New("stream error")
+		respRecovered := &model.LLMResponse{Content: genai.NewContentFromText("recovered chunk", "model")}
+		resp2 := &model.LLMResponse{Content: genai.NewContentFromText("chunk 2", "model")}
+
+		mockM := &mockStreamingModel{
+			responses: []*model.LLMResponse{nil, resp2},
+			errors:    []error{errStream, nil},
+		}
+
+		f := &Flow{
+			Model: mockM,
+			OnModelErrorCallbacks: []OnModelErrorCallback{
+				func(ctx agent.Context, llmReq *model.LLMRequest, llmErr error) (*model.LLMResponse, error) {
+					if errors.Is(llmErr, errStream) {
+						return respRecovered, nil
+					}
+					return nil, llmErr
+				},
+			},
+		}
+		testAgent, _ := agent.New(agent.Config{Name: "test-agent"})
+		baseCtx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{Agent: testAgent})
+		ctx := baseCtx.WithContext(runconfig.ToContext(baseCtx, &runconfig.RunConfig{
+			StreamingMode: runconfig.StreamingModeSSE,
+		}))
+		req := &model.LLMRequest{}
+
+		var yieldedResps []*model.LLMResponse
+		var yieldedErrs []error
+
+		for resp, err := range f.callLLM(ctx, req, make(map[string]any), make(map[string]int64)) {
+			if resp != nil {
+				yieldedResps = append(yieldedResps, resp.LLMResponse)
+			}
+			if err != nil {
+				yieldedErrs = append(yieldedErrs, err)
+			}
+		}
+
+		if len(yieldedErrs) != 0 {
+			t.Fatalf("got %d errors, want 0: %v", len(yieldedErrs), yieldedErrs)
+		}
+		if len(yieldedResps) != 2 {
+			t.Fatalf("got %d responses, want 2", len(yieldedResps))
+		}
+		if yieldedResps[0] != respRecovered {
+			t.Errorf("first response = %v, want %v", yieldedResps[0], respRecovered)
+		}
+		if yieldedResps[1] != resp2 {
+			t.Errorf("second response = %v, want %v", yieldedResps[1], resp2)
+		}
+	})
 }

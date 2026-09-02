@@ -777,7 +777,10 @@ func (f *Flow) callLLM(ctx agent.InvocationContext, req *model.LLMRequest, state
 		// to help with slicing the billing reports on a per-agent basis.
 
 		// TODO: RunLive mode when invocation_context.run_config.support_cfc is true.
-		useStream := runconfig.FromContext(ctx).StreamingMode == runconfig.StreamingModeSSE
+		useStream := false
+		if runCfg := runconfig.FromContext(ctx); runCfg != nil {
+			useStream = runCfg.StreamingMode == runconfig.StreamingModeSSE
+		}
 
 		for resp, err := range generateContent(ctx, f.Model, req, useStream) {
 			if err != nil {
@@ -801,7 +804,6 @@ func (f *Flow) callLLM(ctx agent.InvocationContext, req *model.LLMRequest, state
 			utils.PopulateClientFunctionCallID(ctx, resp.Content)
 
 			callbackResp, callbackErr := f.runAfterModelCallbacks(ctx, resp.LLMResponse, stateDelta, artifactDelta, err)
-			// TODO: check if we should stop iterator on the first error from stream or continue yielding next results.
 			if callbackErr != nil {
 				yield(nil, callbackErr)
 				return
@@ -816,12 +818,6 @@ func (f *Flow) callLLM(ctx agent.InvocationContext, req *model.LLMRequest, state
 					return
 				}
 				continue
-			}
-
-			// TODO: check if we should stop iterator on the first error from stream or continue yielding next results.
-			if err != nil {
-				yield(nil, err)
-				return
 			}
 
 			if !yield(resp, nil) {

@@ -26,14 +26,14 @@ func TestNewInvocationReplayStateAndGetters(t *testing.T) {
 	dummyRecordings := &recording.Recordings{}
 
 	tests := []struct {
-		name                 string
-		testCasePath         string
-		userMessageIndex     int
-		recs                 *recording.Recordings
-		agentToQuery         string
-		initialAgentIndices  map[string]int
-		wantAgentIndex       int
-		wantAgentFound       bool
+		name                string
+		testCasePath        string
+		userMessageIndex    int
+		recs                *recording.Recordings
+		agentToQuery        string
+		initialAgentIndices map[string]int
+		wantAgentIndex      int
+		wantAgentFound      bool
 	}{
 		{
 			name:             "Standard initialization with valid path and non-nil recordings",
