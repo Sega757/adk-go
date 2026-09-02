@@ -36,12 +36,13 @@ import (
 
 // webConfig contains parameters for launching web server
 type webConfig struct {
-	port            int
-	writeTimeout    time.Duration
-	readTimeout     time.Duration
-	idleTimeout     time.Duration
-	shutdownTimeout time.Duration
-	otelToCloud     bool
+	port              int
+	writeTimeout      time.Duration
+	readTimeout       time.Duration
+	readHeaderTimeout time.Duration
+	idleTimeout       time.Duration
+	shutdownTimeout   time.Duration
+	otelToCloud       bool
 }
 
 // webLauncher can launch web server
@@ -183,11 +184,12 @@ func (w *webLauncher) Run(ctx context.Context, config *launcher.Config) error {
 	log.Println()
 
 	srv := http.Server{
-		Addr:         fmt.Sprintf(":%v", fmt.Sprint(w.config.port)),
-		WriteTimeout: w.config.writeTimeout,
-		ReadTimeout:  w.config.readTimeout,
-		IdleTimeout:  w.config.idleTimeout,
-		Handler:      router,
+		Addr:              fmt.Sprintf(":%v", fmt.Sprint(w.config.port)),
+		WriteTimeout:      w.config.writeTimeout,
+		ReadTimeout:       w.config.readTimeout,
+		ReadHeaderTimeout: w.config.readHeaderTimeout,
+		IdleTimeout:       w.config.idleTimeout,
+		Handler:           router,
 	}
 
 	errChan := make(chan error, 1)
@@ -233,6 +235,7 @@ func NewLauncher(sublaunchers ...Sublauncher) launcher.SubLauncher {
 	fs.IntVar(&config.port, "port", 8080, "Localhost port for the server")
 	fs.DurationVar(&config.writeTimeout, "write-timeout", 15*time.Second, "Server write timeout (i.e. '10s', '2m' - see time.ParseDuration for details) - for writing the response after reading the headers & body")
 	fs.DurationVar(&config.readTimeout, "read-timeout", 15*time.Second, "Server read timeout (i.e. '10s', '2m' - see time.ParseDuration for details) - for reading the whole request including body")
+	fs.DurationVar(&config.readHeaderTimeout, "read-header-timeout", 5*time.Second, "Server read header timeout (i.e. '5s', '10s' - see time.ParseDuration for details) - for reading request headers to prevent Slowloris DoS attacks")
 	fs.DurationVar(&config.idleTimeout, "idle-timeout", 60*time.Second, "Server idle timeout (i.e. '10s', '2m' - see time.ParseDuration for details) - for waiting for the next request (only when keep-alive is enabled)")
 	fs.DurationVar(&config.shutdownTimeout, "shutdown-timeout", 15*time.Second, "Server shutdown timeout (i.e. '10s', '2m' - see time.ParseDuration for details) - for waiting for active requests to finish during shutdown")
 	fs.BoolVar(&config.otelToCloud, "otel_to_cloud", false, "Enables/disables OpenTelemetry export to GCP: telemetry.googleapis.com. See adk-go/telemetry package for details about supported options, credentials and environment variables.")
