@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
@@ -108,7 +109,15 @@ func startWeatherAgentServer() string {
 		requestHandler := a2asrv.NewHandler(executor)
 		mux.Handle(agentPath, a2asrv.NewJSONRPCHandler(requestHandler))
 
-		err := http.Serve(listener, mux)
+		server := &http.Server{
+			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       15 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		}
+
+		err := server.Serve(listener)
 
 		log.Printf("A2A server stopped: %v", err)
 	}()
