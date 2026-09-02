@@ -481,6 +481,33 @@ func TestAgentTransferRequestProcessor(t *testing.T) {
 			[]string{"ChatPeer"},
 			[]string{"TaskPeer", "SingleTurnPeer", "Current"})
 	})
+
+	t.Run("NonLLMAgentParentAndPeers", func(t *testing.T) {
+		curAgent := utils.Must(llmagent.New(llmagent.Config{
+			Name:  "Current",
+			Model: llm,
+		}))
+		peer := utils.Must(agent.New(agent.Config{
+			Name: "NonLLMPeer",
+		}))
+		root := utils.Must(agent.New(agent.Config{
+			Name:      "NonLLMParent",
+			SubAgents: []agent.Agent{curAgent, peer},
+		}))
+		check(t, curAgent, root, "NonLLMParent", []string{"NonLLMPeer"}, []string{"Current"})
+	})
+
+	t.Run("NonLLMAgentCurrentAgentWithSubagents", func(t *testing.T) {
+		sub1 := utils.Must(llmagent.New(llmagent.Config{
+			Name:  "Sub1",
+			Model: llm,
+		}))
+		curAgent := utils.Must(agent.New(agent.Config{
+			Name:      "NonLLMCurrent",
+			SubAgents: []agent.Agent{sub1},
+		}))
+		check(t, curAgent, curAgent, "", []string{"Sub1"}, []string{"NonLLMCurrent"})
+	})
 }
 
 // TestAgentTransferRequestProcessor_TaskSingleTurnCurrentAgent verifies

@@ -25,6 +25,7 @@ import (
 	"google.golang.org/genai"
 
 	"google.golang.org/adk/v2/agent"
+	agentinternal "google.golang.org/adk/v2/internal/agent"
 	"google.golang.org/adk/v2/internal/agent/parentmap"
 	"google.golang.org/adk/v2/internal/toolinternal"
 	"google.golang.org/adk/v2/internal/utils"
@@ -68,15 +69,15 @@ import (
 // AgentTransferRequestProcessor processes agent transfer requests.
 func AgentTransferRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest, f *Flow) iter.Seq2[*session.Event, error] {
 	return func(yield func(*session.Event, error) bool) {
-		// TODO: support agent types other than LLMAgent, that have parent/subagents?
 		agent := ctx.Agent()
-		if !shouldUseAutoFlow(agent) {
+		parents := parentmap.FromContext(ctx)
+		parent := parents[agent.Name()]
+
+		if !shouldUseAutoFlow(agent, parent) {
 			return
 		}
 
-		parents := parentmap.FromContext(ctx)
-
-		targets := transferTargets(agent, parents[agent.Name()])
+		targets := transferTargets(agent, parent)
 		if len(targets) == 0 {
 			return
 		}
@@ -191,20 +192,25 @@ func transferTargets(curAgent, parent agent.Agent) []agent.Agent {
 		targets = append(targets, sub)
 	}
 
-	llmAgent := asLLMAgent(curAgent)
-	llmParent := asLLMAgent(parent)
-
-	if llmParent == nil {
+	if isWorkflowAgent(curAgent) {
 		return targets
 	}
 
-	if !llmAgent.internal().DisallowTransferToParent {
+	llmAgent := asLLMAgent(curAgent)
+	disallowToParent := llmAgent != nil && llmAgent.internal().DisallowTransferToParent
+	disallowToPeers := llmAgent != nil && llmAgent.internal().DisallowTransferToPeers
+
+	if parent == nil || isWorkflowAgent(parent) {
+		return targets
+	}
+
+	if !disallowToParent {
 		targets = append(targets, parent)
 	}
 	// For peer-agent transfers, it's only enabled when all below conditions are met:
 	// - the parent agent is also of AutoFlow.
 	// - DisallowTransferToPeers is false.
-	if !llmAgent.internal().DisallowTransferToPeers {
+	if !disallowToPeers {
 		if shouldUseAutoFlow(parent) {
 			for _, peer := range parent.SubAgents() {
 				if peer.Name() == curAgent.Name() {
@@ -218,6 +224,24 @@ func transferTargets(curAgent, parent agent.Agent) []agent.Agent {
 		}
 	}
 	return targets
+}
+
+// isWorkflowAgent returns true for workflow agents that enforce strict step execution
+// (SequentialAgent, ParallelAgent, LoopAgent, WorkflowAgent) and must be excluded from
+// arbitrary parent/peer transfers.
+func isWorkflowAgent(a agent.Agent) bool {
+	if a == nil {
+		return false
+	}
+	typedAgent, ok := a.(agentinternal.Agent)
+	if !ok {
+		return false
+	}
+	switch agentinternal.Reveal(typedAgent).AgentType {
+	case agentinternal.TypeSequentialAgent, agentinternal.TypeParallelAgent, agentinternal.TypeLoopAgent, agentinternal.TypeWorkflowAgent:
+		return true
+	}
+	return false
 }
 
 // isUntransferableMode skips the agents which have different delegation
@@ -245,12 +269,19 @@ func asLLMAgent(agent agent.Agent) Agent {
 	return nil
 }
 
-func shouldUseAutoFlow(agent agent.Agent) bool {
-	a := asLLMAgent(agent)
-	if a == nil {
+func shouldUseAutoFlow(a agent.Agent, parent ...agent.Agent) bool {
+	if a == nil || isWorkflowAgent(a) {
 		return false
 	}
-	return len(agent.SubAgents()) != 0 || !a.internal().DisallowTransferToParent || !a.internal().DisallowTransferToPeers
+	llmA := asLLMAgent(a)
+	if llmA != nil {
+		return len(a.SubAgents()) != 0 || !llmA.internal().DisallowTransferToParent || !llmA.internal().DisallowTransferToPeers
+	}
+	var p agent.Agent
+	if len(parent) > 0 {
+		p = parent[0]
+	}
+	return len(a.SubAgents()) != 0 || p != nil
 }
 
 // appendTools appends the tools to the request.
@@ -327,16 +358,18 @@ var transferToAgentPromptTmpl = template.Must(
 
 func instructionsForTransferToAgent(curAgent, parent agent.Agent, targets []agent.Agent) (string, error) {
 	cur := asLLMAgent(curAgent)
-	// Suppress transfer instructions for task / single_turn agents:
-	// they reach their callees via FC delegation (TaskAgentTool /
-	// SingleTurnTool), not via transfer.
-	switch cur.internal().Mode {
-	case ModeTask, ModeSingleTurn:
-		return "", nil
-	}
+	if cur != nil {
+		// Suppress transfer instructions for task / single_turn agents:
+		// they reach their callees via FC delegation (TaskAgentTool /
+		// SingleTurnTool), not via transfer.
+		switch cur.internal().Mode {
+		case ModeTask, ModeSingleTurn:
+			return "", nil
+		}
 
-	if cur.internal().DisallowTransferToParent {
-		parent = nil
+		if cur.internal().DisallowTransferToParent {
+			parent = nil
+		}
 	}
 
 	var buf bytes.Buffer
