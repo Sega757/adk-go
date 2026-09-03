@@ -355,7 +355,8 @@ function connectWebsocket() {
       url: ws_url
     }, '🔌', 'system');
 
-    // Enable the Send button
+    // Enable input and Send button
+    messageInput.disabled = false;
     document.getElementById("sendButton").disabled = false;
     addSubmitHandler();
   };
@@ -790,6 +791,7 @@ function connectWebsocket() {
   websocket.onclose = function (e) {
     console.log("WebSocket connection closed.", e);
     updateConnectionStatus(false);
+    messageInput.disabled = true;
     document.getElementById("sendButton").disabled = true;
     const reason = e && e.reason ? e.reason + " - " : "";
     addSystemMessage(`${reason}Connection closed. Reconnecting in 5 seconds...`);
@@ -818,6 +820,8 @@ function connectWebsocket() {
   websocket.onerror = function (e) {
     console.log("WebSocket error: ", e);
     updateConnectionStatus(false);
+    messageInput.disabled = true;
+    document.getElementById("sendButton").disabled = true;
 
     // Log to console
     addConsoleEntry('error', 'WebSocket Error', {
@@ -906,10 +910,13 @@ const fileInput = document.getElementById("fileInput");
 let cameraStream = null;
 let isVideoStreaming = false;
 let videoStreamInterval = null;
+let previouslyFocusedElement = null;
 
 // Open camera modal and start preview
 async function openCameraPreview() {
   try {
+    previouslyFocusedElement = document.activeElement;
+
     // Request access to the user's webcam
     cameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -922,8 +929,9 @@ async function openCameraPreview() {
     // Set the stream to the video element
     cameraPreview.srcObject = cameraStream;
 
-    // Show the modal
+    // Show the modal and shift focus
     cameraModal.classList.add('show');
+    captureImageBtn.focus();
 
   } catch (error) {
     console.error('Error accessing camera:', error);
@@ -981,8 +989,11 @@ function closeCameraPreview() {
   // Clear the video source
   cameraPreview.srcObject = null;
 
-  // Hide the modal
+  // Hide the modal and restore focus
   cameraModal.classList.remove('show');
+  if (previouslyFocusedElement && typeof previouslyFocusedElement.focus === 'function') {
+    previouslyFocusedElement.focus();
+  }
 }
 
 // Capture image from the live preview
@@ -1198,6 +1209,23 @@ fileInput.addEventListener("change", (event) => {
 cameraModal.addEventListener("click", (event) => {
   if (event.target === cameraModal) {
     closeCameraPreview();
+  }
+});
+
+// Focus trapping for camera preview modal
+cameraModal.addEventListener("keydown", (event) => {
+  if (event.key === "Tab" && cameraModal.classList.contains("show")) {
+    const focusables = cameraModal.querySelectorAll("button:not([disabled]), [tabindex]:not([tabindex='-1'])");
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 });
 
