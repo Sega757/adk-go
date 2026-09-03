@@ -18,6 +18,7 @@ package functiontool
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"runtime/debug"
 
@@ -186,7 +187,8 @@ func (f *functionTool[TArgs, TResults]) Run(ctx agent.Context, args any) (result
 	// TODO: Handle function call request from tc.InvocationContext.
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("panic in tool %q: %v\nstack: %s", f.Name(), r, debug.Stack())
+			log.Printf("panic in tool %q: %v\nstack:\n%s", f.Name(), r, debug.Stack())
+			err = fmt.Errorf("panic in tool %q: %v", f.Name(), r)
 		}
 	}()
 

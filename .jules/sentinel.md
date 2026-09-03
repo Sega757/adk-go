@@ -31,3 +31,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability/Issue:** Silent failure during instruction placeholder variable injection for optional artifacts and optional session state keys made debugging missing state/artifacts difficult without surfacing errors to the LLM flow.
 **Learning:** Optional template variables (`{artifact.foo?}` or `{bar?}`) should gracefully resolve to empty strings when missing or when benign lookup errors occur, but unexpected errors (such as artifact loading failures or session state query errors other than `session.ErrStateKeyNotExist`) must be logged for operator visibility.
 **Prevention:** Always use standard `log.Printf` to log unexpected optional lookup failures while preserving fallback behavior (`return "", nil`), ensuring `session.ErrStateKeyNotExist` remains silently ignored as expected missing state.
+
+## 2026-09-03 - [Prevent Stack Trace Leakage in Tool Panic Recovery]
+**Vulnerability:** Recovering from panics in function tools (`functiontool`) embedded full stack traces (`debug.Stack()`) in the returned `error` objects, leaking internal call frames, source paths, and function details to external callers, LLM responses, or client payloads.
+**Learning:** Error objects returned from tool execution flow back into LLM content or API responses. Exposing stack traces in error strings leaks application internals and creates security risks.
+**Prevention:** Log stack traces to server logs using `log.Printf` for operator debugging, and return concise error messages without `debug.Stack()` to the caller.

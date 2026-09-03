@@ -1117,11 +1117,64 @@ func TestFunctionTool_PanicRecovery(t *testing.T) {
 		"panic in tool",
 		"panic_tool",
 		"intentional panic for testing",
-		"stack:",
 	}
 	for _, part := range expectedErrParts {
 		if !strings.Contains(err.Error(), part) {
 			t.Errorf("expected error to contain %q, but it did not. Error: %v", part, err)
 		}
+	}
+	if strings.Contains(err.Error(), "stack:") {
+		t.Errorf("error contains stack trace, which leaks sensitive internal details: %v", err)
+	}
+}
+
+func TestStreamingFunctionTool_PanicRecovery(t *testing.T) {
+	type Args struct {
+		Value string `json:"value"`
+	}
+
+	panicStreamingHandler := func(ctx agent.Context, input Args) iter.Seq2[string, error] {
+		return func(yield func(string, error) bool) {
+			panic("intentional streaming panic for testing")
+		}
+	}
+
+	panicTool, err := functiontool.NewStreaming(functiontool.Config{
+		Name:        "panic_streaming_tool",
+		Description: "a streaming tool that always panics",
+	}, panicStreamingHandler)
+	if err != nil {
+		t.Fatalf("NewStreaming failed: %v", err)
+	}
+
+	funcTool, ok := panicTool.(toolinternal.StreamingFunctionTool)
+	if !ok {
+		t.Fatal("panicTool does not implement toolinternal.StreamingFunctionTool")
+	}
+
+	var gotErr error
+	for _, err := range funcTool.RunStream(createToolContext(t), map[string]any{"value": "test"}) {
+		if err != nil {
+			gotErr = err
+			break
+		}
+	}
+
+	if gotErr == nil {
+		t.Fatal("expected error from streaming panic recovery, got nil")
+	}
+
+	expectedErrParts := []string{
+		"panic in tool",
+		"panic_streaming_tool",
+		"intentional streaming panic for testing",
+	}
+	for _, part := range expectedErrParts {
+		if !strings.Contains(gotErr.Error(), part) {
+			t.Errorf("expected streaming error to contain %q, but it did not. Error: %v", part, gotErr)
+		}
+	}
+	if strings.Contains(gotErr.Error(), "stack:") {
+		t.Errorf("streaming error contains stack trace, which leaks sensitive internal details: %v", gotErr)
 	}
 }

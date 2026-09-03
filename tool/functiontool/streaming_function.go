@@ -18,6 +18,7 @@ package functiontool
 import (
 	"fmt"
 	"iter"
+	"log"
 	"reflect"
 	"runtime/debug"
 
@@ -131,7 +132,8 @@ func (f *streamingFunctionTool[TArgs]) RunStream(ctx agent.Context, args any) it
 	return func(yield func(string, error) bool) {
 		defer func() {
 			if r := recover(); r != nil {
-				yield("", fmt.Errorf("panic in tool %q: %v\nstack: %s", f.Name(), r, debug.Stack()))
+				log.Printf("panic in tool %q: %v\nstack:\n%s", f.Name(), r, debug.Stack())
+				yield("", fmt.Errorf("panic in tool %q: %v", f.Name(), r))
 			}
 		}()
 
