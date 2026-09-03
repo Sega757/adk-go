@@ -184,11 +184,13 @@ func (s *streamingResponseAggregator) getValueFromPartialArg(partialArg *genai.P
 		if strings.HasPrefix(jsonPath, "$.") {
 			pathWithoutPrefix = jsonPath[2:]
 		}
-		pathParts := strings.Split(pathWithoutPrefix, ".")
 
-		// Try to get existing value by traversing the map
+		// Try to get existing value by traversing the map using strings.Cut to avoid slice allocations.
 		var existingValue any = s.currentFunctionArgs
-		for _, part := range pathParts {
+		path := pathWithoutPrefix
+		for path != "" {
+			var part string
+			part, path, _ = strings.Cut(path, ".")
 			if m, ok := existingValue.(map[string]any); ok {
 				if val, exists := m[part]; exists {
 					existingValue = val
@@ -232,34 +234,32 @@ func (s *streamingResponseAggregator) setValueByJSONPath(jsonPath string, value 
 	if strings.HasPrefix(jsonPath, "$.") {
 		path = jsonPath[2:]
 	}
-
-	// Split path into components
-	pathParts := strings.Split(path, ".")
-	if len(pathParts) == 0 || (len(pathParts) == 1 && pathParts[0] == "") {
+	if path == "" {
 		return // Handle empty path case
 	}
 
-	// Navigate to the correct location
+	// Navigate to the correct location using strings.Cut to avoid slice allocations.
 	current := s.currentFunctionArgs
-
-	// Iterate through all parts except the last one
-	for _, part := range pathParts[:len(pathParts)-1] {
-		next, exists := current[part]
+	for {
+		part, rest, ok := strings.Cut(path, ".")
+		if !ok {
+			// Set the final value at the last key
+			current[part] = value
+			return
+		}
 
 		// If the path doesn't exist, or the existing value isn't a map,
 		// create a new map at this node.
-		nextMap, ok := next.(map[string]any)
-		if !exists || !ok {
+		next, exists := current[part]
+		nextMap, isMap := next.(map[string]any)
+		if !exists || !isMap {
 			nextMap = make(map[string]any)
 			current[part] = nextMap
 		}
 
 		current = nextMap
+		path = rest
 	}
-
-	// Set the final value at the last key
-	lastKey := pathParts[len(pathParts)-1]
-	current[lastKey] = value
 }
 
 func (s *streamingResponseAggregator) flushTextBufferToSequence() {

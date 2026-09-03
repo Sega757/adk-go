@@ -1145,6 +1145,88 @@ func TestFinishReasonUnexpectedToolCallPreservesErrorCode(t *testing.T) {
 	}
 }
 
+func BenchmarkStreamingFunctionCallArguments(b *testing.B) {
+	ctx := context.Background()
+
+	chunks := []*genai.GenerateContentResponse{
+		{
+			Candidates: []*genai.Candidate{
+				{
+					Content: &genai.Content{
+						Role: "model",
+						Parts: []*genai.Part{
+							{
+								FunctionCall: &genai.FunctionCall{
+									Name: "get_weather",
+									ID:   "fc_001",
+									PartialArgs: []*genai.PartialArg{
+										{JsonPath: "$.location", StringValue: "New "},
+									},
+									WillContinue: ptr(true),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Candidates: []*genai.Candidate{
+				{
+					Content: &genai.Content{
+						Role: "model",
+						Parts: []*genai.Part{
+							{
+								FunctionCall: &genai.FunctionCall{
+									PartialArgs: []*genai.PartialArg{
+										{JsonPath: "$.location", StringValue: "York"},
+									},
+									WillContinue: ptr(true),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Candidates: []*genai.Candidate{
+				{
+					Content: &genai.Content{
+						Role: "model",
+						Parts: []*genai.Part{
+							{
+								FunctionCall: &genai.FunctionCall{
+									PartialArgs: []*genai.PartialArg{
+										{JsonPath: "$.unit", StringValue: "celsius"},
+									},
+									WillContinue: ptr(false),
+								},
+							},
+						},
+					},
+					FinishReason: genai.FinishReasonStop,
+				},
+			},
+		},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		aggregator := llminternal.NewStreamingResponseAggregator()
+		for _, chunk := range chunks {
+			for _, err := range aggregator.ProcessResponse(ctx, chunk) {
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		}
+		_ = aggregator.Close()
+	}
+}
+
 func BenchmarkStreamingResponseAggregator(b *testing.B) {
 	ctx := context.Background()
 
