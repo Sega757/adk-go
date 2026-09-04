@@ -179,11 +179,13 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
     jsonDiv.appendChild(pre);
     entry.appendChild(jsonDiv);
 
-    // Make entry clickable if it has data
+    // Make entry interactive and accessible if it has data
     entry.classList.add("expandable");
+    entry.setAttribute("tabindex", "0");
+    entry.setAttribute("role", "button");
+    entry.setAttribute("aria-expanded", "false");
 
-    // Toggle expand/collapse on click
-    entry.addEventListener("click", () => {
+    const toggleExpand = () => {
       const isExpanded = !jsonDiv.classList.contains("collapsed");
 
       if (isExpanded) {
@@ -191,11 +193,22 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
         jsonDiv.classList.add("collapsed");
         expandIcon.textContent = "▶";
         entry.classList.remove("expanded");
+        entry.setAttribute("aria-expanded", "false");
       } else {
         // Expand
         jsonDiv.classList.remove("collapsed");
         expandIcon.textContent = "▼";
         entry.classList.add("expanded");
+        entry.setAttribute("aria-expanded", "true");
+      }
+    };
+
+    // Toggle expand/collapse on click or keyboard Enter/Space
+    entry.addEventListener("click", toggleExpand);
+    entry.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleExpand();
       }
     });
   }
