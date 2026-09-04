@@ -57,3 +57,30 @@ func TestSecurityHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestQueryInternalErrorSanitization(t *testing.T) {
+	cfg := &launcher.Config{
+		SessionService: session.InMemoryService(),
+	}
+
+	handler, err := NewHandler(cfg, 10*time.Second, 1024*1024, "test-agent-engine")
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	// Send invalid classMethod to trigger internal handleQuery error
+	reqBody := `{"class_method": "invalid_method"}`
+	req := httptest.NewRequest(http.MethodPost, "/reasoning_engine", bytes.NewBufferString(reqBody))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+
+	wantBody := "internal server error\n"
+	if gotBody := rr.Body.String(); gotBody != wantBody {
+		t.Errorf("Response body = %q, want %q", gotBody, wantBody)
+	}
+}

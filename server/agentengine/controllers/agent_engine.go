@@ -80,7 +80,7 @@ func (c *AgentEngineAPIController) Query(rw http.ResponseWriter, req *http.Reque
 	err = c.handleQuery(req.Context(), rw, payload, query.ClassMethod)
 	if err != nil {
 		log.Printf("handleQuery failed: %v", err)
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 }
