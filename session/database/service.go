@@ -19,11 +19,11 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"strings"
 	"time"
 
 	"gorm.io/gorm"
 
+	"google.golang.org/adk/v2/internal/sessionutils"
 	"google.golang.org/adk/v2/platform"
 	"google.golang.org/adk/v2/session"
 )
@@ -104,16 +104,22 @@ func (s *databaseService) Create(ctx context.Context, req *session.CreateRequest
 			return fmt.Errorf("error on create session: %w", err)
 		}
 
-		appDelta, userDelta, sessionState := extractStateDeltas(req.State)
+		appDelta, userDelta, sessionState := sessionutils.ExtractStateDeltas(req.State)
 
 		// apply state delta
 		if len(appDelta) > 0 {
+			if storageApp.State == nil {
+				storageApp.State = make(map[string]any, len(appDelta))
+			}
 			maps.Copy(storageApp.State, appDelta)
 			if err := tx.Save(&storageApp).Error; err != nil {
 				return fmt.Errorf("failed to save app state: %w", err)
 			}
 		}
 		if len(userDelta) > 0 {
+			if storageUser.State == nil {
+				storageUser.State = make(map[string]any, len(userDelta))
+			}
 			maps.Copy(storageUser.State, userDelta)
 			if err := tx.Save(&storageUser).Error; err != nil {
 				return fmt.Errorf("failed to save user state: %w", err)
@@ -391,23 +397,32 @@ func (s *databaseService) applyEvent(ctx context.Context, session *localSession,
 			return err
 		}
 
-		appDelta, userDelta, sessionDelta := extractStateDeltas(event.Actions.StateDelta)
+		appDelta, userDelta, sessionDelta := sessionutils.ExtractStateDeltas(event.Actions.StateDelta)
 
 		// Merge state deltas and update the storage objects.
 		// GORM's .Save() method will correctly perform an INSERT or UPDATE.
 		if len(appDelta) > 0 {
+			if storageApp.State == nil {
+				storageApp.State = make(map[string]any, len(appDelta))
+			}
 			maps.Copy(storageApp.State, appDelta)
 			if err := tx.Save(&storageApp).Error; err != nil {
 				return fmt.Errorf("failed to save app state: %w", err)
 			}
 		}
 		if len(userDelta) > 0 {
+			if storageUser.State == nil {
+				storageUser.State = make(map[string]any, len(userDelta))
+			}
 			maps.Copy(storageUser.State, userDelta)
 			if err := tx.Save(&storageUser).Error; err != nil {
 				return fmt.Errorf("failed to save user state: %w", err)
 			}
 		}
 		if len(sessionDelta) > 0 {
+			if storageSess.State == nil {
+				storageSess.State = make(map[string]any, len(sessionDelta))
+			}
 			maps.Copy(storageSess.State, sessionDelta)
 			// The session state update will be saved along with the event timestamp update.
 		}
@@ -475,39 +490,14 @@ func fetchAllAppStorageUserState(tx *gorm.DB, appName string) (map[string]*stora
 	return statesByUserId, nil
 }
 
-// extractStateDeltas splits a single state delta map into three separate maps
-// for app, user, and session states based on key prefixes.
-// Temporary keys (starting with TempStatePrefix) are ignored.
-func extractStateDeltas(delta map[string]any) (
-	appStateDelta, userStateDelta, sessionStateDelta map[string]any,
-) {
-	// Initialize the maps to be returned.
-	appStateDelta = make(map[string]any)
-	userStateDelta = make(map[string]any)
-	sessionStateDelta = make(map[string]any)
-
-	if delta == nil {
-		return appStateDelta, userStateDelta, sessionStateDelta
-	}
-
-	for key, value := range delta {
-		if cleanKey, found := strings.CutPrefix(key, session.KeyPrefixApp); found {
-			appStateDelta[cleanKey] = value
-		} else if cleanKey, found := strings.CutPrefix(key, session.KeyPrefixUser); found {
-			userStateDelta[cleanKey] = value
-		} else if !strings.HasPrefix(key, session.KeyPrefixTemp) {
-			// This key belongs to the session state, as long as it's not temporary.
-			sessionStateDelta[key] = value
-		}
-	}
-	return appStateDelta, userStateDelta, sessionStateDelta
-}
-
 // mergeStates combines app, user, and session state maps into a single map
 // for client-side responses, adding the appropriate prefixes back.
 func mergeStates(appState, userState, sessionState map[string]any) map[string]any {
 	// Pre-allocate map capacity for efficiency.
 	totalSize := len(appState) + len(userState) + len(sessionState)
+	if totalSize == 0 {
+		return make(map[string]any)
+	}
 	mergedState := make(map[string]any, totalSize)
 
 	// In Go, we create a new map and copy key-value pairs. This is equivalent
