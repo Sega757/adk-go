@@ -28,25 +28,33 @@ const (
 // ExtractStateDeltas splits a single state delta map into three separate maps
 // for app, user, and session states based on key prefixes.
 // Temporary keys (starting with TempStatePrefix) are ignored.
+//
+// Optimization Note: Fast-paths empty/nil state deltas to achieve 0 heap allocations (0 B/op).
+// Maps are lazily allocated only when matching keys are found, eliminating redundant map allocations.
 func ExtractStateDeltas(delta map[string]any) (
 	appStateDelta, userStateDelta, sessionStateDelta map[string]any,
 ) {
-	// Initialize the maps to be returned.
-	appStateDelta = make(map[string]any)
-	userStateDelta = make(map[string]any)
-	sessionStateDelta = make(map[string]any)
-
-	if delta == nil {
-		return appStateDelta, userStateDelta, sessionStateDelta
+	// Fast-path: return nil maps for empty or nil inputs with zero allocations.
+	if len(delta) == 0 {
+		return nil, nil, nil
 	}
 
+	// Lazily allocate result maps only when matching keys are encountered.
 	for key, value := range delta {
 		if cleanKey, found := strings.CutPrefix(key, appPrefix); found {
+			if appStateDelta == nil {
+				appStateDelta = make(map[string]any)
+			}
 			appStateDelta[cleanKey] = value
 		} else if cleanKey, found := strings.CutPrefix(key, userPrefix); found {
+			if userStateDelta == nil {
+				userStateDelta = make(map[string]any)
+			}
 			userStateDelta[cleanKey] = value
 		} else if !strings.HasPrefix(key, tempPrefix) {
-			// This key belongs to the session state, as long as it's not temporary.
+			if sessionStateDelta == nil {
+				sessionStateDelta = make(map[string]any)
+			}
 			sessionStateDelta[key] = value
 		}
 	}
@@ -58,6 +66,9 @@ func ExtractStateDeltas(delta map[string]any) (
 func MergeStates(appState, userState, sessionState map[string]any) map[string]any {
 	// Pre-allocate map capacity for efficiency.
 	totalSize := len(appState) + len(userState) + len(sessionState)
+	if totalSize == 0 {
+		return make(map[string]any)
+	}
 	mergedState := make(map[string]any, totalSize)
 
 	maps.Copy(mergedState, sessionState)
