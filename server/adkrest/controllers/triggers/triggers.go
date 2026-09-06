@@ -108,7 +108,18 @@ func (r *RetriableRunner) runAgentWithRetry(ctx context.Context, runR *runner.Ru
 
 		if i < r.triggerConfig.MaxRetries && isThrottled {
 			delay := calculateBackoff(i, r.triggerConfig.BaseDelay, r.triggerConfig.MaxDelay)
-			time.Sleep(delay)
+			timer := time.NewTimer(delay)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				return nil, ctx.Err()
+			}
 			runErr = nil // Clear error for next attempt
 			continue
 		}

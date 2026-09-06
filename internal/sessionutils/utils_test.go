@@ -21,8 +21,8 @@ import (
 
 func TestExtractStateDeltas(t *testing.T) {
 	tests := []struct {
-		name                 string
-		delta                map[string]any
+		name                           string
+		delta                          map[string]any
 		wantApp, wantUser, wantSession map[string]any
 	}{
 		{
@@ -52,10 +52,10 @@ func TestExtractStateDeltas(t *testing.T) {
 		{
 			name: "mixed state deltas",
 			delta: map[string]any{
-				"app:app_setting":   "enabled",
-				"user:user_pref":    "dark",
-				"session_var":       "active",
-				"temp:discard_me":   "temp_value",
+				"app:app_setting": "enabled",
+				"user:user_pref":  "dark",
+				"session_var":     "active",
+				"temp:discard_me": "temp_value",
 			},
 			wantApp:     map[string]any{"app_setting": "enabled"},
 			wantUser:    map[string]any{"user_pref": "dark"},
@@ -67,19 +67,19 @@ func TestExtractStateDeltas(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gotApp, gotUser, gotSession := ExtractStateDeltas(tt.delta)
 
-			if (len(gotApp) == 0 && len(tt.wantApp) == 0) {
+			if len(gotApp) == 0 && len(tt.wantApp) == 0 {
 				// both empty/nil
 			} else if !reflect.DeepEqual(gotApp, tt.wantApp) {
 				t.Errorf("ExtractStateDeltas() gotApp = %v, want %v", gotApp, tt.wantApp)
 			}
 
-			if (len(gotUser) == 0 && len(tt.wantUser) == 0) {
+			if len(gotUser) == 0 && len(tt.wantUser) == 0 {
 				// both empty/nil
 			} else if !reflect.DeepEqual(gotUser, tt.wantUser) {
 				t.Errorf("ExtractStateDeltas() gotUser = %v, want %v", gotUser, tt.wantUser)
 			}
 
-			if (len(gotSession) == 0 && len(tt.wantSession) == 0) {
+			if len(gotSession) == 0 && len(tt.wantSession) == 0 {
 				// both empty/nil
 			} else if !reflect.DeepEqual(gotSession, tt.wantSession) {
 				t.Errorf("ExtractStateDeltas() gotSession = %v, want %v", gotSession, tt.wantSession)
