@@ -38,7 +38,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -67,6 +66,7 @@ func New(allowedBaseDir string) (*plugin.Plugin, error) {
 		Name:                "replay_plugin",
 		BeforeRunCallback:   p.beforeRun,
 		AfterRunCallback:    p.afterRun,
+		OnEventCallback:     p.onEvent,
 		BeforeModelCallback: p.beforeModel,
 		BeforeToolCallback:  p.beforeTool,
 	})
@@ -234,14 +234,44 @@ func (p *replayPlugin) isReplayModeOn(sessionState session.State) (bool, error) 
 	return true, nil
 }
 
-// getInvocationState retrieves the replay state for the current invocation.
-func (p *replayPlugin) getInvocationState(ctx agent.Context) (*invocationReplayState, error) {
-	invocationID := ctx.InvocationID()
+// onEvent handles events yielded by agent execution and advances the replay step counter.
+func (p *replayPlugin) onEvent(ctx agent.InvocationContext, event *session.Event) (*session.Event, error) {
+	if ctx.Session() == nil {
+		return nil, nil
+	}
+
+	on, err := p.isReplayModeOn(ctx.Session().State())
+	if err != nil || !on {
+		return nil, nil
+	}
+
+	state, err := p.getInvocationStateByID(ctx.InvocationID())
+	if err != nil {
+		return nil, nil
+	}
+
+	state.mu.Lock()
+	state.curIndex++
+	state.mu.Unlock()
+	state.cond.Broadcast()
+
+	return nil, nil
+}
+
+// getInvocationStateByID retrieves the replay state for the given invocation ID.
+func (p *replayPlugin) getInvocationStateByID(invocationID string) (*invocationReplayState, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	state, ok := p.invocationStates[invocationID]
 	if !ok {
 		return nil, fmt.Errorf("replay state not initialized. ensure before_run created it")
 	}
 	return state, nil
+}
+
+// getInvocationState retrieves the replay state for the current invocation.
+func (p *replayPlugin) getInvocationState(ctx agent.Context) (*invocationReplayState, error) {
+	return p.getInvocationStateByID(ctx.InvocationID())
 }
 
 // loadInvocationState loads the recordings and initializes the replay state for the invocation.
@@ -381,15 +411,10 @@ func getNextRecordingForAgent(state *invocationReplayState, agentName string) (*
 	for state.curIndex != expectedRecording.Index {
 		state.cond.Wait()
 	}
-	// FIXME: remove this sleep, move curIndex++ and state cond.Broadcast() to onEvent callback.
-	// This sleep is here to make the replay deterministic, but it's not ideal.
-	time.Sleep(time.Duration(expectedRecording.Index) * time.Millisecond * 10)
 
 	state.agentReplayIndices[agentName]++
-	state.curIndex++
 
 	state.mu.Unlock()
-	state.cond.Broadcast()
 
 	return expectedRecording, nil
 }
