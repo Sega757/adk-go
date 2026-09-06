@@ -287,3 +287,53 @@ func TestAudioCacheManager(t *testing.T) {
 		})
 	}
 }
+
+func TestNewAudioCacheManager(t *testing.T) {
+	mgr := NewAudioCacheManager()
+	if mgr == nil {
+		t.Fatal("NewAudioCacheManager() returned nil")
+	}
+
+	if mgr.inputMimeType != "audio/pcm" {
+		t.Errorf("inputMimeType = %q; want %q", mgr.inputMimeType, "audio/pcm")
+	}
+
+	if mgr.outputMimeType != "audio/pcm" {
+		t.Errorf("outputMimeType = %q; want %q", mgr.outputMimeType, "audio/pcm")
+	}
+
+	if len(mgr.inputCache) != 0 {
+		t.Errorf("len(inputCache) = %d; want 0", len(mgr.inputCache))
+	}
+
+	if len(mgr.outputCache) != 0 {
+		t.Errorf("len(outputCache) = %d; want 0", len(mgr.outputCache))
+	}
+
+	if !mgr.inputStartTime.IsZero() {
+		t.Errorf("inputStartTime = %v; want zero time", mgr.inputStartTime)
+	}
+
+	if !mgr.outputStartTime.IsZero() {
+		t.Errorf("outputStartTime = %v; want zero time", mgr.outputStartTime)
+	}
+
+	// Verify that the newly created instance handles subsequent cache and flush operations without panic.
+	mockArt := &audioMockArtifacts{}
+	mockSess := &audioMockSession{id: "sess1", appName: "app1", userID: "user1"}
+	mockAg := &audioMockAgent{name: "agent1"}
+	mockCtx := &audioMockInvocationContext{
+		artifacts:    mockArt,
+		session:      mockSess,
+		invocationID: "inv1",
+		agentObj:     mockAg,
+	}
+
+	events, err := mgr.FlushCaches(mockCtx, true, true)
+	if err != nil {
+		t.Fatalf("FlushCaches on new manager failed: %v", err)
+	}
+	if len(events) != 0 {
+		t.Errorf("len(events) = %d; want 0 for empty cache", len(events))
+	}
+}
