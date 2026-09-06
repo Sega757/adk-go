@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"google.golang.org/genai"
+
+	"google.golang.org/adk/v2/tool"
 )
 
 // Legacy simulator of task_completed sleep behavior.
@@ -49,6 +51,68 @@ func BenchmarkTaskCompleted_Optimized(b *testing.B) {
 	b.ReportAllocs()
 	for range b.N {
 		simulateTaskCompletedOptimized()
+	}
+}
+
+func BenchmarkFindLongRunningFunctionCallIDs_NoCalls(b *testing.B) {
+	c := &genai.Content{
+		Role: "model",
+		Parts: []*genai.Part{
+			{Text: "Hello world text response"},
+		},
+	}
+	tools := map[string]tool.Tool{}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = findLongRunningFunctionCallIDs(c, tools)
+	}
+}
+
+func BenchmarkFindLongRunningFunctionCallIDs_StandardCall(b *testing.B) {
+	c := &genai.Content{
+		Role: "model",
+		Parts: []*genai.Part{
+			{
+				FunctionCall: &genai.FunctionCall{
+					ID:   "call-1",
+					Name: "standard_tool",
+				},
+			},
+		},
+	}
+	tools := map[string]tool.Tool{
+		"standard_tool": &mockLongRunningTool{name: "standard_tool", isLongRunning: false},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = findLongRunningFunctionCallIDs(c, tools)
+	}
+}
+
+func BenchmarkFindLongRunningFunctionCallIDs_LongRunningCall(b *testing.B) {
+	c := &genai.Content{
+		Role: "model",
+		Parts: []*genai.Part{
+			{
+				FunctionCall: &genai.FunctionCall{
+					ID:   "call-1",
+					Name: "long_tool",
+				},
+			},
+		},
+	}
+	tools := map[string]tool.Tool{
+		"long_tool": &mockLongRunningTool{name: "long_tool", isLongRunning: true},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = findLongRunningFunctionCallIDs(c, tools)
 	}
 }
 

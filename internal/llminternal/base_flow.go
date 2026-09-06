@@ -970,18 +970,21 @@ func (f *Flow) finalizeModelResponseEvent(ctx agent.InvocationContext, resp *res
 }
 
 // findLongRunningFunctionCallIDs iterates over the FunctionCalls and
-// returns the callIDs of the long running functions
+// returns the callIDs of the long running functions.
 func findLongRunningFunctionCallIDs(c *genai.Content, tools map[string]tool.Tool) []string {
-	set := make(map[string]struct{})
-	// Iterate over function calls.
-	for _, fc := range utils.FunctionCalls(c) {
+	fnCalls := utils.FunctionCalls(c)
+	if len(fnCalls) == 0 {
+		return nil
+	}
+	var res []string
+	for _, fc := range fnCalls {
 		if tool, ok := tools[fc.Name]; ok && fc.ID != "" && tool.IsLongRunning() {
-			// If the tool exists and is long-running, add its ID to the set.
-			set[fc.ID] = struct{}{}
+			if !slices.Contains(res, fc.ID) {
+				res = append(res, fc.ID)
+			}
 		}
 	}
-	// Transform the set (map keys) into a slice.
-	return slices.Collect(maps.Keys(set))
+	return res
 }
 
 type fakeTool struct {

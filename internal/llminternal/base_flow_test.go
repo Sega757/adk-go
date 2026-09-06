@@ -72,6 +72,17 @@ func (m *mockFunctionTool) Declaration() *genai.FunctionDeclaration {
 	return nil
 }
 
+type mockLongRunningTool struct {
+	name          string
+	isLongRunning bool
+}
+
+func (m *mockLongRunningTool) Name() string                                              { return m.name }
+func (m *mockLongRunningTool) Description() string                                       { return "" }
+func (m *mockLongRunningTool) IsLongRunning() bool                                       { return m.isLongRunning }
+func (m *mockLongRunningTool) ProcessRequest(ctx agent.Context, req *model.LLMRequest) error { return nil }
+func (m *mockLongRunningTool) Run(ctx agent.Context, args any) (map[string]any, error)   { return nil, nil }
+
 type mockToolset struct {
 	name string
 }
@@ -772,6 +783,102 @@ func TestMergeParallelFunctionResponseEvents_NilEntries(t *testing.T) {
 			t.Errorf("merged parts = %d, want 2", n)
 		}
 	})
+}
+
+func TestFindLongRunningFunctionCallIDs(t *testing.T) {
+	tests := []struct {
+		name  string
+		c     *genai.Content
+		tools map[string]tool.Tool
+		want  []string
+	}{
+		{
+			name:  "nil content",
+			c:     nil,
+			tools: map[string]tool.Tool{},
+			want:  nil,
+		},
+		{
+			name: "text only content",
+			c: &genai.Content{
+				Role: "model",
+				Parts: []*genai.Part{
+					{Text: "Hello"},
+				},
+			},
+			tools: map[string]tool.Tool{},
+			want:  nil,
+		},
+		{
+			name: "standard non-long-running function call",
+			c: &genai.Content{
+				Role: "model",
+				Parts: []*genai.Part{
+					{
+						FunctionCall: &genai.FunctionCall{
+							ID:   "call_1",
+							Name: "mock_tool",
+						},
+					},
+				},
+			},
+			tools: map[string]tool.Tool{
+				"mock_tool": &mockFunctionTool{name: "mock_tool"},
+			},
+			want: nil,
+		},
+		{
+			name: "long-running function call",
+			c: &genai.Content{
+				Role: "model",
+				Parts: []*genai.Part{
+					{
+						FunctionCall: &genai.FunctionCall{
+							ID:   "call_long",
+							Name: "long_tool",
+						},
+					},
+				},
+			},
+			tools: map[string]tool.Tool{
+				"long_tool": &mockLongRunningTool{name: "long_tool", isLongRunning: true},
+			},
+			want: []string{"call_long"},
+		},
+		{
+			name: "duplicate long-running function calls",
+			c: &genai.Content{
+				Role: "model",
+				Parts: []*genai.Part{
+					{
+						FunctionCall: &genai.FunctionCall{
+							ID:   "call_long",
+							Name: "long_tool",
+						},
+					},
+					{
+						FunctionCall: &genai.FunctionCall{
+							ID:   "call_long",
+							Name: "long_tool",
+						},
+					},
+				},
+			},
+			tools: map[string]tool.Tool{
+				"long_tool": &mockLongRunningTool{name: "long_tool", isLongRunning: true},
+			},
+			want: []string{"call_long"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := findLongRunningFunctionCallIDs(tc.c, tc.tools)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("findLongRunningFunctionCallIDs() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
 }
 
 func TestIsThoughtOnlyTurn(t *testing.T) {
