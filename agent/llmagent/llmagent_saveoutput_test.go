@@ -15,6 +15,8 @@
 package llmagent
 
 import (
+	"bytes"
+	"log"
 	"reflect"
 	"testing"
 
@@ -208,5 +210,39 @@ func TestWrappedSession_SeedNotPersisted(t *testing.T) {
 		if ev == seed {
 			t.Fatal("seed leaked into the underlying session history")
 		}
+	}
+}
+
+func TestLlmAgent_MaybeSaveOutputToState_LogsSkippedOutput(t *testing.T) {
+	var buf bytes.Buffer
+	origOut := log.Writer()
+	origFlags := log.Flags()
+	origPrefix := log.Prefix()
+
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	log.SetPrefix("")
+	t.Cleanup(func() {
+		log.SetOutput(origOut)
+		log.SetFlags(origFlags)
+		log.SetPrefix(origPrefix)
+	})
+
+	ag, err := New(Config{Name: "agent_a", OutputKey: "result"})
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+	llmAg, ok := ag.(*llmAgent)
+	if !ok {
+		t.Fatalf("failed to type assert to *llmAgent")
+	}
+
+	ev := createTestEvent("agent_b", "Some output", true)
+	llmAg.maybeSaveOutputToState(ev)
+
+	gotLog := buf.String()
+	wantLog := "Skipping output save for agent agent_a: event authored by agent_b\n"
+	if gotLog != wantLog {
+		t.Errorf("log output mismatch:\ngot = %q\nwant = %q", gotLog, wantLog)
 	}
 }
