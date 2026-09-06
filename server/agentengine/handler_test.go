@@ -57,3 +57,28 @@ func TestSecurityHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestQueryHandleQueryErrorReturnsGeneric500(t *testing.T) {
+	cfg := &launcher.Config{
+		SessionService: session.InMemoryService(),
+	}
+
+	handler, err := NewHandler(cfg, 10*time.Second, 1024*1024, "test-agent-engine")
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/reasoning_engine", bytes.NewBufferString("{}"))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+
+	wantBody := "internal server error\n"
+	if gotBody := rr.Body.String(); gotBody != wantBody {
+		t.Errorf("Response body = %q, want %q", gotBody, wantBody)
+	}
+}
