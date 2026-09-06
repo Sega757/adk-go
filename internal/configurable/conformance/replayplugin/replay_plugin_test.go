@@ -634,3 +634,119 @@ func TestReplayPlugin_PathValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestReplayPlugin_OnEventCallback_AdvancesStep(t *testing.T) {
+	tempDir := t.TempDir()
+	recordingsYaml := `
+recordings:
+  - agent_name: agent1
+    user_message_index: 0
+    llm_recording:
+      llm_request:
+        contents:
+          - role: user
+            parts:
+              - text: "Hello step 0"
+      llm_responses:
+        - content:
+            role: model
+            parts:
+              - text: "Response step 0"
+  - agent_name: agent1
+    user_message_index: 0
+    llm_recording:
+      llm_request:
+        contents:
+          - role: user
+            parts:
+              - text: "Hello step 1"
+      llm_responses:
+        - content:
+            role: model
+            parts:
+              - text: "Response step 1"
+`
+	createRecordingsFile(t, tempDir, recordingsYaml)
+
+	plugin, err := replayplugin.New(tempDir)
+	if err != nil {
+		t.Fatalf("unexpected error creating plugin: %v", err)
+	}
+
+	if plugin.OnEventCallback() == nil {
+		t.Fatal("expected OnEventCallback to be set on plugin")
+	}
+
+	mockState := &MockState{data: map[string]any{
+		"_adk_replay_config": map[string]any{
+			"dir":                tempDir,
+			"user_message_index": 0,
+		},
+	}}
+	mockSession := &MockSession{state: mockState}
+	invContext := &MockInvocationContext{session: mockSession, invocationID: "test-invocation-events"}
+
+	_, err = plugin.BeforeRunCallback()(invContext)
+	if err != nil {
+		t.Fatalf("BeforeRunCallback error: %v", err)
+	}
+
+	callContext := &MockCallbackContext{
+		state:        mockState,
+		invocationID: "test-invocation-events",
+		agentName:    "agent1",
+	}
+
+	req0 := &model.LLMRequest{
+		Contents: []*genai.Content{
+			{Role: "user", Parts: []*genai.Part{{Text: "Hello step 0"}}},
+		},
+	}
+
+	resp0, err := plugin.BeforeModelCallback()(callContext, req0)
+	if err != nil {
+		t.Fatalf("unexpected error for step 0: %v", err)
+	}
+	if resp0 == nil || len(resp0.Content.Parts) == 0 || resp0.Content.Parts[0].Text != "Response step 0" {
+		t.Fatalf("unexpected response for step 0: %v", resp0)
+	}
+
+	req1 := &model.LLMRequest{
+		Contents: []*genai.Content{
+			{Role: "user", Parts: []*genai.Part{{Text: "Hello step 1"}}},
+		},
+	}
+
+	step1Done := make(chan struct{})
+	var resp1 *model.LLMResponse
+	var err1 error
+
+	go func() {
+		resp1, err1 = plugin.BeforeModelCallback()(callContext, req1)
+		close(step1Done)
+	}()
+
+	select {
+	case <-step1Done:
+		t.Fatal("expected step 1 to wait for OnEventCallback")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	dummyEvent := &session.Event{}
+	_, err = plugin.OnEventCallback()(invContext, dummyEvent)
+	if err != nil {
+		t.Fatalf("OnEventCallback error: %v", err)
+	}
+
+	select {
+	case <-step1Done:
+		if err1 != nil {
+			t.Fatalf("unexpected error for step 1: %v", err1)
+		}
+		if resp1 == nil || len(resp1.Content.Parts) == 0 || resp1.Content.Parts[0].Text != "Response step 1" {
+			t.Fatalf("unexpected response for step 1: %v", resp1)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for step 1 to complete after OnEventCallback")
+	}
+}
