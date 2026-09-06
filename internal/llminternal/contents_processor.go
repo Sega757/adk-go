@@ -49,8 +49,11 @@ func ContentsRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest
 		}
 		var events []*session.Event
 		if ctx.Session() != nil {
-			for e := range ctx.Session().Events().All() {
-				events = append(events, e)
+			if sessEvents := ctx.Session().Events(); sessEvents != nil {
+				events = make([]*session.Event, 0, sessEvents.Len())
+				for e := range sessEvents.All() {
+					events = append(events, e)
+				}
 			}
 		}
 		isSingleTurn := state.Mode == ModeSingleTurn
@@ -74,7 +77,7 @@ func ContentsRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest
 // filtering, rearrangement, and content processing to the given events.
 func buildContentsDefault(agentName, invocationBranch, isolationScope string, events []*session.Event, isSingleTurn bool, userContent *genai.Content) ([]*genai.Content, error) {
 	// parse the events, leaving the contents and the function calls and responses from the current agent.
-	var filtered []*session.Event
+	filtered := make([]*session.Event, 0, len(events))
 	for _, ev := range events {
 		content := utils.Content(ev)
 		// Skip events without content or generated neither by user nor
@@ -180,7 +183,7 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 		return nil, err
 	}
 
-	var contents []*genai.Content
+	contents := make([]*genai.Content, 0, len(filtered))
 	for _, ev := range filtered {
 		content := clone(utils.Content(ev))
 		if content == nil {
@@ -244,7 +247,7 @@ func rearrangeEventsForLatestFunctionResponse(events []*session.Event) ([]*sessi
 	}
 
 	// Create response id set
-	responseIDs := make(map[string]struct{})
+	responseIDs := make(map[string]struct{}, len(lastResponses))
 	for _, res := range lastResponses {
 		responseIDs[res.ID] = struct{}{}
 	}
@@ -277,7 +280,7 @@ SearchLoop: // A label to allow breaking out of the nested loop
 					functionCallEventIdx = idx
 
 					// Create a new set of all call IDs from this specific event
-					allCallIDsFromMatchingEvent = make(map[string]struct{})
+					allCallIDsFromMatchingEvent = make(map[string]struct{}, len(calls))
 					for _, c := range calls {
 						allCallIDsFromMatchingEvent[c.ID] = struct{}{}
 					}
@@ -314,7 +317,8 @@ SearchLoop: // A label to allow breaking out of the nested loop
 	// Collect function response events related to the matching call while
 	// preserving unrelated tool events that happened in between.
 	var responseEventsToMerge []*session.Event
-	resultEvents := events[:functionCallEventIdx+1]
+	resultEvents := make([]*session.Event, 0, len(events))
+	resultEvents = append(resultEvents, events[:functionCallEventIdx+1]...)
 	for i := functionCallEventIdx + 1; i < len(events)-1; i++ {
 		event := events[i]
 		calls := utils.FunctionCalls(event.Content)
@@ -393,7 +397,7 @@ func rearrangeEventsForFunctionResponsesInHistory(events []*session.Event) ([]*s
 	}
 
 	// Rebuild the event list
-	var resultEvents []*session.Event
+	resultEvents := make([]*session.Event, 0, len(events))
 
 	for _, event := range events {
 		// If the event contains responses, skip it. It will be handled
@@ -412,7 +416,7 @@ func rearrangeEventsForFunctionResponsesInHistory(events []*session.Event) ([]*s
 
 			// Find the unique indices of all corresponding response events.
 			// Using a map[int]struct{} as a set.
-			responseEventIndicesSet := make(map[int]struct{})
+			responseEventIndicesSet := make(map[int]struct{}, len(calls))
 			for _, call := range calls {
 				if index, found := callIDToResponseEventIndex[call.ID]; found {
 					responseEventIndicesSet[index] = struct{}{}
@@ -432,7 +436,7 @@ func rearrangeEventsForFunctionResponsesInHistory(events []*session.Event) ([]*s
 			} else {
 				// Multiple response events exist for that function call so we merge them.
 				// Collect and sort the indices to process events in order.
-				var sortedIndices []int
+				sortedIndices := make([]int, 0, len(responseEventIndicesSet))
 				for index := range responseEventIndicesSet {
 					sortedIndices = append(sortedIndices, index)
 				}
@@ -496,7 +500,7 @@ func mergeFunctionResponseEvents(functionResponseEvents []*session.Event) (*sess
 	}
 
 	// 2. Create an index (map) of function_response parts by their ID
-	partIndicesInMergedEvent := make(map[string]int)
+	partIndicesInMergedEvent := make(map[string]int, len(partsInMergedEvent))
 	for idx, part := range partsInMergedEvent {
 		if part.FunctionResponse != nil {
 			functionCallID := part.FunctionResponse.ID
