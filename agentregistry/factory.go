@@ -20,9 +20,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2aclient"
@@ -118,7 +121,7 @@ func (c *Client) egressClient(rawURL string, ec egressConfig) *http.Client {
 			base = http.DefaultClient
 		}
 	}
-	return clientWithHeaders(base, ec.headers)
+	return clientWithHeaders(clientWithSSRFProtection(base), ec.headers)
 }
 
 // isGoogleAPI reports whether rawURL points at a Google API endpoint. It mirrors
@@ -135,6 +138,63 @@ func isGoogleAPI(rawURL string) bool {
 // clientWithHeaders returns a client that adds or overwrites the given static
 // headers on every request. If there are no headers, base is returned unchanged.
 // Otherwise base is shallow-copied so the caller's client is not mutated.
+// clientWithSSRFProtection returns a shallow copy of base with a custom Transport
+// that enforces SSRF protection by resolving the hostname and rejecting restricted IPs
+// (loopback, private, link-local, carrier-grade NAT).
+func clientWithSSRFProtection(base *http.Client) *http.Client {
+	if os.Getenv("ADK_TEST_DISABLE_SSRF_PROTECTION") == "1" {
+		return base
+	}
+	clone := *base
+
+	baseTransport := base.Transport
+	if baseTransport == nil {
+		baseTransport = http.DefaultTransport
+	}
+
+	var safeTransport *http.Transport
+	if t, ok := baseTransport.(*http.Transport); ok {
+		safeTransport = t.Clone()
+	} else {
+		safeTransport = http.DefaultTransport.(*http.Transport).Clone()
+	}
+
+	// Initialize default dialer to retain Timeouts and KeepAlive.
+	var dialer net.Dialer
+	dialer.Timeout = 30 * time.Second
+	dialer.KeepAlive = 30 * time.Second
+
+	// Set a custom DialContext for SSRF protection.
+	safeTransport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+		if err != nil {
+			return nil, err
+		}
+		if len(ips) == 0 {
+			return nil, fmt.Errorf("SSRF protection: no IP addresses found for host: %s", host)
+		}
+
+		for _, ip := range ips {
+			if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() {
+				return nil, fmt.Errorf("SSRF protection: address %s resolves to restricted IP %s", host, ip.String())
+			}
+			_, cgnat, _ := net.ParseCIDR("100.64.0.0/10")
+			if cgnat.Contains(ip) {
+				return nil, fmt.Errorf("SSRF protection: address %s resolves to restricted IP %s", host, ip.String())
+			}
+		}
+
+		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
+	}
+	clone.Transport = safeTransport
+	return &clone
+}
+
 func clientWithHeaders(base *http.Client, headers map[string]string) *http.Client {
 	if len(headers) == 0 {
 		return base
@@ -191,7 +251,7 @@ func (c *Client) RemoteAgent(ctx context.Context, name string, opts ...RemoteAge
 	ec := applyRemoteAgentOptions(opts)
 	// A2A egress is not auto-authenticated (parity with adk-python): use the
 	// caller's client or the default, never the registry's ADC client.
-	egress := clientWithHeaders(cmp.Or(ec.httpClient, http.DefaultClient), ec.headers)
+	egress := clientWithHeaders(clientWithSSRFProtection(cmp.Or(ec.httpClient, http.DefaultClient)), ec.headers)
 
 	return remoteagent.NewA2A(remoteagent.A2AConfig{
 		Name:           agentName,

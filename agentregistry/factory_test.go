@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
@@ -451,5 +453,56 @@ func TestMCPToolset_NoEndpoint(t *testing.T) {
 
 	if _, err := newTestClient(srv).MCPToolset(t.Context(), "projects/p/locations/l/mcpServers/data"); err == nil {
 		t.Error("MCPToolset() error = nil, want an error when no endpoint URI is present")
+	}
+}
+
+func TestSSRFProtection(t *testing.T) {
+	os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "0")
+	defer os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "1")
+
+	// Create an HTTP test server attached to localhost.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	}))
+	defer ts.Close()
+
+	// ts.URL looks like "http://127.0.0.1:45321"
+
+	// Using DefaultClient should normally work.
+	resp, err := http.DefaultClient.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("sanity check failed: default client could not reach localhost server: %v", err)
+	}
+	resp.Body.Close()
+
+	// Apply SSRF protection
+	safeClient := clientWithSSRFProtection(http.DefaultClient)
+
+	// Trying to hit the test server (which is on localhost) should now fail.
+	_, err = safeClient.Get(ts.URL)
+	if err == nil {
+		t.Fatalf("expected SSRF protected client to reject localhost request, but it succeeded")
+	}
+	if !strings.Contains(err.Error(), "SSRF protection") {
+		t.Errorf("expected SSRF error, got: %v", err)
+	}
+
+	// Trying to hit metadata server should also fail
+	_, err = safeClient.Get("http://169.254.169.254/computeMetadata/v1/")
+	if err == nil {
+		t.Fatalf("expected SSRF protected client to reject link-local request, but it succeeded")
+	}
+	if !strings.Contains(err.Error(), "SSRF protection") {
+		t.Errorf("expected SSRF error, got: %v", err)
+	}
+
+	// Carrier grade NAT test
+	_, err = safeClient.Get("http://100.64.0.5/test")
+	if err == nil {
+		t.Fatalf("expected SSRF protected client to reject CGNAT request, but it succeeded")
+	}
+	if !strings.Contains(err.Error(), "SSRF protection") {
+		t.Errorf("expected SSRF error, got: %v", err)
 	}
 }
