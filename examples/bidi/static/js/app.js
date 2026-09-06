@@ -74,6 +74,16 @@ const statusText = document.getElementById("statusText");
 const consoleContent = document.getElementById("consoleContent");
 const clearConsoleBtn = document.getElementById("clearConsole");
 const showAudioEventsCheckbox = document.getElementById("showAudioEvents");
+
+// Enable or disable interactive message and media input controls
+function setControlsDisabled(disabled) {
+  messageInput.disabled = disabled;
+  document.getElementById("sendButton").disabled = disabled;
+  startAudioButton.disabled = disabled;
+  cameraButton.disabled = disabled;
+  streamVideoButton.disabled = disabled;
+  sendFileButton.disabled = disabled;
+}
 let currentMessageId = null;
 let currentBubbleElement = null;
 let currentInputTranscriptionId = null;
@@ -368,9 +378,8 @@ function connectWebsocket() {
       url: ws_url
     }, '🔌', 'system');
 
-    // Enable input and Send button
-    messageInput.disabled = false;
-    document.getElementById("sendButton").disabled = false;
+    // Enable input and action buttons
+    setControlsDisabled(false);
     addSubmitHandler();
   };
 
@@ -804,8 +813,13 @@ function connectWebsocket() {
   websocket.onclose = function (e) {
     console.log("WebSocket connection closed.", e);
     updateConnectionStatus(false);
-    messageInput.disabled = true;
-    document.getElementById("sendButton").disabled = true;
+    setControlsDisabled(true);
+    if (isVideoStreaming) {
+      toggleVideoStreaming();
+    }
+    if (is_audio) {
+      toggleAudioStreaming();
+    }
     const reason = e && e.reason ? e.reason + " - " : "";
     addSystemMessage(`${reason}Connection closed. Reconnecting in 5 seconds...`);
 
@@ -833,8 +847,7 @@ function connectWebsocket() {
   websocket.onerror = function (e) {
     console.log("WebSocket error: ", e);
     updateConnectionStatus(false);
-    messageInput.disabled = true;
-    document.getElementById("sendButton").disabled = true;
+    setControlsDisabled(true);
 
     // Log to console
     addConsoleEntry('error', 'WebSocket Error', {
