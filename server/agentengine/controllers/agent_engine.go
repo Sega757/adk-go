@@ -63,9 +63,9 @@ func (c *AgentEngineAPIController) Query(rw http.ResponseWriter, req *http.Reque
 	if req.Body != nil && req.Body != http.NoBody {
 		var err error
 
-		payload, err = io.ReadAll(io.LimitReader(req.Body, c.maxPayloadSize))
+		payload, err = io.ReadAll(http.MaxBytesReader(rw, req.Body, c.maxPayloadSize))
 		if err != nil {
-			err = fmt.Errorf("io.ReadAll with LimitReader failed: %w", err)
+			err = fmt.Errorf("io.ReadAll with MaxBytesReader failed: %w", err)
 			http.Error(rw, err.Error(), http.StatusBadRequest)
 			return
 		}
