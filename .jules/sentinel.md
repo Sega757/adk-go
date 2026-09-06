@@ -36,3 +36,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** Recovering from panics in function tools (`functiontool`) embedded full stack traces (`debug.Stack()`) in the returned `error` objects, leaking internal call frames, source paths, and function details to external callers, LLM responses, or client payloads.
 **Learning:** Error objects returned from tool execution flow back into LLM content or API responses. Exposing stack traces in error strings leaks application internals and creates security risks.
 **Prevention:** Log stack traces to server logs using `log.Printf` for operator debugging, and return concise error messages without `debug.Stack()` to the caller.
+
+## 2026-09-06 - [Memory Exhaustion] Prevent DoS via io.LimitReader on HTTP Requests
+**Vulnerability:** Found `io.LimitReader` usage on `http.Request.Body` in `server/agentengine/controllers/agent_engine.go`.
+**Learning:** `io.LimitReader` does not close the underlying connection when the limit is reached, which exposes the server to DoS attacks by allowing an attacker to send arbitrarily large payloads that exhaust server resources. The server has to keep reading from the connection even when the limit is hit, or close it awkwardly.
+**Prevention:** Always wrap `http.Request.Body` with `http.MaxBytesReader` to set a hard limit (e.g. 10MB) before reading or decoding HTTP payload streams. `http.MaxBytesReader` correctly aborts the HTTP request and closes the connection if the limit is exceeded.
