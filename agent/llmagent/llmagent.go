@@ -17,6 +17,7 @@ package llmagent
 import (
 	"fmt"
 	"iter"
+	"log"
 	"strings"
 
 	"google.golang.org/genai"
@@ -512,7 +513,7 @@ func (a *llmAgent) maybeSaveOutputToState(event *session.Event) {
 		return
 	}
 	if event.Author != a.Name() {
-		// TODO: log "Skipping output save for agent %s: event authored by %s"
+		log.Printf("Skipping output save for agent %s: event authored by %s", a.Name(), event.Author)
 		return
 	}
 	if a.OutputKey != "" && !event.Partial && event.Content != nil && len(event.Content.Parts) > 0 {
