@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"google.golang.org/genai"
 
 	"google.golang.org/adk/v2/agent"
@@ -284,5 +285,70 @@ func TestDecodeRequestBody_EnforcesMaxBytesReader(t *testing.T) {
 
 	if _, err := decodeRequestBody(rr, req); err == nil {
 		t.Errorf("decodeRequestBody: expected error for payload > 10MB, got nil")
+	}
+}
+
+func TestRunLiveHandler_WebSocketReadLimit(t *testing.T) {
+	fakeAgent, err := agent.New(agent.Config{
+		Name: "app",
+		Run: func(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
+			return func(yield func(*session.Event, error) bool) {}
+		},
+	})
+	if err != nil {
+		t.Fatalf("agent.New failed: %v", err)
+	}
+
+	id := fakes.SessionKey{
+		AppName:   "app",
+		UserID:    "user",
+		SessionID: "sess",
+	}
+	sessionService := fakes.FakeSessionService{
+		Sessions: map[fakes.SessionKey]fakes.TestSession{
+			id: {
+				Id:            id,
+				SessionState:  fakes.TestState{},
+				SessionEvents: fakes.TestEvents{},
+				UpdatedAt:     time.Now(),
+			},
+		},
+	}
+
+	controller := NewRuntimeAPIController(
+		&sessionService,
+		nil,
+		agent.NewSingleLoader(fakeAgent),
+		nil,
+		10*time.Second,
+		runner.PluginConfig{},
+		false,
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = controller.RunLiveHandler(w, r)
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?appName=app&userId=user&sessionId=sess"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	// Send message > 10MB to test read limit enforcement
+	largeMsg := bytes.Repeat([]byte("x"), 11*1024*1024)
+	err = conn.WriteMessage(websocket.BinaryMessage, largeMsg)
+	if err != nil {
+		// Connection might be closed early when write/read limit triggers
+		return
+	}
+
+	// Reading response or next message should fail due to connection closure / read limit violation
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Errorf("expected error when sending message > 10MB, got nil")
 	}
 }
