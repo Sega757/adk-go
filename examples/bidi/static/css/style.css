@@ -532,6 +532,15 @@ button.active {
   line-height: 1.5;
 }
 
+.console-empty-state {
+  color: #858585;
+  text-align: center;
+  padding: 2rem 1rem;
+  font-style: italic;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
 /* Console entry */
 .console-entry {
   margin-bottom: 0.75rem;
