@@ -127,6 +127,11 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
     return;
   }
 
+  const emptyState = document.getElementById("consoleEmptyState");
+  if (emptyState) {
+    emptyState.style.display = "none";
+  }
+
   const entry = document.createElement("div");
   entry.className = `console-entry ${type}`;
 
@@ -228,7 +233,7 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
 }
 
 function clearConsole() {
-  consoleContent.innerHTML = '';
+  consoleContent.innerHTML = '<div id="consoleEmptyState" class="console-empty-state">No events recorded yet. Incoming and outgoing WebSocket events will appear here.</div>';
 }
 
 // Clear console button handler
