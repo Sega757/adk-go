@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"net/http"
@@ -350,5 +351,59 @@ func TestRunLiveHandler_WebSocketReadLimit(t *testing.T) {
 	_, _, err = conn.ReadMessage()
 	if err == nil {
 		t.Errorf("expected error when sending message > 10MB, got nil")
+	}
+}
+
+func TestRunLiveHandler_SanitizedInternalErrorCloseReason(t *testing.T) {
+	fakeAgent, err := agent.New(agent.Config{
+		Name: "app",
+		Run: func(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
+			return func(yield func(*session.Event, error) bool) {}
+		},
+	})
+	if err != nil {
+		t.Fatalf("agent.New failed: %v", err)
+	}
+
+	sessionService := fakes.FakeSessionService{}
+	controller := NewRuntimeAPIController(
+		&sessionService,
+		nil,
+		agent.NewSingleLoader(fakeAgent),
+		nil,
+		10*time.Second,
+		runner.PluginConfig{},
+		false,
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = controller.RunLiveHandler(w, r)
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?appName=unknownApp&userId=user&sessionId=sess"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Fatalf("expected close error, got nil")
+	}
+
+	var closeErr *websocket.CloseError
+	if !errors.As(err, &closeErr) {
+		t.Fatalf("expected *websocket.CloseError, got %T: %v", err, err)
+	}
+
+	if closeErr.Code != websocket.CloseInternalServerErr {
+		t.Errorf("expected close code %d, got %d", websocket.CloseInternalServerErr, closeErr.Code)
+	}
+
+	if closeErr.Text != "internal server error" {
+		t.Errorf("expected sanitized close text %q, got %q", "internal server error", closeErr.Text)
 	}
 }

@@ -41,3 +41,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** Found `io.LimitReader` usage on `http.Request.Body` in `server/agentengine/controllers/agent_engine.go`.
 **Learning:** `io.LimitReader` does not close the underlying connection when the limit is reached, which exposes the server to DoS attacks by allowing an attacker to send arbitrarily large payloads that exhaust server resources. The server has to keep reading from the connection even when the limit is hit, or close it awkwardly.
 **Prevention:** Always wrap `http.Request.Body` with `http.MaxBytesReader` to set a hard limit (e.g. 10MB) before reading or decoding HTTP payload streams. `http.MaxBytesReader` correctly aborts the HTTP request and closes the connection if the limit is exceeded.
+
+## 2026-09-07 - [Prevent Information Leakage in WebSocket Internal Error Close Reason]
+**Vulnerability:** In `RunLiveHandler` (`server/adkrest/controllers/runtime.go`), WebSocket close frame reasons for internal server errors (`CloseInternalServerErr` / 1011) sent raw error strings (e.g., `err.Error()`, agent loader failure details) to clients, exposing application internals.
+**Learning:** WebSocket close frame reasons are sent directly to connected clients. Sending raw error messages on internal failures (1011) can leak internal file paths, stack traces, or configuration details.
+**Prevention:** Log detailed errors server-side using `log.Printf`, and return a sanitized generic reason like `"internal server error"` in WebSocket `CloseInternalServerErr` frames.

@@ -294,12 +294,12 @@ func (c *RuntimeAPIController) RunLiveHandler(rw http.ResponseWriter, req *http.
 
 	r, _, err := c.getRunner(models.RunAgentRequest{AppName: appName, UserId: userID, SessionId: sessionID})
 	if err != nil {
-		closeReason := err.Error()
 		if _, loadErr := c.agentLoader.LoadAgent(appName); loadErr != nil {
-			closeReason = fmt.Sprintf("agent %s not found for original error: %v", appName, err)
+			log.Printf("Failed to get runner for app %s: agent %s not found for original error: %v", appName, appName, err)
+		} else {
+			log.Printf("Failed to get runner for app %s: %v", appName, err)
 		}
-		log.Printf("Failed to get runner for app %s: %v", appName, err)
-		sendClose(websocket.CloseInternalServerErr, closeReason)
+		sendClose(websocket.CloseInternalServerErr, "internal server error")
 		return nil
 	}
 
@@ -312,7 +312,7 @@ func (c *RuntimeAPIController) RunLiveHandler(rw http.ResponseWriter, req *http.
 	})
 	if err != nil {
 		log.Printf("RunLive failed for app %s: %v", appName, err)
-		sendClose(websocket.CloseInternalServerErr, err.Error())
+		sendClose(websocket.CloseInternalServerErr, "internal server error")
 		return nil
 	}
 	defer func() {
@@ -380,7 +380,7 @@ func (c *RuntimeAPIController) RunLiveHandler(rw http.ResponseWriter, req *http.
 	for event, err := range eventIter {
 		if err != nil {
 			log.Printf("RunLive failed: %v\n", err)
-			_ = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseInternalServerErr, err.Error()))
+			_ = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "internal server error"))
 			break
 		}
 
