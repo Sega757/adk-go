@@ -66,7 +66,7 @@ func convertOutputItems(items []responses.ResponseOutputItemUnion) ([]*genai.Par
 	if len(items) == 0 {
 		return nil, ErrNoOutputItems
 	}
-	var parts []*genai.Part
+	parts := make([]*genai.Part, 0, len(items))
 	for _, item := range items {
 		switch item.Type {
 		case "message":

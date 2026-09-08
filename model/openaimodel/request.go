@@ -84,34 +84,36 @@ func buildOpenAIParams(modelName string, req *model.LLMRequest) (responses.Respo
 }
 
 func convertContents(contents []*genai.Content) (responses.ResponseInputParam, error) {
+	items := make(responses.ResponseInputParam, 0, len(contents))
 	var (
-		items     responses.ResponseInputParam
 		tracker   callTracker
 		textParts []string
 		curRole   genai.Role = genai.RoleUser
-		// flushText is a helper function that takes any accumulated text parts
-		// and converts them into a message, then appends it to our items.
-		flushText = func() error {
-			if len(textParts) == 0 {
-				return nil
-			}
-			msg, err := newMessage(curRole, textParts)
-			if err != nil {
-				return err
-			}
-			if msg != nil {
-				items = append(items, responses.ResponseInputItemUnionParam{OfMessage: msg})
-			}
-			textParts = textParts[:0]
+	)
+
+	flushText := func() error {
+		if len(textParts) == 0 {
 			return nil
 		}
-	)
+		msg, err := newMessage(curRole, textParts)
+		if err != nil {
+			return err
+		}
+		if msg != nil {
+			items = append(items, responses.ResponseInputItemUnionParam{OfMessage: msg})
+		}
+		textParts = textParts[:0]
+		return nil
+	}
 
 	for _, content := range contents {
 		if content == nil || len(content.Parts) == 0 {
 			continue
 		}
 		curRole = genai.Role(content.Role)
+		if len(textParts) == 0 && cap(textParts) < len(content.Parts) {
+			textParts = make([]string, 0, len(content.Parts))
+		}
 		for _, part := range content.Parts {
 			switch {
 			case part == nil:
