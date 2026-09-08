@@ -187,6 +187,90 @@ func TestHelperFunctions(t *testing.T) {
 	}
 }
 
+func TestHasFunctionCalls(t *testing.T) {
+	tests := []struct {
+		name    string
+		content *genai.Content
+		want    bool
+	}{
+		{
+			name:    "nil content",
+			content: nil,
+			want:    false,
+		},
+		{
+			name:    "empty parts",
+			content: &genai.Content{Parts: []*genai.Part{}},
+			want:    false,
+		},
+		{
+			name:    "text only parts",
+			content: &genai.Content{Parts: []*genai.Part{{Text: "hello"}}},
+			want:    false,
+		},
+		{
+			name:    "function call present",
+			content: &genai.Content{Parts: []*genai.Part{{Text: "call"}, {FunctionCall: &genai.FunctionCall{Name: "fn"}}}},
+			want:    true,
+		},
+		{
+			name:    "function response present, no function call",
+			content: &genai.Content{Parts: []*genai.Part{{FunctionResponse: &genai.FunctionResponse{Name: "fn"}}}},
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := utils.HasFunctionCalls(tt.content); got != tt.want {
+				t.Errorf("HasFunctionCalls() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHasFunctionResponses(t *testing.T) {
+	tests := []struct {
+		name    string
+		content *genai.Content
+		want    bool
+	}{
+		{
+			name:    "nil content",
+			content: nil,
+			want:    false,
+		},
+		{
+			name:    "empty parts",
+			content: &genai.Content{Parts: []*genai.Part{}},
+			want:    false,
+		},
+		{
+			name:    "text only parts",
+			content: &genai.Content{Parts: []*genai.Part{{Text: "hello"}}},
+			want:    false,
+		},
+		{
+			name:    "function response present",
+			content: &genai.Content{Parts: []*genai.Part{{Text: "resp"}, {FunctionResponse: &genai.FunctionResponse{Name: "fn"}}}},
+			want:    true,
+		},
+		{
+			name:    "function call present, no function response",
+			content: &genai.Content{Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Name: "fn"}}}},
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := utils.HasFunctionResponses(tt.content); got != tt.want {
+				t.Errorf("HasFunctionResponses() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func BenchmarkPopulateClientFunctionCallID(b *testing.B) {
 	ctx := platform.WithUUIDProvider(b.Context(), func() string { return "bench-uuid" })
 
@@ -226,5 +310,49 @@ func BenchmarkIsZeroPart(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = utils.IsZeroPart(part)
+	}
+}
+
+func BenchmarkHasFunctionCalls(b *testing.B) {
+	content := &genai.Content{
+		Parts: []*genai.Part{
+			{Text: "thinking..."},
+			{FunctionCall: &genai.FunctionCall{Name: "search"}},
+		},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = utils.HasFunctionCalls(content)
+	}
+}
+
+func BenchmarkHasFunctionCalls_LegacyFunctionCallsSlice(b *testing.B) {
+	content := &genai.Content{
+		Parts: []*genai.Part{
+			{Text: "thinking..."},
+			{FunctionCall: &genai.FunctionCall{Name: "search"}},
+		},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = len(utils.FunctionCalls(content)) > 0
+	}
+}
+
+func BenchmarkHasFunctionResponses(b *testing.B) {
+	content := &genai.Content{
+		Parts: []*genai.Part{
+			{FunctionResponse: &genai.FunctionResponse{Name: "search"}},
+		},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = utils.HasFunctionResponses(content)
 	}
 }

@@ -402,7 +402,7 @@ func rearrangeEventsForFunctionResponsesInHistory(events []*session.Event) ([]*s
 	for _, event := range events {
 		// If the event contains responses, skip it. It will be handled
 		// when we process its corresponding call event.
-		if len(utils.FunctionResponses(event.Content)) > 0 {
+		if utils.HasFunctionResponses(event.Content) {
 			continue
 		}
 

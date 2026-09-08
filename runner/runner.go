@@ -378,13 +378,7 @@ func (s *runnerLiveSession) Send(req agent.LiveRequest) error {
 	// Save user text content to session history
 	if req.Content != nil && len(req.Content.Parts) > 0 {
 		// Skip function responses - they are handled separately
-		isFunctionResponse := false
-		for _, part := range req.Content.Parts {
-			if part.FunctionResponse != nil {
-				isFunctionResponse = true
-				break
-			}
-		}
+		isFunctionResponse := utils.HasFunctionResponses(req.Content)
 
 		if !isFunctionResponse {
 			event := session.NewEvent(s.iCtx, s.iCtx.InvocationID())
@@ -542,15 +536,7 @@ func (r *Runner) RunLive(ctx context.Context, userID, sessionID string, cfg agen
 				isTranscribing = true
 			}
 
-			isToolCallOrResp := false
-			if event.LLMResponse.Content != nil {
-				for _, part := range event.LLMResponse.Content.Parts {
-					if part.FunctionCall != nil || part.FunctionResponse != nil {
-						isToolCallOrResp = true
-						break
-					}
-				}
-			}
+			isToolCallOrResp := utils.HasFunctionCalls(event.LLMResponse.Content) || utils.HasFunctionResponses(event.LLMResponse.Content)
 
 			if isTranscribing && isToolCallOrResp {
 				bufferedEvents = append(bufferedEvents, event)
