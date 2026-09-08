@@ -48,6 +48,9 @@ func TestBuildBaseRouter_SecurityHeaders(t *testing.T) {
 		{"X-Content-Type-Options", "nosniff"},
 		{"X-XSS-Protection", "1; mode=block"},
 		{"Referrer-Policy", "strict-origin-when-cross-origin"},
+		{"Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate"},
+		{"Pragma", "no-cache"},
+		{"Expires", "0"},
 	}
 
 	for _, h := range headers {
