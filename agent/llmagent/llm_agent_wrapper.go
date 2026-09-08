@@ -175,7 +175,7 @@ func ProcessLLMAgentOutput(a agent.Agent, ev *session.Event) error {
 	if ev == nil {
 		return nil
 	}
-	if len(utils.FunctionCalls(ev.Content)) > 0 {
+	if utils.HasFunctionCalls(ev.Content) {
 		return nil
 	}
 	if ev.Partial {

@@ -86,6 +86,34 @@ func Content(ev *session.Event) *genai.Content {
 // Belows are useful utilities that help working with genai.Content
 // included in types.Event.
 // TODO: Use generics.
+// HasFunctionCalls reports whether content c contains any FunctionCall.
+// It provides a zero-allocation alternative to checking len(FunctionCalls(c)) > 0.
+func HasFunctionCalls(c *genai.Content) bool {
+	if c == nil {
+		return false
+	}
+	for _, p := range c.Parts {
+		if p != nil && p.FunctionCall != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// HasFunctionResponses reports whether content c contains any FunctionResponse.
+// It provides a zero-allocation alternative to checking len(FunctionResponses(c)) > 0.
+func HasFunctionResponses(c *genai.Content) bool {
+	if c == nil {
+		return false
+	}
+	for _, p := range c.Parts {
+		if p != nil && p.FunctionResponse != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // FunctionCalls extracts all FunctionCall parts from the content.
 func FunctionCalls(c *genai.Content) (ret []*genai.FunctionCall) {
 	if c == nil {
