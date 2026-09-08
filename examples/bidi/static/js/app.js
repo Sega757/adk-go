@@ -77,12 +77,25 @@ const showAudioEventsCheckbox = document.getElementById("showAudioEvents");
 
 // Enable or disable interactive message and media input controls
 function setControlsDisabled(disabled) {
-  messageInput.disabled = disabled;
-  document.getElementById("sendButton").disabled = disabled;
-  startAudioButton.disabled = disabled;
-  cameraButton.disabled = disabled;
-  streamVideoButton.disabled = disabled;
-  sendFileButton.disabled = disabled;
+  const controls = [
+    messageInput,
+    document.getElementById("sendButton"),
+    startAudioButton,
+    cameraButton,
+    streamVideoButton,
+    sendFileButton
+  ];
+  controls.forEach(ctrl => {
+    if (ctrl) {
+      ctrl.disabled = disabled;
+      if (disabled) {
+        ctrl.setAttribute("title", "Connect to server to enable control");
+      } else {
+        ctrl.removeAttribute("title");
+      }
+    }
+  });
+  messageInput.placeholder = disabled ? "Connecting to server..." : "Type your message here...";
 }
 let currentMessageId = null;
 let currentBubbleElement = null;
