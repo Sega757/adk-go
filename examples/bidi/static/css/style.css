@@ -519,9 +519,15 @@ button.active {
   transition: all 0.2s ease;
 }
 
-.console-clear-btn:hover {
+.console-clear-btn:hover:not(:disabled) {
   background-color: #4e4e4e;
   border-color: #5e5e5e;
+}
+
+.console-clear-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #3e3e3e;
 }
 
 .console-content {
