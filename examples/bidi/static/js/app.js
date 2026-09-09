@@ -75,6 +75,35 @@ const consoleContent = document.getElementById("consoleContent");
 const clearConsoleBtn = document.getElementById("clearConsole");
 const showAudioEventsCheckbox = document.getElementById("showAudioEvents");
 
+// Dynamic button state management for Send and Clear Console controls
+function updateSendButtonState() {
+  const sendButton = document.getElementById("sendButton");
+  if (!sendButton) return;
+  if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+    sendButton.disabled = true;
+    return;
+  }
+  const hasText = messageInput && messageInput.value.trim().length > 0;
+  sendButton.disabled = !hasText;
+  if (!hasText) {
+    sendButton.setAttribute("title", "Type a message to enable send");
+  } else {
+    sendButton.removeAttribute("title");
+  }
+}
+
+function updateClearConsoleButtonState() {
+  if (clearConsoleBtn) {
+    const hasEntries = consoleContent && consoleContent.children.length > 0;
+    clearConsoleBtn.disabled = !hasEntries;
+    if (!hasEntries) {
+      clearConsoleBtn.setAttribute("title", "Console is empty");
+    } else {
+      clearConsoleBtn.removeAttribute("title");
+    }
+  }
+}
+
 // Enable or disable interactive message and media input controls
 function setControlsDisabled(disabled) {
   const controls = [
@@ -96,6 +125,10 @@ function setControlsDisabled(disabled) {
     }
   });
   messageInput.placeholder = disabled ? "Connecting to server..." : "Type your message here...";
+  if (!disabled) {
+    updateSendButtonState();
+  }
+  updateClearConsoleButtonState();
 }
 let currentMessageId = null;
 let currentBubbleElement = null;
@@ -238,14 +271,20 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
 
   consoleContent.appendChild(entry);
   consoleContent.scrollTop = consoleContent.scrollHeight;
+  updateClearConsoleButtonState();
 }
 
 function clearConsole() {
   consoleContent.innerHTML = '';
+  updateClearConsoleButtonState();
 }
 
-// Clear console button handler
+// Input and console button event handlers
+if (messageInput) {
+  messageInput.addEventListener("input", updateSendButtonState);
+}
 clearConsoleBtn.addEventListener('click', clearConsole);
+updateClearConsoleButtonState();
 
 // Update connection status UI
 function updateConnectionStatus(connected) {
@@ -882,8 +921,9 @@ function addSubmitHandler() {
       appendMessage(userBubble);
       scrollToBottom();
 
-      // Clear input
+      // Clear input and update button state
       messageInput.value = "";
+      updateSendButtonState();
 
       // Send message to server
       sendMessage(message);

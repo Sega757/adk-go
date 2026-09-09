@@ -35,3 +35,7 @@ This journal documents critical UX and accessibility learnings, patterns, and in
 ## 2026-09-04 - Dynamic Input Control Feedback and Title Tooltips for Disconnected States
 **Learning:** Disabling web form controls during disconnected or connecting network states without informative tooltip hints (`title`) or placeholder updates leaves screen reader and mouse users confused about why controls are un-interactive. Dynamically setting title tooltips (e.g., `"Connect to server to enable control"`) and input placeholder text (`"Connecting to server..."`) when disabled—and clearing them upon reconnection—provides clear context and reduces user friction.
 **Action:** When toggling input element `disabled` states based on WebSocket connection status, update input placeholders and add/remove descriptive `title` tooltips dynamically.
+
+## 2026-09-05 - Dynamic Form Button States & Contextual Tooltip Hints for Empty States
+**Learning:** Leaving action buttons (like "Send" or "Clear Console") enabled when their underlying inputs or target containers are empty leads to silent no-op clicks and user confusion. Dynamically updating `disabled` attributes alongside contextual `title` tooltips (e.g. `"Type a message to enable send"` or `"Console is empty"`) as users type, submit, or clear data provides instant visual and screen-reader feedback, preventing accidental empty submissions.
+**Action:** Always synchronize action button `disabled` states and descriptive `title` tooltips with input values and container content lengths.
