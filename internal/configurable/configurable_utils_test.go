@@ -233,6 +233,42 @@ func TestRegisterToolsetFactory(t *testing.T) {
 		}
 	})
 
+	t.Run("McpToolsetInvalidArgsHandling", func(t *testing.T) {
+		resetRegistries(t)
+
+		t.Run("NonStringServerParamsArgs", func(t *testing.T) {
+			args := map[string]any{
+				"stdio_connection_params": map[string]any{
+					"server_params": map[string]any{
+						"command": "node",
+						"args":    []any{"valid", 123},
+					},
+				},
+				"tool_filter": []any{"tool1"},
+			}
+			_, _, err := ResolveToolReference(context.Background(), "McpToolset", args)
+			if err == nil {
+				t.Fatalf("expected error for non-string server_params args element, got nil")
+			}
+		})
+
+		t.Run("NonStringToolFilter", func(t *testing.T) {
+			args := map[string]any{
+				"stdio_connection_params": map[string]any{
+					"server_params": map[string]any{
+						"command": "node",
+						"args":    []any{"valid"},
+					},
+				},
+				"tool_filter": []any{"tool1", true},
+			}
+			_, _, err := ResolveToolReference(context.Background(), "McpToolset", args)
+			if err == nil {
+				t.Fatalf("expected error for non-string tool_filter element, got nil")
+			}
+		})
+	})
+
 	t.Run("CrossTypeCollisionWithToolFactory", func(t *testing.T) {
 		toolName := "cross_collision_tool"
 		toolFactory := func(ctx context.Context, args map[string]any) (tool.Tool, error) {
