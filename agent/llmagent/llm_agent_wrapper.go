@@ -232,14 +232,15 @@ func ProcessLLMAgentOutput(a agent.Agent, ev *session.Event) error {
 	return nil
 }
 
-// extractFinishTaskFC returns the finish_task FunctionCall
+// extractFinishTaskFC returns the finish_task FunctionCall.
+// Iterates directly over ev.Content.Parts to avoid intermediate slice allocations via utils.FunctionCalls.
 func extractFinishTaskFC(ev *session.Event) *genai.FunctionCall {
-	if ev == nil {
+	if ev == nil || ev.Content == nil {
 		return nil
 	}
-	for _, fc := range utils.FunctionCalls(ev.Content) {
-		if fc != nil && fc.Name == workflowinternal.FinishTaskToolName {
-			return fc
+	for _, p := range ev.Content.Parts {
+		if p != nil && p.FunctionCall != nil && p.FunctionCall.Name == workflowinternal.FinishTaskToolName {
+			return p.FunctionCall
 		}
 	}
 	return nil
@@ -250,12 +251,17 @@ func extractFinishTaskFC(ev *session.Event) *genai.FunctionCall {
 // The first finish_task FR decides. A non-success FR (e.g.
 // validation error) returns false so the caller keeps iterating and
 // the LLM gets a chance to retry.
+// Iterates directly over ev.Content.Parts to avoid intermediate slice allocations via utils.FunctionResponses.
 func isFinishTaskSuccessFR(ev *session.Event) bool {
-	if ev == nil {
+	if ev == nil || ev.Content == nil {
 		return false
 	}
-	for _, fr := range utils.FunctionResponses(ev.Content) {
-		if fr == nil || fr.Name != workflowinternal.FinishTaskToolName {
+	for _, p := range ev.Content.Parts {
+		if p == nil || p.FunctionResponse == nil {
+			continue
+		}
+		fr := p.FunctionResponse
+		if fr.Name != workflowinternal.FinishTaskToolName {
 			continue
 		}
 		if fr.Response == nil {
@@ -273,16 +279,18 @@ func isFinishTaskSuccessFR(ev *session.Event) bool {
 
 // extractTaskDelegationFCs returns task-delegation FCs in this event.
 // A task-delegation FC is one whose tool is a TaskAgentTool.
+// Iterates directly over ev.Content.Parts to avoid intermediate slice allocations via utils.FunctionCalls.
 func extractTaskDelegationFCs(ev *session.Event, toolsDict map[string]tool.Tool) []*genai.FunctionCall {
-	if ev == nil {
+	if ev == nil || ev.Content == nil {
 		return nil
 	}
 	var out []*genai.FunctionCall
-	for _, fc := range utils.FunctionCalls(ev.Content) {
-		if fc == nil || fc.ID == "" {
+	for _, p := range ev.Content.Parts {
+		if p == nil || p.FunctionCall == nil {
 			continue
 		}
-		if isTaskDelegationTool(toolsDict, fc.Name) {
+		fc := p.FunctionCall
+		if fc.ID != "" && isTaskDelegationTool(toolsDict, fc.Name) {
 			out = append(out, fc)
 		}
 	}

@@ -75,6 +75,163 @@ func BenchmarkFindUnresolvedTaskDelegations_NoDelegations(b *testing.B) {
 	}
 }
 
+func BenchmarkExtractFinishTaskFC_TextEvent(b *testing.B) {
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role:  genai.RoleModel,
+				Parts: []*genai.Part{{Text: "Hello world"}},
+			},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = extractFinishTaskFC(ev)
+	}
+}
+
+func BenchmarkExtractFinishTaskFC_OtherCall(b *testing.B) {
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role: genai.RoleModel,
+				Parts: []*genai.Part{{
+					FunctionCall: &genai.FunctionCall{
+						Name: "get_weather",
+					},
+				}},
+			},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = extractFinishTaskFC(ev)
+	}
+}
+
+func BenchmarkExtractFinishTaskFC_MatchingCall(b *testing.B) {
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role: genai.RoleModel,
+				Parts: []*genai.Part{{
+					FunctionCall: &genai.FunctionCall{
+						Name: workflowinternal.FinishTaskToolName,
+					},
+				}},
+			},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = extractFinishTaskFC(ev)
+	}
+}
+
+func BenchmarkIsFinishTaskSuccessFR_TextEvent(b *testing.B) {
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role:  genai.RoleUser,
+				Parts: []*genai.Part{{Text: "User message"}},
+			},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = isFinishTaskSuccessFR(ev)
+	}
+}
+
+func BenchmarkIsFinishTaskSuccessFR_OtherResponse(b *testing.B) {
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role: genai.RoleUser,
+				Parts: []*genai.Part{{
+					FunctionResponse: &genai.FunctionResponse{
+						Name: "get_weather",
+						Response: map[string]any{
+							"temp": 72,
+						},
+					},
+				}},
+			},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = isFinishTaskSuccessFR(ev)
+	}
+}
+
+func BenchmarkIsFinishTaskSuccessFR_MatchingResponse(b *testing.B) {
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role: genai.RoleUser,
+				Parts: []*genai.Part{{
+					FunctionResponse: &genai.FunctionResponse{
+						Name: workflowinternal.FinishTaskToolName,
+						Response: map[string]any{
+							"result": workflowinternal.FinishTaskSuccessResult,
+						},
+					},
+				}},
+			},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = isFinishTaskSuccessFR(ev)
+	}
+}
+
+func BenchmarkExtractTaskDelegationFCs_TextEvent(b *testing.B) {
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role:  genai.RoleModel,
+				Parts: []*genai.Part{{Text: "Hello world"}},
+			},
+		},
+	}
+	toolsDict := map[string]tool.Tool{}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = extractTaskDelegationFCs(ev, toolsDict)
+	}
+}
+
+func BenchmarkExtractTaskDelegationFCs_OtherCall(b *testing.B) {
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role: genai.RoleModel,
+				Parts: []*genai.Part{{
+					FunctionCall: &genai.FunctionCall{
+						ID:   "call-1",
+						Name: "get_weather",
+					},
+				}},
+			},
+		},
+	}
+	toolsDict := map[string]tool.Tool{}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = extractTaskDelegationFCs(ev, toolsDict)
+	}
+}
+
 func BenchmarkFindUnresolvedTaskDelegations_ResolvedDelegation(b *testing.B) {
 	ctx := context.Background()
 	svc := session.InMemoryService()
