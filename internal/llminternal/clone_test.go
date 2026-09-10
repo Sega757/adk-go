@@ -17,6 +17,8 @@ package llminternal
 import (
 	"reflect"
 	"testing"
+
+	"google.golang.org/genai"
 )
 
 func TestClone(t *testing.T) {
@@ -113,6 +115,63 @@ func TestCloneUnexported(t *testing.T) {
 	clone(original)
 }
 
+func TestCloneGenAIContent(t *testing.T) {
+	orig := &genai.Content{
+		Role: "user",
+		Parts: []*genai.Part{
+			{Text: "hello"},
+			{Thought: true, ThoughtSignature: []byte("sig")},
+			{FunctionCall: &genai.FunctionCall{ID: "c1", Name: "fn1", Args: map[string]any{"arg1": "val1"}}},
+			{FunctionResponse: &genai.FunctionResponse{ID: "c1", Name: "fn1", Response: map[string]any{"res1": "val2"}}},
+			{InlineData: &genai.Blob{MIMEType: "image/png", Data: []byte("data")}},
+			{FileData: &genai.FileData{MIMEType: "image/png", FileURI: "gs://file"}},
+			{ExecutableCode: &genai.ExecutableCode{Code: "print(1)", Language: "PYTHON"}},
+			{CodeExecutionResult: &genai.CodeExecutionResult{Outcome: "OK", Output: "1"}},
+			{MediaResolution: &genai.PartMediaResolution{}},
+			{VideoMetadata: &genai.VideoMetadata{}},
+			{ToolCall: &genai.ToolCall{ID: "tc1"}},
+			{ToolResponse: &genai.ToolResponse{ID: "tr1"}},
+			{PartMetadata: map[string]any{"meta": "data"}},
+		},
+	}
+
+	cloned := clone(orig)
+	if !reflect.DeepEqual(orig, cloned) {
+		t.Errorf("clone(*genai.Content) mismatch (-want +got):\n%+v", cloned)
+	}
+
+	// Verify deep copy independence:
+	cloned.Parts[0].Text = "modified"
+	cloned.Parts[2].FunctionCall.Args["arg1"] = "modified"
+	cloned.Parts[3].FunctionResponse.Response["res1"] = "modified"
+	cloned.Parts[4].InlineData.Data[0] = 'X'
+
+	if orig.Parts[0].Text == "modified" {
+		t.Errorf("original text part was modified")
+	}
+	if orig.Parts[2].FunctionCall.Args["arg1"] == "modified" {
+		t.Errorf("original function call args were modified")
+	}
+	if orig.Parts[3].FunctionResponse.Response["res1"] == "modified" {
+		t.Errorf("original function response map was modified")
+	}
+	if orig.Parts[4].InlineData.Data[0] == 'X' {
+		t.Errorf("original inline data slice was modified")
+	}
+
+	// Test value type cloning
+	clonedVal := clone(*orig)
+	if !reflect.DeepEqual(*orig, clonedVal) {
+		t.Errorf("clone(genai.Content) value mismatch")
+	}
+
+	// Test nil pointer cloning
+	var nilContent *genai.Content
+	if clonedNil := clone(nilContent); clonedNil != nil {
+		t.Errorf("clone(nil *genai.Content) = %v, want nil", clonedNil)
+	}
+}
+
 func BenchmarkClone(b *testing.B) {
 	type testStruct struct {
 		S  string
@@ -137,5 +196,22 @@ func BenchmarkClone(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = clone(testData)
+	}
+}
+
+func BenchmarkClone_GenAIContent(b *testing.B) {
+	orig := &genai.Content{
+		Role: "user",
+		Parts: []*genai.Part{
+			{Text: "hello model"},
+			{FunctionCall: &genai.FunctionCall{ID: "c1", Name: "fn1", Args: map[string]any{"arg1": "val1"}}},
+			{FunctionResponse: &genai.FunctionResponse{ID: "c1", Name: "fn1", Response: map[string]any{"res1": "val2"}}},
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = clone(orig)
 	}
 }

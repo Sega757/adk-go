@@ -15,8 +15,10 @@
 package llminternal
 
 import (
+	"bytes"
 	"fmt"
 	"iter"
+	"maps"
 	"reflect"
 
 	"google.golang.org/genai"
@@ -63,6 +65,22 @@ func basicRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest, f
 // clone returns a deep copy of the src.
 // NOTE: this does not work for types with unexported fields.
 func clone[M any](src M) M {
+	switch v := any(src).(type) {
+	case *genai.Content:
+		if v == nil {
+			var zero M
+			return zero
+		}
+		return any(cloneContent(v)).(M)
+	case genai.Content:
+		cl := cloneContent(&v)
+		if cl == nil {
+			var zero M
+			return zero
+		}
+		return any(*cl).(M)
+	}
+
 	val := reflect.ValueOf(src)
 
 	// Handle nil pointers
@@ -163,4 +181,85 @@ func isCopyRequired(k reflect.Kind) bool {
 	default:
 		return false
 	}
+}
+
+// cloneContent creates a deep copy of genai.Content without reflection.
+func cloneContent(c *genai.Content) *genai.Content {
+	if c == nil {
+		return nil
+	}
+	res := &genai.Content{
+		Role: c.Role,
+	}
+	if len(c.Parts) > 0 {
+		res.Parts = make([]*genai.Part, len(c.Parts))
+		for i, p := range c.Parts {
+			res.Parts[i] = clonePart(p)
+		}
+	}
+	return res
+}
+
+// clonePart creates a deep copy of genai.Part without reflection.
+func clonePart(p *genai.Part) *genai.Part {
+	if p == nil {
+		return nil
+	}
+	res := *p
+	if len(p.ThoughtSignature) > 0 {
+		res.ThoughtSignature = bytes.Clone(p.ThoughtSignature)
+	}
+	if p.FunctionCall != nil {
+		fc := *p.FunctionCall
+		if fc.Args != nil {
+			fc.Args = maps.Clone(fc.Args)
+		}
+		res.FunctionCall = &fc
+	}
+	if p.FunctionResponse != nil {
+		fr := *p.FunctionResponse
+		if fr.Response != nil {
+			fr.Response = maps.Clone(fr.Response)
+		}
+		res.FunctionResponse = &fr
+	}
+	if p.InlineData != nil {
+		id := *p.InlineData
+		if len(id.Data) > 0 {
+			id.Data = bytes.Clone(id.Data)
+		}
+		res.InlineData = &id
+	}
+	if p.FileData != nil {
+		fd := *p.FileData
+		res.FileData = &fd
+	}
+	if p.ExecutableCode != nil {
+		ec := *p.ExecutableCode
+		res.ExecutableCode = &ec
+	}
+	if p.CodeExecutionResult != nil {
+		cer := *p.CodeExecutionResult
+		res.CodeExecutionResult = &cer
+	}
+	if p.MediaResolution != nil {
+		mr := *p.MediaResolution
+		res.MediaResolution = &mr
+	}
+	if p.VideoMetadata != nil {
+		vm := *p.VideoMetadata
+		res.VideoMetadata = &vm
+	}
+	if p.ToolCall != nil {
+		tc := *p.ToolCall
+		res.ToolCall = &tc
+	}
+	if p.ToolResponse != nil {
+		tr := *p.ToolResponse
+		res.ToolResponse = &tr
+	}
+	if len(p.PartMetadata) > 0 {
+		res.PartMetadata = maps.Clone(p.PartMetadata)
+	}
+	return &res
 }
