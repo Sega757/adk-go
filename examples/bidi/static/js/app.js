@@ -279,7 +279,25 @@ function clearConsole() {
   updateClearConsoleButtonState();
 }
 
-// Input and console button event handlers
+// Audio filter tooltip and console button event handlers
+function updateAudioEventsTooltip() {
+  if (!showAudioEventsCheckbox) return;
+  const label = showAudioEventsCheckbox.closest("label");
+  const tooltipText = showAudioEventsCheckbox.checked
+    ? "Audio events are visible in console log"
+    : "Audio events are hidden from console log";
+  if (label) {
+    label.setAttribute("title", tooltipText);
+  } else {
+    showAudioEventsCheckbox.setAttribute("title", tooltipText);
+  }
+}
+
+if (showAudioEventsCheckbox) {
+  showAudioEventsCheckbox.addEventListener("change", updateAudioEventsTooltip);
+  updateAudioEventsTooltip();
+}
+
 if (messageInput) {
   messageInput.addEventListener("input", updateSendButtonState);
 }
