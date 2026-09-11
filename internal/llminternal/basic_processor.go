@@ -20,6 +20,7 @@ import (
 	"iter"
 	"maps"
 	"reflect"
+	"slices"
 
 	"google.golang.org/genai"
 
@@ -74,6 +75,19 @@ func clone[M any](src M) M {
 		return any(cloneContent(v)).(M)
 	case genai.Content:
 		cl := cloneContent(&v)
+		if cl == nil {
+			var zero M
+			return zero
+		}
+		return any(*cl).(M)
+	case *genai.GenerateContentConfig:
+		if v == nil {
+			var zero M
+			return zero
+		}
+		return any(cloneGenerateContentConfig(v)).(M)
+	case genai.GenerateContentConfig:
+		cl := cloneGenerateContentConfig(&v)
 		if cl == nil {
 			var zero M
 			return zero
@@ -260,6 +274,250 @@ func clonePart(p *genai.Part) *genai.Part {
 	}
 	if len(p.PartMetadata) > 0 {
 		res.PartMetadata = maps.Clone(p.PartMetadata)
+	}
+	return &res
+}
+
+// cloneGenerateContentConfig creates a deep copy of genai.GenerateContentConfig without reflection.
+func cloneGenerateContentConfig(c *genai.GenerateContentConfig) *genai.GenerateContentConfig {
+	if c == nil {
+		return nil
+	}
+	res := *c
+	if c.HTTPOptions != nil {
+		ho := *c.HTTPOptions
+		if c.HTTPOptions.Headers != nil {
+			ho.Headers = c.HTTPOptions.Headers.Clone()
+		}
+		if c.HTTPOptions.ExtraBody != nil {
+			ho.ExtraBody = maps.Clone(c.HTTPOptions.ExtraBody)
+		}
+		res.HTTPOptions = &ho
+	}
+	if c.SystemInstruction != nil {
+		res.SystemInstruction = cloneContent(c.SystemInstruction)
+	}
+	if c.Temperature != nil {
+		v := *c.Temperature
+		res.Temperature = &v
+	}
+	if c.TopP != nil {
+		v := *c.TopP
+		res.TopP = &v
+	}
+	if c.TopK != nil {
+		v := *c.TopK
+		res.TopK = &v
+	}
+	if c.Logprobs != nil {
+		v := *c.Logprobs
+		res.Logprobs = &v
+	}
+	if c.PresencePenalty != nil {
+		v := *c.PresencePenalty
+		res.PresencePenalty = &v
+	}
+	if c.FrequencyPenalty != nil {
+		v := *c.FrequencyPenalty
+		res.FrequencyPenalty = &v
+	}
+	if c.Seed != nil {
+		v := *c.Seed
+		res.Seed = &v
+	}
+	if c.StopSequences != nil {
+		res.StopSequences = slices.Clone(c.StopSequences)
+	}
+	if c.ResponseSchema != nil {
+		res.ResponseSchema = cloneSchema(c.ResponseSchema)
+	}
+	if c.ResponseJsonSchema != nil {
+		res.ResponseJsonSchema = clone(c.ResponseJsonSchema)
+	}
+	if c.RoutingConfig != nil {
+		rc := *c.RoutingConfig
+		res.RoutingConfig = &rc
+	}
+	if c.ModelSelectionConfig != nil {
+		msc := *c.ModelSelectionConfig
+		res.ModelSelectionConfig = &msc
+	}
+	if len(c.SafetySettings) > 0 {
+		res.SafetySettings = make([]*genai.SafetySetting, len(c.SafetySettings))
+		for i, ss := range c.SafetySettings {
+			if ss != nil {
+				v := *ss
+				res.SafetySettings[i] = &v
+			}
+		}
+	}
+	if len(c.Tools) > 0 {
+		res.Tools = make([]*genai.Tool, len(c.Tools))
+		for i, t := range c.Tools {
+			res.Tools[i] = cloneTool(t)
+		}
+	}
+	if c.ToolConfig != nil {
+		res.ToolConfig = cloneToolConfig(c.ToolConfig)
+	}
+	if c.Labels != nil {
+		res.Labels = maps.Clone(c.Labels)
+	}
+	if c.ResponseModalities != nil {
+		res.ResponseModalities = slices.Clone(c.ResponseModalities)
+	}
+	if c.SpeechConfig != nil {
+		sc := *c.SpeechConfig
+		res.SpeechConfig = &sc
+	}
+	if c.ThinkingConfig != nil {
+		tc := *c.ThinkingConfig
+		res.ThinkingConfig = &tc
+	}
+	if c.ImageConfig != nil {
+		ic := *c.ImageConfig
+		res.ImageConfig = &ic
+	}
+	if c.EnableEnhancedCivicAnswers != nil {
+		v := *c.EnableEnhancedCivicAnswers
+		res.EnableEnhancedCivicAnswers = &v
+	}
+	if c.ModelArmorConfig != nil {
+		mac := *c.ModelArmorConfig
+		res.ModelArmorConfig = &mac
+	}
+	return &res
+}
+
+func cloneTool(t *genai.Tool) *genai.Tool {
+	if t == nil {
+		return nil
+	}
+	res := *t
+	if len(t.FunctionDeclarations) > 0 {
+		res.FunctionDeclarations = make([]*genai.FunctionDeclaration, len(t.FunctionDeclarations))
+		for i, fd := range t.FunctionDeclarations {
+			res.FunctionDeclarations[i] = cloneFunctionDeclaration(fd)
+		}
+	}
+	if t.GoogleSearch != nil {
+		gs := *t.GoogleSearch
+		res.GoogleSearch = &gs
+	}
+	if t.EnterpriseWebSearch != nil {
+		ews := *t.EnterpriseWebSearch
+		res.EnterpriseWebSearch = &ews
+	}
+	if t.CodeExecution != nil {
+		ce := *t.CodeExecution
+		res.CodeExecution = &ce
+	}
+	if t.GoogleSearchRetrieval != nil {
+		gsr := *t.GoogleSearchRetrieval
+		if t.GoogleSearchRetrieval.DynamicRetrievalConfig != nil {
+			drc := *t.GoogleSearchRetrieval.DynamicRetrievalConfig
+			if t.GoogleSearchRetrieval.DynamicRetrievalConfig.DynamicThreshold != nil {
+				dt := *t.GoogleSearchRetrieval.DynamicRetrievalConfig.DynamicThreshold
+				drc.DynamicThreshold = &dt
+			}
+			gsr.DynamicRetrievalConfig = &drc
+		}
+		res.GoogleSearchRetrieval = &gsr
+	}
+	if t.Retrieval != nil {
+		r := *t.Retrieval
+		res.Retrieval = &r
+	}
+	if t.ComputerUse != nil {
+		cu := *t.ComputerUse
+		res.ComputerUse = &cu
+	}
+	if t.GoogleMaps != nil {
+		gm := *t.GoogleMaps
+		res.GoogleMaps = &gm
+	}
+	if t.URLContext != nil {
+		uc := *t.URLContext
+		res.URLContext = &uc
+	}
+	if t.FileSearch != nil {
+		fs := *t.FileSearch
+		res.FileSearch = &fs
+	}
+	if t.ParallelAISearch != nil {
+		pas := *t.ParallelAISearch
+		res.ParallelAISearch = &pas
+	}
+	if t.ExaAISearch != nil {
+		eas := *t.ExaAISearch
+		res.ExaAISearch = &eas
+	}
+	if len(t.MCPServers) > 0 {
+		res.MCPServers = make([]*genai.MCPServer, len(t.MCPServers))
+		for i, ms := range t.MCPServers {
+			if ms != nil {
+				v := *ms
+				res.MCPServers[i] = &v
+			}
+		}
+	}
+	return &res
+}
+
+func cloneFunctionDeclaration(fd *genai.FunctionDeclaration) *genai.FunctionDeclaration {
+	if fd == nil {
+		return nil
+	}
+	res := *fd
+	if fd.Parameters != nil {
+		res.Parameters = cloneSchema(fd.Parameters)
+	}
+	if fd.Response != nil {
+		res.Response = cloneSchema(fd.Response)
+	}
+	return &res
+}
+
+func cloneSchema(s *genai.Schema) *genai.Schema {
+	if s == nil {
+		return nil
+	}
+	res := *s
+	if len(s.Enum) > 0 {
+		res.Enum = slices.Clone(s.Enum)
+	}
+	if len(s.Required) > 0 {
+		res.Required = slices.Clone(s.Required)
+	}
+	if len(s.Properties) > 0 {
+		res.Properties = make(map[string]*genai.Schema, len(s.Properties))
+		for k, v := range s.Properties {
+			res.Properties[k] = cloneSchema(v)
+		}
+	}
+	if s.Items != nil {
+		res.Items = cloneSchema(s.Items)
+	}
+	if len(s.AnyOf) > 0 {
+		res.AnyOf = make([]*genai.Schema, len(s.AnyOf))
+		for i, sub := range s.AnyOf {
+			res.AnyOf[i] = cloneSchema(sub)
+		}
+	}
+	return &res
+}
+
+func cloneToolConfig(tc *genai.ToolConfig) *genai.ToolConfig {
+	if tc == nil {
+		return nil
+	}
+	res := *tc
+	if tc.FunctionCallingConfig != nil {
+		fcc := *tc.FunctionCallingConfig
+		if len(tc.FunctionCallingConfig.AllowedFunctionNames) > 0 {
+			fcc.AllowedFunctionNames = slices.Clone(tc.FunctionCallingConfig.AllowedFunctionNames)
+		}
+		res.FunctionCallingConfig = &fcc
 	}
 	return &res
 }

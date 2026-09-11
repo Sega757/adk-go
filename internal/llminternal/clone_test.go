@@ -172,6 +172,91 @@ func TestCloneGenAIContent(t *testing.T) {
 	}
 }
 
+func TestCloneGenerateContentConfig(t *testing.T) {
+	temp := float32(0.7)
+	topP := float32(0.9)
+	topK := float32(40)
+	logprobs := int32(5)
+	presencePenalty := float32(0.1)
+	frequencyPenalty := float32(0.2)
+	seed := int32(42)
+	enableCivic := true
+
+	orig := &genai.GenerateContentConfig{
+		Temperature:                &temp,
+		TopP:                       &topP,
+		TopK:                       &topK,
+		CandidateCount:             1,
+		MaxOutputTokens:            100,
+		StopSequences:              []string{"END", "STOP"},
+		ResponseLogprobs:           true,
+		Logprobs:                   &logprobs,
+		PresencePenalty:            &presencePenalty,
+		FrequencyPenalty:           &frequencyPenalty,
+		Seed:                       &seed,
+		ResponseMIMEType:           "application/json",
+		SystemInstruction:          &genai.Content{Role: "system", Parts: []*genai.Part{{Text: "System prompt"}}},
+		ResponseSchema:             &genai.Schema{Type: genai.TypeObject, Properties: map[string]*genai.Schema{"key": {Type: genai.TypeString}}},
+		ResponseJsonSchema:         map[string]any{"type": "object"},
+		RoutingConfig:              &genai.GenerationConfigRoutingConfig{AutoMode: &genai.GenerationConfigRoutingConfigAutoRoutingMode{}},
+		ModelSelectionConfig:       &genai.ModelSelectionConfig{},
+		SafetySettings:             []*genai.SafetySetting{{Category: "HARM_CATEGORY_HATE_SPEECH", Threshold: "BLOCK_LOW_AND_ABOVE"}},
+		Tools:                      []*genai.Tool{{FunctionDeclarations: []*genai.FunctionDeclaration{{Name: "fn1", Description: "desc1"}}}},
+		ToolConfig:                 &genai.ToolConfig{FunctionCallingConfig: &genai.FunctionCallingConfig{Mode: genai.FunctionCallingConfigModeAny, AllowedFunctionNames: []string{"fn1"}}},
+		Labels:                     map[string]string{"env": "prod"},
+		ResponseModalities:         []string{"TEXT"},
+		SpeechConfig:               &genai.SpeechConfig{},
+		ThinkingConfig:             &genai.ThinkingConfig{},
+		ImageConfig:                &genai.ImageConfig{},
+		EnableEnhancedCivicAnswers: &enableCivic,
+		ModelArmorConfig:           &genai.ModelArmorConfig{},
+	}
+
+	cloned := clone(orig)
+	if !reflect.DeepEqual(orig, cloned) {
+		t.Errorf("clone(*genai.GenerateContentConfig) mismatch (-want +got):\n%+v", cloned)
+	}
+
+	// Verify deep copy independence:
+	*cloned.Temperature = 0.1
+	cloned.StopSequences[0] = "MODIFIED"
+	cloned.Labels["env"] = "dev"
+	cloned.Tools[0].FunctionDeclarations[0].Name = "modified_fn"
+	cloned.ToolConfig.FunctionCallingConfig.AllowedFunctionNames[0] = "modified_fn"
+	cloned.SystemInstruction.Parts[0].Text = "modified_prompt"
+
+	if *orig.Temperature == 0.1 {
+		t.Errorf("original temperature was modified")
+	}
+	if orig.StopSequences[0] == "MODIFIED" {
+		t.Errorf("original stop sequences were modified")
+	}
+	if orig.Labels["env"] == "dev" {
+		t.Errorf("original labels map was modified")
+	}
+	if orig.Tools[0].FunctionDeclarations[0].Name == "modified_fn" {
+		t.Errorf("original function declaration name was modified")
+	}
+	if orig.ToolConfig.FunctionCallingConfig.AllowedFunctionNames[0] == "modified_fn" {
+		t.Errorf("original allowed function names were modified")
+	}
+	if orig.SystemInstruction.Parts[0].Text == "modified_prompt" {
+		t.Errorf("original system instruction text was modified")
+	}
+
+	// Test value type cloning
+	clonedVal := clone(*orig)
+	if !reflect.DeepEqual(*orig, clonedVal) {
+		t.Errorf("clone(genai.GenerateContentConfig) value mismatch")
+	}
+
+	// Test nil pointer cloning
+	var nilConfig *genai.GenerateContentConfig
+	if clonedNil := clone(nilConfig); clonedNil != nil {
+		t.Errorf("clone(nil *genai.GenerateContentConfig) = %v, want nil", clonedNil)
+	}
+}
+
 func BenchmarkClone(b *testing.B) {
 	type testStruct struct {
 		S  string
@@ -206,6 +291,35 @@ func BenchmarkClone_GenAIContent(b *testing.B) {
 			{Text: "hello model"},
 			{FunctionCall: &genai.FunctionCall{ID: "c1", Name: "fn1", Args: map[string]any{"arg1": "val1"}}},
 			{FunctionResponse: &genai.FunctionResponse{ID: "c1", Name: "fn1", Response: map[string]any{"res1": "val2"}}},
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = clone(orig)
+	}
+}
+
+func BenchmarkClone_GenerateContentConfig(b *testing.B) {
+	temp := float32(0.7)
+	topP := float32(0.9)
+	orig := &genai.GenerateContentConfig{
+		Temperature:       &temp,
+		TopP:              &topP,
+		SystemInstruction: &genai.Content{Role: "system", Parts: []*genai.Part{{Text: "System prompt"}}},
+		ResponseMIMEType:  "application/json",
+		StopSequences:     []string{"END", "STOP"},
+		Labels:            map[string]string{"env": "prod", "tier": "gold"},
+		SafetySettings: []*genai.SafetySetting{
+			{Category: "HARM_CATEGORY_HATE_SPEECH", Threshold: "BLOCK_LOW_AND_ABOVE"},
+		},
+		Tools: []*genai.Tool{
+			{
+				FunctionDeclarations: []*genai.FunctionDeclaration{
+					{Name: "my_func", Description: "a test function"},
+				},
+			},
 		},
 	}
 
