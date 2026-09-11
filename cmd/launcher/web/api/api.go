@@ -82,7 +82,11 @@ func isOriginAllowed(originHeader, frontendAddress string) bool {
 		return false
 	}
 
-	allowedHost := strings.ToLower(strings.TrimRight(frontendAddress, "/"))
+	allowedURL, err := url.Parse("http://" + frontendAddress)
+	if err != nil || allowedURL.Host == "" {
+		return false
+	}
+	allowedHost := strings.ToLower(allowedURL.Host)
 	return reqHost == allowedHost
 }
 

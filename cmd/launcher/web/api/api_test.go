@@ -131,6 +131,26 @@ func TestCorsWithArgs(t *testing.T) {
 			wantVaryHeader:    true,
 			wantStatus:        http.StatusOK,
 		},
+		{
+			name:              "Scheme-less frontend address with trailing slash",
+			frontendAddress:   "localhost:8080/",
+			requestOrigin:     "http://localhost:8080",
+			requestMethod:     "GET",
+			wantAllowedOrigin: "http://localhost:8080",
+			wantMethodsHeader: true,
+			wantVaryHeader:    true,
+			wantStatus:        http.StatusOK,
+		},
+		{
+			name:              "Origin header with userinfo or path payload does not match host",
+			frontendAddress:   "localhost:8080",
+			requestOrigin:     "http://attacker.com#localhost:8080",
+			requestMethod:     "GET",
+			wantAllowedOrigin: "",
+			wantMethodsHeader: false,
+			wantVaryHeader:    true,
+			wantStatus:        http.StatusOK,
+		},
 	}
 
 	for _, tt := range tests {
