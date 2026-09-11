@@ -17,6 +17,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -32,7 +33,8 @@ func EncodeJSONResponse(i any, status int, w http.ResponseWriter) {
 	if i != nil {
 		err := json.NewEncoder(w).Encode(i)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("EncodeJSONResponse failed: %v", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}
 	}
 }
@@ -45,9 +47,15 @@ func NewErrorHandler(fn errorHandler) http.HandlerFunc {
 		err := fn(w, r)
 		if err != nil {
 			if statusErr, ok := err.(statusError); ok {
-				http.Error(w, statusErr.Error(), statusErr.Status())
+				if statusErr.Status() == http.StatusInternalServerError {
+					log.Printf("Internal server error: %v", statusErr.Error())
+					http.Error(w, "internal server error", http.StatusInternalServerError)
+				} else {
+					http.Error(w, statusErr.Error(), statusErr.Status())
+				}
 			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Printf("Internal server error: %v", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
 			}
 		}
 	}
