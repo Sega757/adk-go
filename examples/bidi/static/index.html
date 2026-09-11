@@ -22,8 +22,8 @@
           <span>Affective Dialog</span>
         </label>
       </div>
-      <div class="connection-status">
-        <span class="status-indicator" id="statusIndicator"></span>
+      <div class="connection-status" role="status" aria-live="polite">
+        <span class="status-indicator" id="statusIndicator" aria-hidden="true"></span>
         <span id="statusText">Connecting...</span>
       </div>
     </header>
@@ -79,7 +79,7 @@
           <button id="closeCameraModal" class="close-btn" aria-label="Close camera preview">&times;</button>
         </div>
         <div class="modal-body">
-          <video id="cameraPreview" autoplay playsinline></video>
+          <video id="cameraPreview" autoplay playsinline aria-label="Live camera preview"></video>
         </div>
         <div class="modal-footer">
           <button id="cancelCamera" class="btn-secondary">Cancel</button>
