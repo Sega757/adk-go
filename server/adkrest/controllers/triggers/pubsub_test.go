@@ -124,6 +124,51 @@ func TestPubSubTriggerHandler(t *testing.T) {
 	}
 }
 
+func TestPubSubTriggerHandler_InternalServerErrorSanitized(t *testing.T) {
+	mockResults := []error{fmt.Errorf("secret internal database error")}
+	mockAgentRunCount := 0
+	testAgent := createMockAgent(t, mockResults, &mockAgentRunCount, nil)
+
+	apiController := setupTest(t, testAgent)
+
+	reqObj := models.PubSubTriggerRequest{
+		Message: models.PubSubMessage{
+			Data: []byte(base64.StdEncoding.EncodeToString([]byte("test message"))),
+		},
+		Subscription: "test-sub",
+	}
+	reqBytes, err := json.Marshal(reqObj)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/pubsub", bytes.NewBuffer(reqBytes))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+	rr := httptest.NewRecorder()
+
+	apiController.PubSubTriggerHandler(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if bytes.Contains(rr.Body.Bytes(), []byte("secret internal database error")) {
+		t.Errorf("response body leaked internal error details: %s", body)
+	}
+
+	var resp models.TriggerResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Status != "internal server error" {
+		t.Errorf("expected status 'internal server error', got %q", resp.Status)
+	}
+}
+
 func TestPubSubTriggerHandler_BodyTooLarge(t *testing.T) {
 	apiController := setupTest(t, nil)
 	largeBody := bytes.NewBuffer(make([]byte, 10*1024*1024+1))
