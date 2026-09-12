@@ -257,6 +257,101 @@ func TestCloneGenerateContentConfig(t *testing.T) {
 	}
 }
 
+func TestCloneGenAISchema(t *testing.T) {
+	orig := &genai.Schema{
+		Type:        genai.TypeObject,
+		Description: "test schema",
+		Enum:        []string{"a", "b"},
+		Required:    []string{"key1"},
+		Properties: map[string]*genai.Schema{
+			"key1": {Type: genai.TypeString, Description: "prop1"},
+		},
+		Items: &genai.Schema{Type: genai.TypeString},
+		AnyOf: []*genai.Schema{{Type: genai.TypeInteger}},
+	}
+
+	cloned := clone(orig)
+	if !reflect.DeepEqual(orig, cloned) {
+		t.Errorf("clone(*genai.Schema) mismatch (-want +got):\n%+v", cloned)
+	}
+
+	// Verify deep copy independence:
+	cloned.Enum[0] = "MODIFIED"
+	cloned.Required[0] = "MODIFIED"
+	cloned.Properties["key1"].Description = "MODIFIED"
+
+	if orig.Enum[0] == "MODIFIED" {
+		t.Errorf("original enum was modified")
+	}
+	if orig.Required[0] == "MODIFIED" {
+		t.Errorf("original required slice was modified")
+	}
+	if orig.Properties["key1"].Description == "MODIFIED" {
+		t.Errorf("original properties schema was modified")
+	}
+
+	// Test value type cloning
+	clonedVal := clone(*orig)
+	if !reflect.DeepEqual(*orig, clonedVal) {
+		t.Errorf("clone(genai.Schema) value mismatch")
+	}
+
+	// Test nil pointer cloning
+	var nilSchema *genai.Schema
+	if clonedNil := clone(nilSchema); clonedNil != nil {
+		t.Errorf("clone(nil *genai.Schema) = %v, want nil", clonedNil)
+	}
+}
+
+func TestCloneGenAITool(t *testing.T) {
+	orig := &genai.Tool{
+		FunctionDeclarations: []*genai.FunctionDeclaration{
+			{Name: "fn1", Description: "desc1", Parameters: &genai.Schema{Type: genai.TypeObject}},
+		},
+		GoogleSearch: &genai.GoogleSearch{},
+	}
+
+	cloned := clone(orig)
+	if !reflect.DeepEqual(orig, cloned) {
+		t.Errorf("clone(*genai.Tool) mismatch (-want +got):\n%+v", cloned)
+	}
+
+	cloned.FunctionDeclarations[0].Name = "modified"
+	if orig.FunctionDeclarations[0].Name == "modified" {
+		t.Errorf("original tool function declaration was modified")
+	}
+
+	clonedVal := clone(*orig)
+	if !reflect.DeepEqual(*orig, clonedVal) {
+		t.Errorf("clone(genai.Tool) value mismatch")
+	}
+}
+
+func TestCloneGenAIPart(t *testing.T) {
+	orig := &genai.Part{
+		Text: "hello",
+		FunctionCall: &genai.FunctionCall{
+			Name: "fn",
+			Args: map[string]any{"arg1": "val1"},
+		},
+	}
+
+	cloned := clone(orig)
+	if !reflect.DeepEqual(orig, cloned) {
+		t.Errorf("clone(*genai.Part) mismatch (-want +got):\n%+v", cloned)
+	}
+
+	cloned.FunctionCall.Args["arg1"] = "modified"
+	if orig.FunctionCall.Args["arg1"] == "modified" {
+		t.Errorf("original part function call args map was modified")
+	}
+
+	clonedVal := clone(*orig)
+	if !reflect.DeepEqual(*orig, clonedVal) {
+		t.Errorf("clone(genai.Part) value mismatch")
+	}
+}
+
 func BenchmarkClone(b *testing.B) {
 	type testStruct struct {
 		S  string
@@ -291,6 +386,65 @@ func BenchmarkClone_GenAIContent(b *testing.B) {
 			{Text: "hello model"},
 			{FunctionCall: &genai.FunctionCall{ID: "c1", Name: "fn1", Args: map[string]any{"arg1": "val1"}}},
 			{FunctionResponse: &genai.FunctionResponse{ID: "c1", Name: "fn1", Response: map[string]any{"res1": "val2"}}},
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = clone(orig)
+	}
+}
+
+func BenchmarkClone_GenAISchema(b *testing.B) {
+	orig := &genai.Schema{
+		Type:        genai.TypeObject,
+		Description: "JSON response schema",
+		Properties: map[string]*genai.Schema{
+			"name": {Type: genai.TypeString, Description: "user name"},
+			"age":  {Type: genai.TypeInteger, Description: "user age"},
+			"tags": {Type: genai.TypeArray, Items: &genai.Schema{Type: genai.TypeString}},
+		},
+		Required: []string{"name", "age"},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = clone(orig)
+	}
+}
+
+func BenchmarkClone_GenAITool(b *testing.B) {
+	orig := &genai.Tool{
+		FunctionDeclarations: []*genai.FunctionDeclaration{
+			{
+				Name:        "get_weather",
+				Description: "Get weather information for location",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"city": {Type: genai.TypeString},
+					},
+					Required: []string{"city"},
+				},
+			},
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = clone(orig)
+	}
+}
+
+func BenchmarkClone_GenAIPart(b *testing.B) {
+	orig := &genai.Part{
+		FunctionCall: &genai.FunctionCall{
+			ID:   "call_123",
+			Name: "search",
+			Args: map[string]any{"query": "golang optimization", "limit": 10},
 		},
 	}
 
