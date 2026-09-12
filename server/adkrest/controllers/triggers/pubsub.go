@@ -58,7 +58,7 @@ func (c *PubSubController) PubSubTriggerHandler(w http.ResponseWriter, r *http.R
 	r.Body = http.MaxBytesReader(w, r.Body, maxPubSubBodyBytes)
 	// Parse the request to the request model.
 	var req models.PubSubTriggerRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 10*1024*1024)).Decode(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to decode request: %v", err))
 		return
 	}
