@@ -106,19 +106,33 @@ function updateClearConsoleButtonState() {
 
 // Enable or disable interactive message and media input controls
 function setControlsDisabled(disabled) {
+  const startAudioBtn = document.getElementById("startAudioButton");
+  const cameraBtn = document.getElementById("cameraButton");
+  const streamVideoBtn = document.getElementById("streamVideoButton");
+  const sendFileBtn = document.getElementById("sendFileButton");
+  const sendBtn = document.getElementById("sendButton");
+
+  const defaultTooltips = {
+    startAudioButton: is_audio ? "Stop microphone audio streaming" : "Start microphone audio streaming",
+    cameraButton: "Open live camera preview to capture image",
+    streamVideoButton: isVideoStreaming ? "Stop live video streaming" : "Start live video streaming",
+    sendFileButton: "Select and send an image file"
+  };
   const controls = [
     messageInput,
-    document.getElementById("sendButton"),
-    startAudioButton,
-    cameraButton,
-    streamVideoButton,
-    sendFileButton
+    sendBtn,
+    startAudioBtn,
+    cameraBtn,
+    streamVideoBtn,
+    sendFileBtn
   ];
   controls.forEach(ctrl => {
     if (ctrl) {
       ctrl.disabled = disabled;
       if (disabled) {
         ctrl.setAttribute("title", "Connect to server to enable control");
+      } else if (defaultTooltips[ctrl.id]) {
+        ctrl.setAttribute("title", defaultTooltips[ctrl.id]);
       } else {
         ctrl.removeAttribute("title");
       }
@@ -240,6 +254,7 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
     entry.setAttribute("role", "button");
     entry.setAttribute("tabindex", "0");
     entry.setAttribute("aria-expanded", "false");
+    entry.setAttribute("title", "Click or press Enter/Space to expand details");
 
     const toggleExpand = () => {
       const isExpanded = !jsonDiv.classList.contains("collapsed");
@@ -250,12 +265,14 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
         expandIcon.textContent = "▶";
         entry.classList.remove("expanded");
         entry.setAttribute("aria-expanded", "false");
+        entry.setAttribute("title", "Click or press Enter/Space to expand details");
       } else {
         // Expand
         jsonDiv.classList.remove("collapsed");
         expandIcon.textContent = "▼";
         entry.classList.add("expanded");
         entry.setAttribute("aria-expanded", "true");
+        entry.setAttribute("title", "Click or press Enter/Space to collapse details");
       }
     };
 
@@ -1201,6 +1218,9 @@ function toggleVideoStreaming() {
     isVideoStreaming = false;
     streamVideoButton.textContent = "📹 Stream Video";
     streamVideoButton.classList.remove("active");
+    if (!streamVideoButton.disabled) {
+      streamVideoButton.setAttribute("title", "Start live video streaming");
+    }
     addSystemMessage("Video streaming stopped");
 
     // Keep the bubble in chat but stop tracks
@@ -1255,6 +1275,9 @@ function startStreamingLoop() {
   streamVideoButton.textContent = "⏹️ Stop Video";
   streamVideoButton.classList.add("active");
   streamVideoButton.setAttribute("aria-pressed", "true");
+  if (!streamVideoButton.disabled) {
+    streamVideoButton.setAttribute("title", "Stop live video streaming");
+  }
   addSystemMessage("Video streaming started");
 
   // 1 FPS = 1000ms interval
@@ -1396,6 +1419,9 @@ async function toggleAudioStreaming() {
     startAudioButton.textContent = "🎤 Start Voice";
     startAudioButton.classList.remove("active");
     startAudioButton.setAttribute("aria-pressed", "false");
+    if (!startAudioButton.disabled) {
+      startAudioButton.setAttribute("title", "Start microphone audio streaming");
+    }
     addSystemMessage("Audio streaming stopped");
     addConsoleEntry('outgoing', 'Audio Mode Disabled', { status: 'Audio stopped' }, '🎤', 'system');
   } else {
@@ -1406,6 +1432,9 @@ async function toggleAudioStreaming() {
       startAudioButton.textContent = "⏹️ Stop Voice";
       startAudioButton.classList.add("active");
       startAudioButton.setAttribute("aria-pressed", "true");
+      if (!startAudioButton.disabled) {
+        startAudioButton.setAttribute("title", "Stop microphone audio streaming");
+      }
       addSystemMessage("Audio mode enabled - you can now speak to the agent");
       addConsoleEntry('outgoing', 'Audio Mode Enabled', {
         status: 'Audio worklets started',
