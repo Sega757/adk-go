@@ -358,7 +358,7 @@ function createMessageBubble(text, isUser, isPartial = false) {
 }
 
 // Create an image message bubble element
-function createImageBubble(imageDataUrl, isUser) {
+function createImageBubble(imageDataUrl, isUser, altText = "Captured image") {
   const messageDiv = document.createElement("div");
   messageDiv.className = `message ${isUser ? "user" : "agent"}`;
 
@@ -368,7 +368,7 @@ function createImageBubble(imageDataUrl, isUser) {
   const img = document.createElement("img");
   img.src = imageDataUrl;
   img.className = "bubble-image";
-  img.alt = "Captured image";
+  img.alt = altText;
 
   bubbleDiv.appendChild(img);
   messageDiv.appendChild(bubbleDiv);
@@ -1305,7 +1305,7 @@ fileInput.addEventListener("change", (event) => {
     const mimeType = file.type;
 
     // Display the image in the chat
-    const imageBubble = createImageBubble(reader.result, true);
+    const imageBubble = createImageBubble(reader.result, true, `Uploaded image: ${file.name}`);
     appendMessage(imageBubble);
     scrollToBottom();
 
