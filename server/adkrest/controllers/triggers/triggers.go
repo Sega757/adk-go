@@ -17,6 +17,7 @@ package triggers
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -129,6 +130,10 @@ func (r *RetriableRunner) runAgentWithRetry(ctx context.Context, runR *runner.Ru
 }
 
 func respondError(w http.ResponseWriter, code int, msg string) {
+	if code == http.StatusInternalServerError {
+		log.Printf("Internal server error in trigger handler: %s", msg)
+		msg = "internal server error"
+	}
 	resp := models.TriggerResponse{Status: msg}
 	controllers.EncodeJSONResponse(resp, code, w)
 }
