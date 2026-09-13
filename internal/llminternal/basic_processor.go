@@ -80,6 +80,19 @@ func clone[M any](src M) M {
 			return zero
 		}
 		return any(*cl).(M)
+	case *genai.Part:
+		if v == nil {
+			var zero M
+			return zero
+		}
+		return any(clonePart(v)).(M)
+	case genai.Part:
+		cl := clonePart(&v)
+		if cl == nil {
+			var zero M
+			return zero
+		}
+		return any(*cl).(M)
 	case *genai.GenerateContentConfig:
 		if v == nil {
 			var zero M
@@ -88,6 +101,58 @@ func clone[M any](src M) M {
 		return any(cloneGenerateContentConfig(v)).(M)
 	case genai.GenerateContentConfig:
 		cl := cloneGenerateContentConfig(&v)
+		if cl == nil {
+			var zero M
+			return zero
+		}
+		return any(*cl).(M)
+	case *genai.Tool:
+		if v == nil {
+			var zero M
+			return zero
+		}
+		return any(cloneTool(v)).(M)
+	case genai.Tool:
+		cl := cloneTool(&v)
+		if cl == nil {
+			var zero M
+			return zero
+		}
+		return any(*cl).(M)
+	case *genai.FunctionDeclaration:
+		if v == nil {
+			var zero M
+			return zero
+		}
+		return any(cloneFunctionDeclaration(v)).(M)
+	case genai.FunctionDeclaration:
+		cl := cloneFunctionDeclaration(&v)
+		if cl == nil {
+			var zero M
+			return zero
+		}
+		return any(*cl).(M)
+	case *genai.Schema:
+		if v == nil {
+			var zero M
+			return zero
+		}
+		return any(cloneSchema(v)).(M)
+	case genai.Schema:
+		cl := cloneSchema(&v)
+		if cl == nil {
+			var zero M
+			return zero
+		}
+		return any(*cl).(M)
+	case *genai.ToolConfig:
+		if v == nil {
+			var zero M
+			return zero
+		}
+		return any(cloneToolConfig(v)).(M)
+	case genai.ToolConfig:
+		cl := cloneToolConfig(&v)
 		if cl == nil {
 			var zero M
 			return zero
