@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -55,7 +56,8 @@ func (c *SessionsAPIController) CreateSessionHandler(rw http.ResponseWriter, req
 	}
 	respSession, err := c.createSession(req.Context(), sessionID, createSessionRequest)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal server error in CreateSessionHandler: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	EncodeJSONResponse(respSession, http.StatusOK, rw)
@@ -99,7 +101,8 @@ func (c *SessionsAPIController) DeleteSessionHandler(rw http.ResponseWriter, req
 		SessionID: sessionID.ID,
 	})
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal server error in DeleteSessionHandler: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	EncodeJSONResponse(nil, http.StatusOK, rw)
@@ -123,12 +126,14 @@ func (c *SessionsAPIController) GetSessionHandler(rw http.ResponseWriter, req *h
 		SessionID: sessionID.ID,
 	})
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal server error in GetSessionHandler: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	session, err := models.FromSession(storedSession.Session)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal server error in GetSessionHandler: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	EncodeJSONResponse(session, http.StatusOK, rw)
@@ -148,13 +153,15 @@ func (c *SessionsAPIController) ListSessionsHandler(rw http.ResponseWriter, req 
 		UserID:  sessionID.UserID,
 	})
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal server error in ListSessionsHandler: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	for _, session := range resp.Sessions {
 		respSession, err := models.FromSession(session)
 		if err != nil {
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			log.Printf("Internal server error in ListSessionsHandler: %v", err)
+			http.Error(rw, "internal server error", http.StatusInternalServerError)
 			return
 		}
 		sessions = append(sessions, respSession)
