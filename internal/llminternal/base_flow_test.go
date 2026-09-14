@@ -464,6 +464,14 @@ func BenchmarkDeepMergeMap(b *testing.B) {
 	}
 }
 
+func BenchmarkDeepMergeMap_EmptySrc(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = deepMergeMap(nil, nil)
+	}
+}
+
 func BenchmarkMergeEventActions(b *testing.B) {
 	base := &session.EventActions{
 		StateDelta: map[string]any{"a": 1, "b": 2},

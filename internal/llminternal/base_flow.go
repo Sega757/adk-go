@@ -1341,11 +1341,17 @@ func mergeParallelFunctionResponseEvents(events []*session.Event) (*session.Even
 	case 1:
 		return events[0], nil
 	}
-	var parts []*genai.Part
+	totalParts := 0
+	for _, ev := range events {
+		if ev != nil && ev.LLMResponse != nil && ev.LLMResponse.Content != nil {
+			totalParts += len(ev.LLMResponse.Content.Parts)
+		}
+	}
+	parts := make([]*genai.Part, 0, totalParts)
 	var actions *session.EventActions
 	var result *session.Event // first non-nil event, reused as the merged result
 	for _, ev := range events {
-		if ev == nil || ev.LLMResponse.Content == nil {
+		if ev == nil || ev.LLMResponse == nil || ev.LLMResponse.Content == nil {
 			continue
 		}
 		if result == nil {
@@ -1364,7 +1370,9 @@ func mergeParallelFunctionResponseEvents(events []*session.Event) (*session.Even
 			Parts: parts,
 		},
 	}
-	result.Actions = *actions
+	if actions != nil {
+		result.Actions = *actions
+	}
 	return result, nil
 }
 
@@ -1388,8 +1396,13 @@ func mergeEventActions(base, other *session.EventActions) *session.EventActions 
 	if other.StateDelta != nil {
 		base.StateDelta = deepMergeMap(base.StateDelta, other.StateDelta)
 	}
-	// TODO add similar logic for state
-	if other.RequestedToolConfirmations != nil {
+	if len(other.ArtifactDelta) > 0 {
+		if base.ArtifactDelta == nil {
+			base.ArtifactDelta = make(map[string]int64, len(other.ArtifactDelta))
+		}
+		maps.Copy(base.ArtifactDelta, other.ArtifactDelta)
+	}
+	if len(other.RequestedToolConfirmations) > 0 {
 		if base.RequestedToolConfirmations == nil {
 			// Preallocate map capacity to avoid rehashing allocations during map population.
 			base.RequestedToolConfirmations = make(map[string]toolconfirmation.ToolConfirmation, len(other.RequestedToolConfirmations))
@@ -1399,22 +1412,26 @@ func mergeEventActions(base, other *session.EventActions) *session.EventActions 
 	return base
 }
 
+// deepMergeMap recursively merges src map entries into dst map.
+// Optimization Note: Fast-paths empty src maps to return dst directly (0 allocs when dst and src are empty/nil).
+// Recursively deep copies nested maps when dst[key] is not yet present to avoid reference sharing.
 func deepMergeMap(dst, src map[string]any) map[string]any {
-	if dst == nil {
-		// Preallocate map capacity matching src size to prevent dynamic map re-allocations.
-		dst = make(map[string]any, len(src))
-	}
 	if len(src) == 0 {
 		return dst
+	}
+	if dst == nil {
+		dst = make(map[string]any, len(src))
 	}
 	for key, value := range src {
 		if srcMap, ok := value.(map[string]any); ok {
 			if dstMap, ok := dst[key].(map[string]any); ok {
 				dst[key] = deepMergeMap(dstMap, srcMap)
-				continue
+			} else {
+				dst[key] = deepMergeMap(nil, srcMap)
 			}
+		} else {
+			dst[key] = value
 		}
-		dst[key] = value
 	}
 	return dst
 }
