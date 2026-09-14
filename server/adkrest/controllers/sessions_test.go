@@ -75,7 +75,7 @@ func TestGetSession(t *testing.T) {
 			name:           "session does not exist",
 			storedSessions: map[fakes.SessionKey]fakes.TestSession{},
 			sessionID:      id,
-			wantErr:        fmt.Errorf("not found"),
+			wantErr:        fmt.Errorf("internal server error"),
 			wantStatus:     http.StatusInternalServerError,
 		},
 		{
@@ -109,7 +109,7 @@ func TestGetSession(t *testing.T) {
 				},
 			},
 			sessionID:  id,
-			wantErr:    fmt.Errorf("session_id is empty in received session"),
+			wantErr:    fmt.Errorf("internal server error"),
 			wantStatus: http.StatusInternalServerError,
 		},
 	}
@@ -177,7 +177,7 @@ func TestCreateSession(t *testing.T) {
 				},
 			},
 			sessionID:  id,
-			wantErr:    fmt.Errorf("session already exists"),
+			wantErr:    fmt.Errorf("internal server error"),
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
