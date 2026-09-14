@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"iter"
 	"log"
-	"regexp"
 	"strings"
 	"unicode"
 
@@ -66,9 +65,6 @@ func instructionsRequestProcessor(ctx agent.InvocationContext, req *model.LLMReq
 		}
 	}
 }
-
-// The regex to find placeholders like {variable} or {artifact.file_name}.
-var placeholderRegex = regexp.MustCompile(`{+[^{}]*}+`)
 
 func appendInstructions(ctx agent.InvocationContext, req *model.LLMRequest, agentState *State) error {
 	if agentState.InstructionProvider != nil {
@@ -212,40 +208,70 @@ func isValidStateName(varName string) bool {
 }
 
 // InjectSessionState populates values in an instruction template from a context.
+// Performance-optimized by Bolt: uses direct string scanning instead of regexp
+// matching to eliminate heap slice allocations for regex matches.
 func InjectSessionState(ctx agent.InvocationContext, template string) (string, error) {
-	if !strings.Contains(template, "{") {
+	firstOpen := strings.IndexByte(template, '{')
+	if firstOpen < 0 {
 		return template, nil
 	}
 
-	matches := placeholderRegex.FindAllStringIndex(template, -1)
-	if len(matches) == 0 {
-		return template, nil
-	}
-
-	// Pre-allocate buffer based on template length.
 	var result strings.Builder
 	result.Grow(len(template))
 
 	lastIndex := 0
-	for _, matchIndexes := range matches {
-		startIndex, endIndex := matchIndexes[0], matchIndexes[1]
+	i := firstOpen
 
-		// Append the text between the last match and this one
-		result.WriteString(template[lastIndex:startIndex])
+	for i < len(template) {
+		openRel := strings.IndexByte(template[i:], '{')
+		if openRel < 0 {
+			break
+		}
+		openIdx := i + openRel
 
-		// Get the replacement for the current match
-		matchStr := template[startIndex:endIndex]
+		// Count consecutive '{'
+		endOpen := openIdx + 1
+		for endOpen < len(template) && template[endOpen] == '{' {
+			endOpen++
+		}
+
+		// Find non-'{}' content
+		idx := endOpen
+		for idx < len(template) && template[idx] != '{' && template[idx] != '}' {
+			idx++
+		}
+
+		if idx >= len(template) || template[idx] == '{' {
+			// No closing '}' found for this '{', move to idx
+			i = idx
+			continue
+		}
+
+		// Found '}', collect all consecutive '}'
+		closeEnd := idx + 1
+		for closeEnd < len(template) && template[closeEnd] == '}' {
+			closeEnd++
+		}
+
+		// Valid placeholder match: template[openIdx:closeEnd]
+		result.WriteString(template[lastIndex:openIdx])
+
+		matchStr := template[openIdx:closeEnd]
 		replacement, err := replaceMatch(ctx, matchStr)
 		if err != nil {
-			return "", err // Propagate the error
+			return "", err
 		}
 		result.WriteString(replacement)
 
-		lastIndex = endIndex
+		lastIndex = closeEnd
+		i = closeEnd
 	}
 
-	// Append any remaining text after the last match
-	result.WriteString(template[lastIndex:])
+	if lastIndex == 0 {
+		// No valid placeholders were matched
+		return template, nil
+	}
 
+	result.WriteString(template[lastIndex:])
 	return result.String(), nil
 }
