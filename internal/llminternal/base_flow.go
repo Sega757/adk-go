@@ -1343,15 +1343,15 @@ func mergeParallelFunctionResponseEvents(events []*session.Event) (*session.Even
 	}
 	totalParts := 0
 	for _, ev := range events {
-		if ev != nil && ev.LLMResponse != nil && ev.LLMResponse.Content != nil {
-			totalParts += len(ev.LLMResponse.Content.Parts)
+		if ev != nil && ev.Content != nil {
+			totalParts += len(ev.Content.Parts)
 		}
 	}
 	parts := make([]*genai.Part, 0, totalParts)
 	var actions *session.EventActions
 	var result *session.Event // first non-nil event, reused as the merged result
 	for _, ev := range events {
-		if ev == nil || ev.LLMResponse == nil || ev.LLMResponse.Content == nil {
+		if ev == nil || ev.Content == nil {
 			continue
 		}
 		if result == nil {
