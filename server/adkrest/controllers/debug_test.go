@@ -17,8 +17,10 @@ package controllers_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,7 +34,9 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.36.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/server/adkrest/controllers"
+	"google.golang.org/adk/v2/server/adkrest/internal/fakes"
 	"google.golang.org/adk/v2/server/adkrest/internal/services"
 )
 
@@ -276,6 +280,67 @@ func setupTestTelemetry(t *testing.T) *testTelemetry {
 		tp:     tp,
 		logger: logger,
 		lp:     lp,
+	}
+}
+
+type errAgentLoader struct{}
+
+func (e *errAgentLoader) LoadAgent(name string) (agent.Agent, error) {
+	return nil, errors.New("sensitive agent loading database connection failed")
+}
+
+func (e *errAgentLoader) ListAgents() []string {
+	return nil
+}
+
+func (e *errAgentLoader) RootAgent() agent.Agent {
+	return nil
+}
+
+func TestEventGraphHandler_SanitizedInternalError(t *testing.T) {
+	storedSessions := map[fakes.SessionKey]fakes.TestSession{
+		{
+			AppName:   "app",
+			UserID:    "user",
+			SessionID: "sess-1",
+		}: {
+			Id: fakes.SessionKey{
+				AppName:   "app",
+				UserID:    "user",
+				SessionID: "sess-1",
+			},
+			SessionEvents: fakes.TestEvents{
+				{
+					ID: "event-1",
+				},
+			},
+		},
+	}
+
+	sessionService := &fakes.FakeSessionService{Sessions: storedSessions}
+	apiController := controllers.NewDebugAPIController(sessionService, &errAgentLoader{}, nil)
+
+	req, err := http.NewRequest(http.MethodGet, "/debug/apps/app/users/user/sessions/sess-1/events/event-1/graph", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req = mux.SetURLVars(req, map[string]string{
+		"app_name":   "app",
+		"user_id":    "user",
+		"session_id": "sess-1",
+		"event_id":   "event-1",
+	})
+
+	rr := httptest.NewRecorder()
+	apiController.EventGraphHandler(rr, req)
+
+	if gotStatus := rr.Code; gotStatus != http.StatusInternalServerError {
+		t.Errorf("got status %d, want %d", gotStatus, http.StatusInternalServerError)
+	}
+
+	body := strings.TrimSpace(rr.Body.String())
+	if body != "internal server error" {
+		t.Errorf("got body %q, want %q", body, "internal server error")
 	}
 }
 
