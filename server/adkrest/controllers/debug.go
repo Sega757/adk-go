@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"slices"
 
@@ -157,12 +158,14 @@ func (c *DebugAPIController) EventGraphHandler(rw http.ResponseWriter, req *http
 
 	agent, err := c.agentloader.LoadAgent(sessionID.AppName)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal error loading agent %s: %v", sessionID.AppName, err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	graph, err := services.GetAgentGraph(req.Context(), agent, highlightedPairs)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal error generating agent graph for %s: %v", sessionID.AppName, err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	EncodeJSONResponse(map[string]string{"dotSrc": graph}, http.StatusOK, rw)
