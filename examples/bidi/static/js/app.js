@@ -332,6 +332,41 @@ function updateConnectionStatus(connected) {
   }
 }
 
+// Add copy to clipboard button to agent message bubble
+function addCopyButtonToBubble(messageElement) {
+  if (!messageElement || messageElement.querySelector(".copy-btn")) return;
+  const bubble = messageElement.querySelector(".bubble");
+  if (!bubble) return;
+
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "copy-btn";
+  copyBtn.type = "button";
+  copyBtn.setAttribute("aria-label", "Copy message text");
+  copyBtn.setAttribute("title", "Copy message");
+  copyBtn.textContent = "📋";
+
+  copyBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const textElement = messageElement.querySelector(".bubble-text");
+    if (!textElement) return;
+    const cleanText = textElement.textContent.replace(/\.\.\.$/, "").trim();
+    navigator.clipboard.writeText(cleanText).then(() => {
+      copyBtn.textContent = "✓";
+      copyBtn.setAttribute("aria-label", "Copied to clipboard");
+      copyBtn.setAttribute("title", "Copied!");
+      setTimeout(() => {
+        copyBtn.textContent = "📋";
+        copyBtn.setAttribute("aria-label", "Copy message text");
+        copyBtn.setAttribute("title", "Copy message");
+      }, 2000);
+    }).catch(err => {
+      console.error("Failed to copy message:", err);
+    });
+  });
+
+  bubble.appendChild(copyBtn);
+}
+
 // Create a message bubble element
 function createMessageBubble(text, isUser, isPartial = false) {
   const messageDiv = document.createElement("div");
@@ -353,6 +388,10 @@ function createMessageBubble(text, isUser, isPartial = false) {
 
   bubbleDiv.appendChild(textP);
   messageDiv.appendChild(bubbleDiv);
+
+  if (!isUser && !isPartial) {
+    addCopyButtonToBubble(messageDiv);
+  }
 
   return messageDiv;
 }
@@ -393,6 +432,8 @@ function updateMessageBubble(element, text, isPartial = false) {
     const typingSpan = document.createElement("span");
     typingSpan.className = "typing-indicator";
     textElement.appendChild(typingSpan);
+  } else if (element.classList.contains("agent")) {
+    addCopyButtonToBubble(element);
   }
 }
 
@@ -601,6 +642,9 @@ function connectWebsocket() {
         if (typingIndicator) {
           typingIndicator.remove();
         }
+        if (currentBubbleElement.classList.contains("agent")) {
+          addCopyButtonToBubble(currentBubbleElement);
+        }
       }
       // Remove typing indicator from current output transcription
       if (currentOutputTranscriptionElement) {
@@ -608,6 +652,9 @@ function connectWebsocket() {
         const typingIndicator = textElement.querySelector(".typing-indicator");
         if (typingIndicator) {
           typingIndicator.remove();
+        }
+        if (currentOutputTranscriptionElement.classList.contains("agent")) {
+          addCopyButtonToBubble(currentOutputTranscriptionElement);
         }
       }
       currentMessageId = null;
