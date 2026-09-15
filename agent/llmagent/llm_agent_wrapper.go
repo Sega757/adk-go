@@ -307,8 +307,17 @@ func extractTaskDelegationFCs(ev *session.Event, toolsDict map[string]tool.Tool)
 // produces a fresh scope, so filtering by the current turn's scope would
 // hide the coordinator's own FC from a prior turn. Author + tool-name
 // filtering is sufficient.
+func hasTaskDelegationTools(toolsDict map[string]tool.Tool) bool {
+	for _, t := range toolsDict {
+		if _, ok := t.(*workflowinternal.TaskAgentTool); ok {
+			return true
+		}
+	}
+	return false
+}
+
 func findUnresolvedTaskDelegations(sess session.Session, owner string, toolsDict map[string]tool.Tool) []*genai.FunctionCall {
-	if sess == nil {
+	if sess == nil || sess.Events().Len() == 0 || !hasTaskDelegationTools(toolsDict) {
 		return nil
 	}
 	// pendingFCs preserves discovery order (the order the LLM emitted
@@ -338,7 +347,7 @@ func findUnresolvedTaskDelegations(sess session.Session, owner string, toolsDict
 					pendingFCs = append(pendingFCs, fc)
 				}
 			}
-			if fr := p.FunctionResponse; fr != nil && fr.ID != "" {
+			if fr := p.FunctionResponse; fr != nil && fr.ID != "" && seenFCs != nil {
 				if resolvedIDs == nil {
 					resolvedIDs = make(map[string]struct{})
 				}
@@ -390,9 +399,12 @@ func findFinishTaskTool(a agent.Agent) *workflowinternal.FinishTaskTool {
 func safeCanonicalToolsDict(a agent.Agent) map[string]tool.Tool {
 	llmA, ok := a.(llminternal.Agent)
 	if !ok || llmA == nil {
-		return map[string]tool.Tool{}
+		return nil
 	}
 	tools := llminternal.Reveal(llmA).Tools
+	if len(tools) == 0 {
+		return nil
+	}
 	out := make(map[string]tool.Tool, len(tools))
 	for _, t := range tools {
 		if t == nil {
