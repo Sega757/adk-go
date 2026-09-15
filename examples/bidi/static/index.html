@@ -14,11 +14,11 @@
       <div class="subtitle">Real-time bidirectional streaming with Google ADK</div>
       <div class="header-options">
         <label class="header-checkbox" title="Enable model to proactively respond without explicit prompts (Native audio models only)" style="display: none;">
-          <input type="checkbox" id="enableProactivity">
+          <input type="checkbox" id="enableProactivity" aria-label="Enable proactivity">
           <span>Proactivity</span>
         </label>
         <label class="header-checkbox" title="Enable model to detect and adapt to emotional cues (Native audio models only)" style="display: none;">
-          <input type="checkbox" id="enableAffectiveDialog">
+          <input type="checkbox" id="enableAffectiveDialog" aria-label="Enable affective dialog">
           <span>Affective Dialog</span>
         </label>
       </div>
@@ -61,7 +61,7 @@
           <h2>Event Console</h2>
           <div class="console-controls">
             <label class="console-checkbox" title="Toggle PCM audio events in console log">
-              <input type="checkbox" id="showAudioEvents" aria-controls="consoleContent">
+              <input type="checkbox" id="showAudioEvents" aria-label="Show audio events" aria-controls="consoleContent">
               <span>Show audio</span>
             </label>
             <button id="clearConsole" class="console-clear-btn" aria-label="Clear event console" disabled>Clear</button>
@@ -76,14 +76,14 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3 id="cameraModalTitle">Camera Preview</h3>
-          <button id="closeCameraModal" class="close-btn" aria-label="Close camera preview">&times;</button>
+          <button id="closeCameraModal" class="close-btn" aria-label="Close camera preview" title="Close camera preview">&times;</button>
         </div>
         <div class="modal-body">
           <video id="cameraPreview" autoplay playsinline aria-label="Live camera preview"></video>
         </div>
         <div class="modal-footer">
-          <button id="cancelCamera" class="btn-secondary" aria-label="Cancel camera preview">Cancel</button>
-          <button id="captureImage" class="btn-primary" aria-label="Capture and send image from camera">📷 Send Image</button>
+          <button id="cancelCamera" class="btn-secondary" aria-label="Cancel camera preview" title="Cancel camera preview">Cancel</button>
+          <button id="captureImage" class="btn-primary" aria-label="Capture and send image from camera" title="Capture and send image from camera">📷 Send Image</button>
         </div>
       </div>
     </div>
