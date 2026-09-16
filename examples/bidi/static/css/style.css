@@ -134,6 +134,29 @@ h1 {
   flex-direction: column;
   overflow: hidden;
   border-right: 1px solid var(--border-color);
+  position: relative;
+}
+
+/* Floating scroll-to-bottom button */
+.scroll-bottom-btn {
+  position: absolute;
+  bottom: 5.5rem;
+  right: 2rem;
+  z-index: 10;
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 1.5rem;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
+  border: none;
+}
+
+.scroll-bottom-btn:hover {
+  background-color: #3367d6;
+  transform: translateY(-2px);
 }
 
 /* Messages Area */
