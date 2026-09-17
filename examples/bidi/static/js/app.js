@@ -437,6 +437,8 @@ function updateMessageBubble(element, text, isPartial = false) {
   }
 }
 
+const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
+
 // Add a system message
 function addSystemMessage(text) {
   const messageDiv = document.createElement("div");
@@ -446,9 +448,29 @@ function addSystemMessage(text) {
   scrollToBottom();
 }
 
-// Scroll to bottom of messages
-function scrollToBottom() {
-  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+// Scroll to bottom of messages with smart auto-scroll
+function scrollToBottom(force = false) {
+  if (!messagesDiv) return;
+  const isNearBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 100;
+  if (force || isNearBottom) {
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    if (scrollToBottomBtn) scrollToBottomBtn.style.display = "none";
+  } else if (scrollToBottomBtn) {
+    scrollToBottomBtn.style.display = "block";
+  }
+}
+
+if (messagesDiv) {
+  messagesDiv.addEventListener("scroll", () => {
+    const isNearBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 100;
+    if (isNearBottom && scrollToBottomBtn) {
+      scrollToBottomBtn.style.display = "none";
+    }
+  });
+}
+
+if (scrollToBottomBtn) {
+  scrollToBottomBtn.addEventListener("click", () => scrollToBottom(true));
 }
 
 // Append message to messagesDiv, inserting before stream bubble if active
@@ -1001,7 +1023,7 @@ function addSubmitHandler() {
       // Add user message bubble
       const userBubble = createMessageBubble(message, true, false);
       appendMessage(userBubble);
-      scrollToBottom();
+      scrollToBottom(true);
 
       // Clear input and update button state
       messageInput.value = "";
@@ -1180,7 +1202,7 @@ function captureImageFromPreview() {
     // Display the captured image in the chat
     const imageBubble = createImageBubble(imageDataUrl, true);
     appendMessage(imageBubble);
-    scrollToBottom();
+    scrollToBottom(true);
 
     // Convert canvas to blob for sending to server
     canvas.toBlob((blob) => {
@@ -1301,7 +1323,7 @@ function toggleVideoStreaming() {
 
     // Append to chat (always at bottom for now)
     messagesDiv.appendChild(messageDiv);
-    scrollToBottom();
+    scrollToBottom(true);
 
     if (!cameraStream) {
       startVideoStream(video).then(() => {
@@ -1354,7 +1376,7 @@ fileInput.addEventListener("change", (event) => {
     // Display the image in the chat
     const imageBubble = createImageBubble(reader.result, true, `Uploaded image: ${file.name}`);
     appendMessage(imageBubble);
-    scrollToBottom();
+    scrollToBottom(true);
 
     // Send to server
     sendImage(base64data, mimeType);
