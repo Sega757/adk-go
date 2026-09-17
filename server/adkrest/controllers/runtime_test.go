@@ -93,6 +93,117 @@ func TestNewRuntimeAPIController_PluginsAssignment(t *testing.T) {
 	}
 }
 
+func TestRunSSEHandler_SanitizedHTTPErrorResponses(t *testing.T) {
+	fakeAgent, err := agent.New(agent.Config{
+		Name: "testApp",
+		Run: testAgent([]testAgentResult{
+			{event: makeEvent("invocation-1", "testApp", "hello"), err: nil},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("agent.New failed: %v", err)
+	}
+
+	sessionService := fakes.FakeSessionService{}
+	controller := NewRuntimeAPIController(
+		&sessionService,
+		nil,
+		agent.NewSingleLoader(fakeAgent),
+		nil,
+		10*time.Second,
+		runner.PluginConfig{},
+		false,
+	)
+
+	t.Run("bad_request_sanitized", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/run-sse", bytes.NewBufferString("{invalid json"))
+		rr := httptest.NewRecorder()
+		w := &recorderWithDeadline{rr}
+
+		controller.RunSSEHandler(w, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+		}
+		got := strings.TrimSpace(rr.Body.String())
+		want := "bad request"
+		if got != want {
+			t.Errorf("got body %q, want %q", got, want)
+		}
+	})
+
+	t.Run("not_found_sanitized", func(t *testing.T) {
+		reqObj := models.RunAgentRequest{
+			AppName:   "testApp",
+			UserId:    "testUser",
+			SessionId: "missingSession",
+		}
+		reqBytes, _ := json.Marshal(reqObj)
+		req := httptest.NewRequest(http.MethodPost, "/run-sse", bytes.NewBuffer(reqBytes))
+		rr := httptest.NewRecorder()
+		w := &recorderWithDeadline{rr}
+
+		controller.RunSSEHandler(w, req)
+
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("expected status %d, got %d", http.StatusNotFound, rr.Code)
+		}
+		got := strings.TrimSpace(rr.Body.String())
+		want := "not found"
+		if got != want {
+			t.Errorf("got body %q, want %q", got, want)
+		}
+	})
+
+	t.Run("internal_server_error_get_runner_sanitized", func(t *testing.T) {
+		id := fakes.SessionKey{
+			AppName:   "unknownApp",
+			UserID:    "testUser",
+			SessionID: "testSession",
+		}
+		sessionServiceWithSession := fakes.FakeSessionService{
+			Sessions: map[fakes.SessionKey]fakes.TestSession{
+				id: {
+					Id:            id,
+					SessionState:  fakes.TestState{},
+					SessionEvents: fakes.TestEvents{},
+					UpdatedAt:     time.Now(),
+				},
+			},
+		}
+		ctrl := NewRuntimeAPIController(
+			&sessionServiceWithSession,
+			nil,
+			agent.NewSingleLoader(fakeAgent),
+			nil,
+			10*time.Second,
+			runner.PluginConfig{},
+			false,
+		)
+
+		reqObj := models.RunAgentRequest{
+			AppName:   "unknownApp",
+			UserId:    "testUser",
+			SessionId: "testSession",
+		}
+		reqBytes, _ := json.Marshal(reqObj)
+		req := httptest.NewRequest(http.MethodPost, "/run-sse", bytes.NewBuffer(reqBytes))
+		rr := httptest.NewRecorder()
+		w := &recorderWithDeadline{rr}
+
+		ctrl.RunSSEHandler(w, req)
+
+		if rr.Code != http.StatusInternalServerError {
+			t.Errorf("expected status %d, got %d", http.StatusInternalServerError, rr.Code)
+		}
+		got := strings.TrimSpace(rr.Body.String())
+		want := "internal server error"
+		if got != want {
+			t.Errorf("got body %q, want %q", got, want)
+		}
+	})
+}
+
 type recorderWithDeadline struct {
 	*httptest.ResponseRecorder
 }

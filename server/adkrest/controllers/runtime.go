@@ -102,25 +102,29 @@ func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.R
 	deadline := time.Now().Add(c.sseTimeout)
 	err := rc.SetWriteDeadline(deadline)
 	if err != nil {
-		http.Error(rw, "failed to set write deadline: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("RunSSEHandler failed to set write deadline: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	runAgentRequest, err := decodeRequestBody(rw, req)
 	if err != nil {
-		http.Error(rw, "failed to decode request body: "+err.Error(), http.StatusBadRequest)
+		log.Printf("RunSSEHandler failed to decode request body: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 
 	err = c.validateSessionExists(req.Context(), runAgentRequest.AppName, runAgentRequest.UserId, runAgentRequest.SessionId)
 	if err != nil {
-		http.Error(rw, "failed to find the session: "+err.Error(), http.StatusNotFound)
+		log.Printf("RunSSEHandler failed to find session: %v", err)
+		http.Error(rw, "not found", http.StatusNotFound)
 		return
 	}
 
 	r, rCfg, err := c.getRunner(runAgentRequest)
 	if err != nil {
-		http.Error(rw, "failed to get runner: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("RunSSEHandler failed to get runner: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
