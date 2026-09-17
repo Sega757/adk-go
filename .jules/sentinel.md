@@ -46,3 +46,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** In `RunLiveHandler` (`server/adkrest/controllers/runtime.go`), WebSocket close frame reasons for internal server errors (`CloseInternalServerErr` / 1011) sent raw error strings (e.g., `err.Error()`, agent loader failure details) to clients, exposing application internals.
 **Learning:** WebSocket close frame reasons are sent directly to connected clients. Sending raw error messages on internal failures (1011) can leak internal file paths, stack traces, or configuration details.
 **Prevention:** Log detailed errors server-side using `log.Printf`, and return a sanitized generic reason like `"internal server error"` in WebSocket `CloseInternalServerErr` frames.
+
+## 2026-09-17 - [Prevent Information Leakage in SSE Handlers]
+**Vulnerability:** In `RunSSEHandler` (`server/adkrest/controllers/runtime.go`), internal HTTP 500 errors were directly returning raw error strings (e.g., `failed to set write deadline: err.Error()`, `failed to get runner: err.Error()`) to clients via `http.Error`, potentially exposing application internals and configuration details.
+**Learning:** Returning raw internal error details to API clients creates a security risk by exposing underlying infrastructure state, paths, or dependencies. Internal errors should always be sanitized at the API boundary.
+**Prevention:** Log detailed internal errors server-side using `log.Printf` and return generic error messages (e.g., `"internal server error"`) to the client for 500 status codes while preserving appropriate client-side HTTP 400 and 404 errors.
