@@ -73,13 +73,25 @@ func (n *ParallelWorker) Run(ctx agent.Context, input any) iter.Seq2[*session.Ev
 		defer cancelFunc()
 		workerCtx := ctx.WithAgentContext(cancelCtx)
 
-		v := reflect.ValueOf(input)
-		if v.Kind() != reflect.Slice {
-			yield(nil, fmt.Errorf("parallel worker %s expects a slice input, got %T", n.Name(), input))
-			return
+		// Reflection-free fast-path for standard []any slice inputs to eliminate reflect allocations.
+		var items []any
+		switch s := input.(type) {
+		case []any:
+			items = s
+		default:
+			v := reflect.ValueOf(input)
+			if v.Kind() != reflect.Slice {
+				yield(nil, fmt.Errorf("parallel worker %s expects a slice input, got %T", n.Name(), input))
+				return
+			}
+			nItems := v.Len()
+			items = make([]any, nItems)
+			for i := 0; i < nItems; i++ {
+				items[i] = v.Index(i).Interface()
+			}
 		}
 
-		nItems := v.Len()
+		nItems := len(items)
 		if nItems == 0 {
 			// Yield an empty list as output
 			event := session.NewEvent(ctx, ctx.InvocationID())
@@ -107,7 +119,7 @@ func (n *ParallelWorker) Run(ctx agent.Context, input any) iter.Seq2[*session.Ev
 		wrappedName := n.wrapped.Name()
 
 		for i := 0; i < nItems; i++ {
-			item := v.Index(i).Interface()
+			item := items[i]
 
 			if sem != nil {
 				select {
