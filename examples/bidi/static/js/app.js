@@ -446,9 +446,43 @@ function addSystemMessage(text) {
   scrollToBottom();
 }
 
-// Scroll to bottom of messages
-function scrollToBottom() {
-  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+// Scroll to bottom of messages (only auto-scroll if user is near bottom, unless forced)
+function scrollToBottom(force = false) {
+  const msgDiv = document.getElementById("messages") || messagesDiv;
+  if (!msgDiv) return;
+  const isNearBottom = msgDiv.scrollHeight - msgDiv.clientHeight - msgDiv.scrollTop <= 100;
+  const btn = document.getElementById("scrollToBottomBtn");
+  if (force || isNearBottom) {
+    msgDiv.scrollTop = msgDiv.scrollHeight;
+    if (btn) btn.style.display = "none";
+  } else if (btn) {
+    btn.style.display = "block";
+  }
+}
+
+function initScrollListener() {
+  const msgDiv = document.getElementById("messages");
+  const btn = document.getElementById("scrollToBottomBtn");
+  if (msgDiv) {
+    msgDiv.addEventListener("scroll", () => {
+      const isNearBottom = msgDiv.scrollHeight - msgDiv.clientHeight - msgDiv.scrollTop <= 100;
+      const b = document.getElementById("scrollToBottomBtn");
+      if (b) {
+        b.style.display = isNearBottom ? "none" : "block";
+      }
+    });
+  }
+  if (btn) {
+    btn.addEventListener("click", () => {
+      scrollToBottom(true);
+    });
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initScrollListener);
+} else {
+  initScrollListener();
 }
 
 // Append message to messagesDiv, inserting before stream bubble if active
@@ -1001,7 +1035,7 @@ function addSubmitHandler() {
       // Add user message bubble
       const userBubble = createMessageBubble(message, true, false);
       appendMessage(userBubble);
-      scrollToBottom();
+      scrollToBottom(true);
 
       // Clear input and update button state
       messageInput.value = "";
@@ -1180,7 +1214,7 @@ function captureImageFromPreview() {
     // Display the captured image in the chat
     const imageBubble = createImageBubble(imageDataUrl, true);
     appendMessage(imageBubble);
-    scrollToBottom();
+    scrollToBottom(true);
 
     // Convert canvas to blob for sending to server
     canvas.toBlob((blob) => {
@@ -1354,7 +1388,7 @@ fileInput.addEventListener("change", (event) => {
     // Display the image in the chat
     const imageBubble = createImageBubble(reader.result, true, `Uploaded image: ${file.name}`);
     appendMessage(imageBubble);
-    scrollToBottom();
+    scrollToBottom(true);
 
     // Send to server
     sendImage(base64data, mimeType);
