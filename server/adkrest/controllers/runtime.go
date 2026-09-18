@@ -102,7 +102,8 @@ func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.R
 	deadline := time.Now().Add(c.sseTimeout)
 	err := rc.SetWriteDeadline(deadline)
 	if err != nil {
-		http.Error(rw, "failed to set write deadline: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal error setting write deadline: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -120,7 +121,8 @@ func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.R
 
 	r, rCfg, err := c.getRunner(runAgentRequest)
 	if err != nil {
-		http.Error(rw, "failed to get runner: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal error getting runner: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -130,7 +132,8 @@ func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.R
 	rw.Header().Set("Cache-Control", "no-cache")
 	rw.Header().Set("Connection", "keep-alive")
 	if err := rc.Flush(); err != nil {
-		http.Error(rw, "failed to flush headers", http.StatusInternalServerError)
+		log.Printf("Internal error flushing headers: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
