@@ -65,14 +65,15 @@ func (c *AgentEngineAPIController) Query(rw http.ResponseWriter, req *http.Reque
 
 		payload, err = io.ReadAll(http.MaxBytesReader(rw, req.Body, c.maxPayloadSize))
 		if err != nil {
-			err = fmt.Errorf("io.ReadAll with MaxBytesReader failed: %w", err)
-			http.Error(rw, err.Error(), http.StatusBadRequest)
+			log.Printf("ReadAll failed in Query: %v", err)
+			http.Error(rw, "failed to read request body", http.StatusBadRequest)
 			return
 		}
 
 		err = json.Unmarshal(payload, &query)
 		if err != nil {
-			http.Error(rw, err.Error(), http.StatusBadRequest)
+			log.Printf("Unmarshal query failed in Query: %v", err)
+			http.Error(rw, "invalid request body", http.StatusBadRequest)
 			return
 		}
 	}
