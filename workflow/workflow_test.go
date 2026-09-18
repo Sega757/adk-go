@@ -62,7 +62,7 @@ func (m *MockInvocationContext) WithICDelta(d *agent.InvocationContextDelta) age
 // newMockCtx returns a fresh MockInvocationContext backed by
 // t.Context(), which is automatically cancelled when the test ends
 // — preventing leaked scheduler goroutines from outliving the test.
-func newMockCtx(t *testing.T) *MockInvocationContext {
+func newMockCtx(t testing.TB) *MockInvocationContext {
 	t.Helper()
 	return &MockInvocationContext{Context: t.Context()}
 }
@@ -70,7 +70,7 @@ func newMockCtx(t *testing.T) *MockInvocationContext {
 // newSeededMockCtx returns a mockCtx pre-loaded with a "seed" user
 // content part — the standard fixture for scheduler tests that need
 // an initial input flowing into Start.
-func newSeededMockCtx(t *testing.T) *MockInvocationContext {
+func newSeededMockCtx(t testing.TB) *MockInvocationContext {
 	t.Helper()
 	ctx := newMockCtx(t)
 	ctx.userContent = &genai.Content{Parts: []*genai.Part{{Text: "seed"}}}

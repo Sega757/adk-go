@@ -206,6 +206,46 @@ func TestMatchType(t *testing.T) {
 	}
 }
 
+func BenchmarkValidateMapOnSchema(b *testing.B) {
+	schema := &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"str_field":  {Type: genai.TypeString},
+			"int_field":  {Type: genai.TypeInteger},
+			"bool_field": {Type: genai.TypeBoolean},
+			"arr_field": {
+				Type:  genai.TypeArray,
+				Items: &genai.Schema{Type: genai.TypeString},
+			},
+			"nested_obj": {
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"inner_str": {Type: genai.TypeString},
+				},
+			},
+		},
+		Required: []string{"str_field"},
+	}
+
+	args := map[string]any{
+		"str_field":  "hello",
+		"int_field":  123.0,
+		"bool_field": true,
+		"arr_field":  []any{"item1", "item2", "item3"},
+		"nested_obj": map[string]any{
+			"inner_str": "value",
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if err := ValidateMapOnSchema(args, schema, true); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestValidateMapOnSchema(t *testing.T) {
 	schema := &genai.Schema{
 		Type: genai.TypeObject,
