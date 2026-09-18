@@ -240,11 +240,10 @@ func rearrangeEventsForLatestFunctionResponse(events []*session.Event) ([]*sessi
 	}
 
 	lastEvent := events[len(events)-1]
-	lastResponses := utils.FunctionResponses(lastEvent.Content)
-	// No need to process, since the latest event is not function_response.
-	if len(lastResponses) == 0 {
+	if !utils.HasFunctionResponses(lastEvent.Content) {
 		return events, nil
 	}
+	lastResponses := utils.FunctionResponses(lastEvent.Content)
 
 	// Create response id set
 	responseIDs := make(map[string]struct{}, len(lastResponses))
@@ -254,8 +253,8 @@ func rearrangeEventsForLatestFunctionResponse(events []*session.Event) ([]*sessi
 
 	// Check if its already in the correct position
 	prevEvent := events[len(events)-2]
-	prevCalls := utils.FunctionCalls(prevEvent.Content)
-	if len(prevCalls) > 0 {
+	if utils.HasFunctionCalls(prevEvent.Content) {
+		prevCalls := utils.FunctionCalls(prevEvent.Content)
 		for _, call := range prevCalls {
 			if _, found := responseIDs[call.ID]; found {
 				// The latest response is already matched with the immediately
@@ -271,38 +270,39 @@ func rearrangeEventsForLatestFunctionResponse(events []*session.Event) ([]*sessi
 SearchLoop: // A label to allow breaking out of the nested loop
 	for idx := len(events) - 2; idx >= 0; idx-- {
 		event := events[idx]
+		if !utils.HasFunctionCalls(event.Content) {
+			continue
+		}
 		calls := utils.FunctionCalls(event.Content)
 
-		if len(calls) > 0 {
-			for _, call := range calls {
-				if _, found := responseIDs[call.ID]; found {
-					// Match found. This is the event we're looking for.
-					functionCallEventIdx = idx
+		for _, call := range calls {
+			if _, found := responseIDs[call.ID]; found {
+				// Match found. This is the event we're looking for.
+				functionCallEventIdx = idx
 
-					// Create a new set of all call IDs from this specific event
-					allCallIDsFromMatchingEvent = make(map[string]struct{}, len(calls))
-					for _, c := range calls {
-						allCallIDsFromMatchingEvent[c.ID] = struct{}{}
-					}
-
-					// Validation check
-					// last response event should only contain the responses for the
-					// function calls in the same function call event
-					for respID := range responseIDs {
-						if _, exists := allCallIDsFromMatchingEvent[respID]; !exists {
-							return nil, fmt.Errorf(
-								"validation failed: last response event has IDs not in the matching call event. Call IDs: %v, Response IDs: %v",
-								allCallIDsFromMatchingEvent, responseIDs,
-							)
-						}
-					}
-
-					// Update the tracked IDs to be ALL IDs from the call event
-					responseIDs = allCallIDsFromMatchingEvent
-
-					// Exit the search loop
-					break SearchLoop
+				// Create a new set of all call IDs from this specific event
+				allCallIDsFromMatchingEvent = make(map[string]struct{}, len(calls))
+				for _, c := range calls {
+					allCallIDsFromMatchingEvent[c.ID] = struct{}{}
 				}
+
+				// Validation check
+				// last response event should only contain the responses for the
+				// function calls in the same function call event
+				for respID := range responseIDs {
+					if _, exists := allCallIDsFromMatchingEvent[respID]; !exists {
+						return nil, fmt.Errorf(
+							"validation failed: last response event has IDs not in the matching call event. Call IDs: %v, Response IDs: %v",
+							allCallIDsFromMatchingEvent, responseIDs,
+						)
+					}
+				}
+
+				// Update the tracked IDs to be ALL IDs from the call event
+				responseIDs = allCallIDsFromMatchingEvent
+
+				// Exit the search loop
+				break SearchLoop
 			}
 		}
 	}
@@ -321,16 +321,15 @@ SearchLoop: // A label to allow breaking out of the nested loop
 	resultEvents = append(resultEvents, events[:functionCallEventIdx+1]...)
 	for i := functionCallEventIdx + 1; i < len(events)-1; i++ {
 		event := events[i]
-		calls := utils.FunctionCalls(event.Content)
-		if len(calls) > 0 {
+		if utils.HasFunctionCalls(event.Content) {
 			resultEvents = append(resultEvents, event)
 			continue
 		}
 
-		responses := utils.FunctionResponses(event.Content)
-		if len(responses) == 0 {
+		if !utils.HasFunctionResponses(event.Content) {
 			continue
 		}
+		responses := utils.FunctionResponses(event.Content)
 
 		// Check if this event contains any response relevant to our call.
 		isRelated := false
@@ -378,16 +377,19 @@ func rearrangeEventsForFunctionResponsesInHistory(events []*session.Event) ([]*s
 
 	// Create a map to store the index of the event containing each function response.
 	// Lazily allocate the map and return early if no function responses exist in history.
+	// Iterates directly over event.Content.Parts to avoid intermediate slice allocations from utils.FunctionResponses.
 	var callIDToResponseEventIndex map[string]int
 	for i, event := range events {
-		responses := utils.FunctionResponses(event.Content)
-
-		if len(responses) > 0 {
-			if callIDToResponseEventIndex == nil {
-				callIDToResponseEventIndex = make(map[string]int)
-			}
-			for _, res := range responses {
-				callIDToResponseEventIndex[res.ID] = i
+		content := utils.Content(event)
+		if content == nil {
+			continue
+		}
+		for _, p := range content.Parts {
+			if p != nil && p.FunctionResponse != nil {
+				if callIDToResponseEventIndex == nil {
+					callIDToResponseEventIndex = make(map[string]int)
+				}
+				callIDToResponseEventIndex[p.FunctionResponse.ID] = i
 			}
 		}
 	}
@@ -406,13 +408,14 @@ func rearrangeEventsForFunctionResponsesInHistory(events []*session.Event) ([]*s
 			continue
 		}
 
-		calls := utils.FunctionCalls(event.Content)
-		if len(calls) == 0 {
+		if !utils.HasFunctionCalls(event.Content) {
 			// This is a regular event (e.g., user message). Just append it.
 			resultEvents = append(resultEvents, event)
 		} else {
 			// This is a function call event, append it and search for responses
 			resultEvents = append(resultEvents, event)
+
+			calls := utils.FunctionCalls(event.Content)
 
 			// Find the unique indices of all corresponding response events.
 			// Using a map[int]struct{} as a set.
@@ -627,10 +630,13 @@ const (
 
 func shouldExcludeEvent(ev *session.Event) bool {
 	c := utils.Content(ev)
-	if c == nil {
+	if c == nil || (!utils.HasFunctionCalls(c) && !utils.HasFunctionResponses(c)) {
 		return false
 	}
 	for _, p := range c.Parts {
+		if p == nil {
+			continue
+		}
 		if p.FunctionCall != nil {
 			switch p.FunctionCall.Name {
 			case requestEUCFunctionCallName, toolconfirmation.FunctionCallName:
