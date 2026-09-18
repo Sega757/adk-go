@@ -143,14 +143,7 @@ func NewToolContext(ic InvocationContext, functionCallID string, actions *sessio
 
 func prepareEventActions(actions *session.EventActions) *session.EventActions {
 	if actions == nil {
-		return &session.EventActions{StateDelta: make(map[string]any), ArtifactDelta: make(map[string]int64)}
-	}
-	// create missing maps if needed
-	if actions.StateDelta == nil {
-		actions.StateDelta = make(map[string]any)
-	}
-	if actions.ArtifactDelta == nil {
-		actions.ArtifactDelta = make(map[string]int64)
+		return &session.EventActions{}
 	}
 	return actions
 }
@@ -439,7 +432,10 @@ func (c *callbackContextState) Get(key string) (any, error) {
 }
 
 func (c *callbackContextState) Set(key string, val any) error {
-	if c.ctx.actions != nil && c.ctx.actions.StateDelta != nil {
+	if c.ctx.actions != nil {
+		if c.ctx.actions.StateDelta == nil {
+			c.ctx.actions.StateDelta = make(map[string]any)
+		}
 		c.ctx.actions.StateDelta[key] = val
 	}
 	if c.ctx.invocationContext == nil {
