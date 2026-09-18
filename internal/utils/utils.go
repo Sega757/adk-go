@@ -57,7 +57,7 @@ func GenerateFunctionCallID(ctx context.Context) string {
 // by populateClientFunctionCallID. This is necessary when FunctionCall or
 // FunctionResponse are sent back to the model.
 func RemoveClientFunctionCallID(c *genai.Content) {
-	if c == nil {
+	if c == nil || (!HasFunctionCalls(c) && !HasFunctionResponses(c)) {
 		return
 	}
 	// Direct single-pass iteration avoids intermediate slice allocations from FunctionCalls/FunctionResponses.
