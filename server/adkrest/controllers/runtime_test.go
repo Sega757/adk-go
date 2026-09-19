@@ -465,3 +465,57 @@ func TestRunSSEHandler_SanitizesInternalServerError(t *testing.T) {
 		t.Errorf("expected sanitized body %q, got %q", wantBody, gotBody)
 	}
 }
+
+func TestRunSSEHandler_SanitizesBadRequestAndNotFoundErrors(t *testing.T) {
+	fakeAgent, _ := agent.New(agent.Config{Name: "app"})
+	sessionService := fakes.FakeSessionService{}
+	controller := NewRuntimeAPIController(
+		&sessionService,
+		nil,
+		agent.NewSingleLoader(fakeAgent),
+		nil,
+		10*time.Second,
+		runner.PluginConfig{},
+		false,
+	)
+
+	t.Run("bad request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/run-sse", bytes.NewBufferString("{invalid json}"))
+		rr := httptest.NewRecorder()
+		w := &recorderWithDeadline{rr}
+
+		controller.RunSSEHandler(w, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+		}
+		if got := rr.Body.String(); got != "bad request\n" {
+			t.Errorf("expected body %q, got %q", "bad request\n", got)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		reqObj := models.RunAgentRequest{
+			AppName:   "app",
+			UserId:    "user",
+			SessionId: "nonExistentSession",
+			Streaming: true,
+			NewMessage: genai.Content{
+				Parts: []*genai.Part{{Text: "Hello"}},
+			},
+		}
+		reqBytes, _ := json.Marshal(reqObj)
+		req := httptest.NewRequest(http.MethodPost, "/run-sse", bytes.NewBuffer(reqBytes))
+		rr := httptest.NewRecorder()
+		w := &recorderWithDeadline{rr}
+
+		controller.RunSSEHandler(w, req)
+
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("expected status %d, got %d", http.StatusNotFound, rr.Code)
+		}
+		if got := rr.Body.String(); got != "not found\n" {
+			t.Errorf("expected body %q, got %q", "not found\n", got)
+		}
+	})
+}
