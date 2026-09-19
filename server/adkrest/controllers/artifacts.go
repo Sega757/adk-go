@@ -39,7 +39,8 @@ func (c *ArtifactsAPIController) ListArtifactsHandler(rw http.ResponseWriter, re
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	if sessionID.ID == "" {
@@ -68,7 +69,8 @@ func (c *ArtifactsAPIController) LoadArtifactHandler(rw http.ResponseWriter, req
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	if sessionID.ID == "" {
@@ -112,7 +114,8 @@ func (c *ArtifactsAPIController) LoadArtifactVersionHandler(rw http.ResponseWrit
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	if sessionID.ID == "" {
@@ -159,7 +162,8 @@ func (c *ArtifactsAPIController) DeleteArtifactHandler(rw http.ResponseWriter, r
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	if sessionID.ID == "" {
