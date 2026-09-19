@@ -47,3 +47,7 @@ This journal documents critical UX and accessibility learnings, patterns, and in
 ## 2026-09-16 - Smart Auto-Scrolling & Floating Jump-to-Bottom Controls during Live Response Streaming
 **Learning:** In real-time streaming chat interfaces, forcing automatic scroll-to-bottom on every incoming chunk disrupts users who scroll up to review previous conversation history. Pausing auto-scroll when `isNearBottom` evaluates to false (e.g. `diff > 100px`) while revealing a floating action pill button (`↓ New messages`) with explicit `aria-label` and `title` tooltips allows users to read earlier messages uninterrupted and jump back to the bottom in one click.
 **Action:** Always check whether a scrolling container is near the bottom before auto-scrolling during streaming events, force-scroll on user actions, and pair auto-scroll pauses with a floating scroll-to-bottom button.
+
+## 2026-09-17 - Web Form Input Discard Shortcut & Keyboard Tooltip Guidance
+**Learning:** In streaming web chat interfaces, users often draft text messages before deciding to cancel or reset their input. Providing an `Escape` key listener on chat input fields to clear non-empty draft text—paired with tooltip hints (`"Type a message and press Enter to send (Esc to clear)"`)—provides keyboard navigators an immediate input reset shortcut without needing mouse interaction or manual backspacing.
+**Action:** Always pair text input fields with an `Escape` key listener for clearing non-empty text and include keyboard shortcut hints in input tooltips or helper text.
