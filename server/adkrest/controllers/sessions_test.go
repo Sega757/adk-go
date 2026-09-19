@@ -92,7 +92,7 @@ func TestGetSession(t *testing.T) {
 				AppName:   "testApp",
 				SessionID: "testSession",
 			},
-			wantErr:    fmt.Errorf("user_id parameter is required"),
+			wantErr:    fmt.Errorf("bad request"),
 			wantStatus: http.StatusBadRequest,
 		},
 		{
@@ -220,7 +220,7 @@ func TestCreateSession(t *testing.T) {
 			},
 			createRequestObj: models.CreateSessionRequest{},
 			wantStatus:       http.StatusBadRequest,
-			wantErr:          fmt.Errorf("user_id parameter is required"),
+			wantErr:          fmt.Errorf("bad request"),
 		},
 	}
 
