@@ -16,6 +16,7 @@ package converters
 
 import (
 	"encoding/json"
+	"reflect"
 )
 
 // ToMapStructure converts any to map[string]any.
@@ -34,6 +35,11 @@ func ToMapStructure(data any) (map[string]any, error) {
 		if len(m) == 0 {
 			return map[string]any{}, nil
 		}
+	}
+	// Fast-path: return early for typed nil pointers to avoid json.Marshal("null") and Unmarshal allocations.
+	val := reflect.ValueOf(data)
+	if val.Kind() == reflect.Pointer && val.IsNil() {
+		return nil, nil
 	}
 
 	bytes, err := json.Marshal(data)
