@@ -315,6 +315,16 @@ func BenchmarkToMapStructure_Nil(b *testing.B) {
 	}
 }
 
+func BenchmarkToMapStructure_TypedNilPointer(b *testing.B) {
+	var ptr *sampleStruct
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = ToMapStructure(ptr)
+	}
+}
+
+
 func BenchmarkFromMapStructure(b *testing.B) {
 	input := map[string]any{
 		"name": "Charlie",
