@@ -134,6 +134,42 @@ func TestSaveRequest_Validate(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
 		},
+		{
+			name: "AppName with path traversal",
+			req: &SaveRequest{
+				AppName:   "app/../other",
+				UserID:    "user-123",
+				SessionID: "sess-abc",
+				FileName:  "file.txt",
+				Part:      genai.NewPartFromBytes([]byte("data"), "text/plain"),
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: AppName cannot contain path separators or path traversal sequences",
+		},
+		{
+			name: "UserID with path traversal",
+			req: &SaveRequest{
+				AppName:   "MyApp",
+				UserID:    "user/../admin",
+				SessionID: "sess-abc",
+				FileName:  "file.txt",
+				Part:      genai.NewPartFromBytes([]byte("data"), "text/plain"),
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: UserID cannot contain path separators or path traversal sequences",
+		},
+		{
+			name: "SessionID with path traversal",
+			req: &SaveRequest{
+				AppName:   "MyApp",
+				UserID:    "user-123",
+				SessionID: "sess/../other",
+				FileName:  "file.txt",
+				Part:      genai.NewPartFromBytes([]byte("data"), "text/plain"),
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: SessionID cannot contain path separators or path traversal sequences",
+		},
 	}
 	executeValidatorTestCases(t, "SaveRequest", testCases)
 }
@@ -197,6 +233,17 @@ func TestLoadRequest_Validate(t *testing.T) {
 			},
 			wantErr:    true,
 			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
+		},
+		{
+			name: "UserID with path separator",
+			req: &LoadRequest{
+				AppName:   "MyApp",
+				UserID:    "user/123",
+				SessionID: "sess-abc",
+				FileName:  "file.txt",
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: UserID cannot contain path separators or path traversal sequences",
 		},
 	}
 	executeValidatorTestCases(t, "LoadRequest", testCases)
@@ -262,6 +309,17 @@ func TestDeleteRequest_Validate(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "invalid name: filename cannot contain path separators or path traversal sequences",
 		},
+		{
+			name: "SessionID with path traversal",
+			req: &DeleteRequest{
+				AppName:   "MyApp",
+				UserID:    "user-123",
+				SessionID: "../other-sess",
+				FileName:  "file.txt",
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: SessionID cannot contain path separators or path traversal sequences",
+		},
 	}
 	executeValidatorTestCases(t, "DeleteRequest", testCases)
 }
@@ -301,6 +359,16 @@ func TestListRequest_Validate(t *testing.T) {
 			req:        &ListRequest{},
 			wantErr:    true,
 			wantErrMsg: "invalid list request: missing required fields: AppName, UserID, SessionID",
+		},
+		{
+			name: "UserID with path traversal",
+			req: &ListRequest{
+				AppName:   "MyApp",
+				UserID:    "user/../victim",
+				SessionID: "sess-abc",
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid name: UserID cannot contain path separators or path traversal sequences",
 		},
 	}
 	executeValidatorTestCases(t, "ListRequest", testCases)
