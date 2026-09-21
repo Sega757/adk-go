@@ -20,6 +20,8 @@ import (
 
 	"google.golang.org/genai"
 
+	"google.golang.org/adk/v2/model"
+	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/tool"
 )
 
@@ -133,5 +135,59 @@ func TestTaskCompleted_PartMatching(t *testing.T) {
 	}
 	if !isTaskCompleted {
 		t.Fatalf("expected task_completed to be identified")
+	}
+}
+
+func BenchmarkRearrangeEventsForFunctionResponsesInHistory_TextHistory(b *testing.B) {
+	const numEvents = 200
+	events := make([]*session.Event, 0, numEvents)
+	for i := 0; i < numEvents/2; i++ {
+		events = append(events, &session.Event{
+			Author: "user",
+			LLMResponse: model.LLMResponse{
+				Content: genai.NewContentFromText("user message", "user"),
+			},
+		}, &session.Event{
+			Author: "model",
+			LLMResponse: model.LLMResponse{
+				Content: genai.NewContentFromText("model response", "model"),
+			},
+		})
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_, err := rearrangeEventsForFunctionResponsesInHistory(events)
+		if err != nil {
+			b.Fatalf("rearrangeEventsForFunctionResponsesInHistory failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkRearrangeEventsForLatestFunctionResponse_TextHistory(b *testing.B) {
+	const numEvents = 200
+	events := make([]*session.Event, 0, numEvents)
+	for i := 0; i < numEvents/2; i++ {
+		events = append(events, &session.Event{
+			Author: "user",
+			LLMResponse: model.LLMResponse{
+				Content: genai.NewContentFromText("user message", "user"),
+			},
+		}, &session.Event{
+			Author: "model",
+			LLMResponse: model.LLMResponse{
+				Content: genai.NewContentFromText("model response", "model"),
+			},
+		})
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_, err := rearrangeEventsForLatestFunctionResponse(events)
+		if err != nil {
+			b.Fatalf("rearrangeEventsForLatestFunctionResponse failed: %v", err)
+		}
 	}
 }
