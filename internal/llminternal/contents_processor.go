@@ -240,11 +240,12 @@ func rearrangeEventsForLatestFunctionResponse(events []*session.Event) ([]*sessi
 	}
 
 	lastEvent := events[len(events)-1]
-	lastResponses := utils.FunctionResponses(lastEvent.Content)
-	// No need to process, since the latest event is not function_response.
-	if len(lastResponses) == 0 {
+	// Performance optimization by Bolt: use zero-allocation predicate HasFunctionResponses
+	// to check for function responses before allocating a slice via FunctionResponses.
+	if !utils.HasFunctionResponses(lastEvent.Content) {
 		return events, nil
 	}
+	lastResponses := utils.FunctionResponses(lastEvent.Content)
 
 	// Create response id set
 	responseIDs := make(map[string]struct{}, len(lastResponses))
@@ -271,6 +272,9 @@ func rearrangeEventsForLatestFunctionResponse(events []*session.Event) ([]*sessi
 SearchLoop: // A label to allow breaking out of the nested loop
 	for idx := len(events) - 2; idx >= 0; idx-- {
 		event := events[idx]
+		if !utils.HasFunctionCalls(event.Content) {
+			continue
+		}
 		calls := utils.FunctionCalls(event.Content)
 
 		if len(calls) > 0 {
@@ -380,15 +384,17 @@ func rearrangeEventsForFunctionResponsesInHistory(events []*session.Event) ([]*s
 	// Lazily allocate the map and return early if no function responses exist in history.
 	var callIDToResponseEventIndex map[string]int
 	for i, event := range events {
+		// Performance optimization by Bolt: use zero-allocation predicate HasFunctionResponses
+		// to skip non-response events without allocating slice objects.
+		if !utils.HasFunctionResponses(event.Content) {
+			continue
+		}
 		responses := utils.FunctionResponses(event.Content)
-
-		if len(responses) > 0 {
-			if callIDToResponseEventIndex == nil {
-				callIDToResponseEventIndex = make(map[string]int)
-			}
-			for _, res := range responses {
-				callIDToResponseEventIndex[res.ID] = i
-			}
+		if callIDToResponseEventIndex == nil {
+			callIDToResponseEventIndex = make(map[string]int)
+		}
+		for _, res := range responses {
+			callIDToResponseEventIndex[res.ID] = i
 		}
 	}
 
