@@ -113,6 +113,7 @@ function setControlsDisabled(disabled) {
   const sendBtn = document.getElementById("sendButton");
 
   const defaultTooltips = {
+    message: "Type a message and press Enter to send (Esc to clear)",
     startAudioButton: is_audio ? "Stop microphone audio streaming" : "Start microphone audio streaming",
     cameraButton: "Open live camera preview to capture image",
     streamVideoButton: isVideoStreaming ? "Stop live video streaming" : "Start live video streaming",
@@ -317,6 +318,13 @@ if (showAudioEventsCheckbox) {
 
 if (messageInput) {
   messageInput.addEventListener("input", updateSendButtonState);
+  messageInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && messageInput.value.length > 0) {
+      e.preventDefault();
+      messageInput.value = "";
+      updateSendButtonState();
+    }
+  });
 }
 clearConsoleBtn.addEventListener('click', clearConsole);
 updateClearConsoleButtonState();
@@ -475,6 +483,9 @@ function initScrollListener() {
   if (btn) {
     btn.addEventListener("click", () => {
       scrollToBottom(true);
+      if (messageInput && !messageInput.disabled) {
+        messageInput.focus();
+      }
     });
   }
 }
