@@ -75,6 +75,49 @@ func BenchmarkFindUnresolvedTaskDelegations_NoDelegations(b *testing.B) {
 	}
 }
 
+func BenchmarkProcessLLMAgentOutput_SinglePartText(b *testing.B) {
+	dummyAgent, err := agent.New(agent.Config{Name: "test_agent"})
+	if err != nil {
+		b.Fatalf("agent.New: %v", err)
+	}
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role:  genai.RoleModel,
+				Parts: []*genai.Part{{Text: "Hello world, this is a response message from the LLM."}},
+			},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = ProcessLLMAgentOutput(dummyAgent, ev)
+	}
+}
+
+func BenchmarkProcessLLMAgentOutput_MultiPartText(b *testing.B) {
+	dummyAgent, err := agent.New(agent.Config{Name: "test_agent"})
+	if err != nil {
+		b.Fatalf("agent.New: %v", err)
+	}
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role: genai.RoleModel,
+				Parts: []*genai.Part{
+					{Text: "Hello world, "},
+					{Text: "this is a multi-part response message from the LLM."},
+				},
+			},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = ProcessLLMAgentOutput(dummyAgent, ev)
+	}
+}
+
 func BenchmarkFindUnresolvedTaskDelegations_EmptySession(b *testing.B) {
 	ctx := context.Background()
 	svc := session.InMemoryService()
