@@ -93,21 +93,25 @@ func (t *artifactsTool) Run(ctx agent.Context, args any) (map[string]any, error)
 	}
 	var artifactNames []string
 	artifactNamesRaw, exists := m["artifact_names"]
-	if !exists {
+	if !exists || artifactNamesRaw == nil {
 		artifactNames = []string{}
 	} else {
-		// In order to cast properly from []any to []string we're gonna marshal and then
-		// unmarshal the artifact_names value.
-		artifactNamesJson, err := json.Marshal(artifactNamesRaw)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal artifact_names to JSON: %w", err)
-		}
-		if err := json.Unmarshal(artifactNamesJson, &artifactNames); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal artifact_names from JSON to []string: %w", err)
-		}
-		// Ensure the slice is not nil if it's empty
-		if artifactNames == nil {
-			artifactNames = []string{}
+		// Performance-optimized by Bolt: Direct type assertions replace the expensive
+		// JSON marshal/unmarshal round-trip, eliminating heap allocations and serialization CPU overhead.
+		switch v := artifactNamesRaw.(type) {
+		case []string:
+			artifactNames = v
+		case []any:
+			artifactNames = make([]string, len(v))
+			for i, elem := range v {
+				s, ok := elem.(string)
+				if !ok {
+					return nil, fmt.Errorf("failed to convert element %d (%v of type %T) to string", i, elem, elem)
+				}
+				artifactNames[i] = s
+			}
+		default:
+			return nil, fmt.Errorf("unexpected artifact_names type: %T, expected []string or []any", artifactNamesRaw)
 		}
 	}
 	for _, name := range artifactNames {

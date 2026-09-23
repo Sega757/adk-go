@@ -327,6 +327,55 @@ func TestLoadArtifactsTool_ProcessRequest_Artifacts_OtherFunctionCall(t *testing
 	}
 }
 
+func BenchmarkRun_StringSlice(b *testing.B) {
+	toolImpl := loadartifactstool.New().(toolinternal.FunctionTool)
+	tc := createToolContextBenchmark(b)
+	args := map[string]any{
+		"artifact_names": []string{"file1.txt", "file2.pdf", "file3.json"},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := toolImpl.Run(tc, args)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkRun_AnySlice(b *testing.B) {
+	toolImpl := loadartifactstool.New().(toolinternal.FunctionTool)
+	tc := createToolContextBenchmark(b)
+	args := map[string]any{
+		"artifact_names": []any{"file1.txt", "file2.pdf", "file3.json"},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := toolImpl.Run(tc, args)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func createToolContextBenchmark(b *testing.B) agent.Context {
+	b.Helper()
+
+	artifacts := &artifactinternal.Artifacts{
+		Service:   artifact.InMemoryService(),
+		AppName:   "app",
+		UserID:    "user",
+		SessionID: "session",
+	}
+
+	ctx := icontext.NewInvocationContext(b.Context(), icontext.InvocationContextParams{
+		Artifacts: artifacts,
+	})
+
+	return agent.NewToolContext(ctx, "", nil, nil)
+}
+
 func createToolContext(t *testing.T) agent.Context {
 	t.Helper()
 
