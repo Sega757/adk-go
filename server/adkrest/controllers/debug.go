@@ -105,7 +105,8 @@ func (c *DebugAPIController) EventGraphHandler(rw http.ResponseWriter, req *http
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	resp, err := c.sessionService.Get(req.Context(), &session.GetRequest{
@@ -114,7 +115,8 @@ func (c *DebugAPIController) EventGraphHandler(rw http.ResponseWriter, req *http
 		SessionID: sessionID.ID,
 	})
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Internal error getting session %s: %v", sessionID.ID, err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	eventID := vars["event_id"]
