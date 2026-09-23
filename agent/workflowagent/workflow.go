@@ -123,6 +123,9 @@ func (a *workflowAgent) run(ctx agent.InvocationContext) iter.Seq2[*session.Even
 // Workflow.Resume), the RunState loaded from session, and true if
 // this turn is a resume; (nil, nil, false) for a fresh turn.
 func (a *workflowAgent) detectResume(ctx agent.InvocationContext) (map[string]any, *workflow.RunState, bool, error) {
+	if !utils.HasFunctionResponses(ctx.UserContent()) {
+		return nil, nil, false, nil
+	}
 	frs := utils.FunctionResponses(ctx.UserContent())
 	if len(frs) == 0 {
 		return nil, nil, false, nil

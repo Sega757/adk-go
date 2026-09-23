@@ -897,3 +897,71 @@ func sessionOutputs(sess session.Session) []any {
 	}
 	return outs
 }
+
+func TestBuildResumeResponses_FastPath(t *testing.T) {
+	svc := session.InMemoryService()
+	ctx := t.Context()
+	sessResp, err := svc.Create(ctx, &session.CreateRequest{
+		AppName:   "test_app",
+		UserID:    "u",
+		SessionID: "s",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	sess := sessResp.Session
+
+	// Plain text message fast-paths to nil without inspecting state or history.
+	textMsg := userText("plain text")
+	if got := runner.ExportedBuildResumeResponses(textMsg, nil, sess); got != nil {
+		t.Errorf("ExportedBuildResumeResponses(textMsg) = %v, want nil", got)
+	}
+
+	// Message with function response is parsed.
+	frMsg := &genai.Content{
+		Role: genai.RoleUser,
+		Parts: []*genai.Part{{
+			FunctionResponse: &genai.FunctionResponse{
+				ID:       "call-1",
+				Name:     "ask_human",
+				Response: map[string]any{"response": "ok"},
+			},
+		}},
+	}
+	// Add an event with long running call ID to history so call-1 is pending.
+	ev := session.NewEvent(ctx, "inv-1")
+	ev.Author = "model"
+	ev.LongRunningToolIDs = []string{"call-1"}
+	if err := svc.AppendEvent(ctx, sess, ev); err != nil {
+		t.Fatalf("AppendEvent() error = %v", err)
+	}
+
+	got := runner.ExportedBuildResumeResponses(frMsg, nil, sess)
+	if got == nil || got["call-1"] != "ok" {
+		t.Errorf("ExportedBuildResumeResponses(frMsg) = %v, want map with call-1: ok", got)
+	}
+}
+
+func BenchmarkBuildResumeResponses_TextTurn(b *testing.B) {
+	svc := session.InMemoryService()
+	ctx := context.Background()
+	sessResp, _ := svc.Create(ctx, &session.CreateRequest{
+		AppName:   "bench_app",
+		UserID:    "u",
+		SessionID: "s",
+	})
+	sess := sessResp.Session
+	for i := 0; i < 20; i++ {
+		ev := session.NewEvent(ctx, "inv-1")
+		ev.Author = "model"
+		ev.LLMResponse = model.LLMResponse{
+			Content: genai.NewContentFromText("some output text", "model"),
+		}
+		_ = svc.AppendEvent(ctx, sess, ev)
+	}
+	userMsg := userText("hello world")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = runner.ExportedBuildResumeResponses(userMsg, nil, sess)
+	}
+}
