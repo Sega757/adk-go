@@ -109,13 +109,15 @@ func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.R
 
 	runAgentRequest, err := decodeRequestBody(rw, req)
 	if err != nil {
-		http.Error(rw, "failed to decode request body: "+err.Error(), http.StatusBadRequest)
+		log.Printf("RunSSEHandler decode request body failed: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 
 	err = c.validateSessionExists(req.Context(), runAgentRequest.AppName, runAgentRequest.UserId, runAgentRequest.SessionId)
 	if err != nil {
-		http.Error(rw, "failed to find the session: "+err.Error(), http.StatusNotFound)
+		log.Printf("RunSSEHandler session validation failed: %v", err)
+		http.Error(rw, "not found", http.StatusNotFound)
 		return
 	}
 
