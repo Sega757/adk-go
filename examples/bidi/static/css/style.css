@@ -349,6 +349,13 @@ h1 {
   background-color: white;
   padding: 1.5rem 2rem;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input-container.drag-over {
+  border-top-color: var(--primary-color);
+  background-color: rgba(66, 133, 244, 0.05);
+  box-shadow: 0 -2px 12px rgba(66, 133, 244, 0.2);
 }
 
 #messageForm {
