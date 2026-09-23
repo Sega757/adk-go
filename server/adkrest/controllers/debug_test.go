@@ -38,6 +38,7 @@ import (
 	"google.golang.org/adk/v2/server/adkrest/controllers"
 	"google.golang.org/adk/v2/server/adkrest/internal/fakes"
 	"google.golang.org/adk/v2/server/adkrest/internal/services"
+	"google.golang.org/adk/v2/session"
 )
 
 func TestSessionSpansHandler(t *testing.T) {
@@ -319,6 +320,43 @@ func TestEventGraphHandler_SanitizedInternalError(t *testing.T) {
 
 	sessionService := &fakes.FakeSessionService{Sessions: storedSessions}
 	apiController := controllers.NewDebugAPIController(sessionService, &errAgentLoader{}, nil)
+
+	req, err := http.NewRequest(http.MethodGet, "/debug/apps/app/users/user/sessions/sess-1/events/event-1/graph", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req = mux.SetURLVars(req, map[string]string{
+		"app_name":   "app",
+		"user_id":    "user",
+		"session_id": "sess-1",
+		"event_id":   "event-1",
+	})
+
+	rr := httptest.NewRecorder()
+	apiController.EventGraphHandler(rr, req)
+
+	if gotStatus := rr.Code; gotStatus != http.StatusInternalServerError {
+		t.Errorf("got status %d, want %d", gotStatus, http.StatusInternalServerError)
+	}
+
+	body := strings.TrimSpace(rr.Body.String())
+	if body != "internal server error" {
+		t.Errorf("got body %q, want %q", body, "internal server error")
+	}
+}
+
+type errSessionService struct {
+	session.Service
+	err error
+}
+
+func (s *errSessionService) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
+	return nil, s.err
+}
+
+func TestEventGraphHandler_SessionGetErrorSanitized(t *testing.T) {
+	svc := &errSessionService{err: errors.New("secret database password connection failure")}
+	apiController := controllers.NewDebugAPIController(svc, nil, nil)
 
 	req, err := http.NewRequest(http.MethodGet, "/debug/apps/app/users/user/sessions/sess-1/events/event-1/graph", nil)
 	if err != nil {
