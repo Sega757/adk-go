@@ -113,6 +113,7 @@ function setControlsDisabled(disabled) {
   const sendBtn = document.getElementById("sendButton");
 
   const defaultTooltips = {
+    message: "Type a message and press Enter to send (Esc to clear)",
     startAudioButton: is_audio ? "Stop microphone audio streaming" : "Start microphone audio streaming",
     cameraButton: "Open live camera preview to capture image",
     streamVideoButton: isVideoStreaming ? "Stop live video streaming" : "Start live video streaming",
@@ -317,6 +318,12 @@ if (showAudioEventsCheckbox) {
 
 if (messageInput) {
   messageInput.addEventListener("input", updateSendButtonState);
+  messageInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && messageInput.value) {
+      messageInput.value = "";
+      updateSendButtonState();
+    }
+  });
 }
 clearConsoleBtn.addEventListener('click', clearConsole);
 updateClearConsoleButtonState();
@@ -330,6 +337,41 @@ function updateConnectionStatus(connected) {
     statusIndicator.classList.add("disconnected");
     statusText.textContent = "Disconnected";
   }
+}
+
+// Add copy to clipboard button to agent message bubble
+function addCopyButtonToBubble(messageElement) {
+  if (!messageElement || messageElement.querySelector(".copy-btn")) return;
+  const bubble = messageElement.querySelector(".bubble");
+  if (!bubble) return;
+
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "copy-btn";
+  copyBtn.type = "button";
+  copyBtn.setAttribute("aria-label", "Copy message text");
+  copyBtn.setAttribute("title", "Copy message");
+  copyBtn.textContent = "📋";
+
+  copyBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const textElement = messageElement.querySelector(".bubble-text");
+    if (!textElement) return;
+    const cleanText = textElement.textContent.replace(/\.\.\.$/, "").trim();
+    navigator.clipboard.writeText(cleanText).then(() => {
+      copyBtn.textContent = "✓";
+      copyBtn.setAttribute("aria-label", "Copied to clipboard");
+      copyBtn.setAttribute("title", "Copied!");
+      setTimeout(() => {
+        copyBtn.textContent = "📋";
+        copyBtn.setAttribute("aria-label", "Copy message text");
+        copyBtn.setAttribute("title", "Copy message");
+      }, 2000);
+    }).catch(err => {
+      console.error("Failed to copy message:", err);
+    });
+  });
+
+  bubble.appendChild(copyBtn);
 }
 
 // Create a message bubble element
@@ -354,11 +396,15 @@ function createMessageBubble(text, isUser, isPartial = false) {
   bubbleDiv.appendChild(textP);
   messageDiv.appendChild(bubbleDiv);
 
+  if (!isUser && !isPartial) {
+    addCopyButtonToBubble(messageDiv);
+  }
+
   return messageDiv;
 }
 
 // Create an image message bubble element
-function createImageBubble(imageDataUrl, isUser) {
+function createImageBubble(imageDataUrl, isUser, altText = "Captured image") {
   const messageDiv = document.createElement("div");
   messageDiv.className = `message ${isUser ? "user" : "agent"}`;
 
@@ -368,7 +414,7 @@ function createImageBubble(imageDataUrl, isUser) {
   const img = document.createElement("img");
   img.src = imageDataUrl;
   img.className = "bubble-image";
-  img.alt = "Captured image";
+  img.alt = altText;
 
   bubbleDiv.appendChild(img);
   messageDiv.appendChild(bubbleDiv);
@@ -393,6 +439,8 @@ function updateMessageBubble(element, text, isPartial = false) {
     const typingSpan = document.createElement("span");
     typingSpan.className = "typing-indicator";
     textElement.appendChild(typingSpan);
+  } else if (element.classList.contains("agent")) {
+    addCopyButtonToBubble(element);
   }
 }
 
@@ -405,9 +453,43 @@ function addSystemMessage(text) {
   scrollToBottom();
 }
 
-// Scroll to bottom of messages
-function scrollToBottom() {
-  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+// Scroll to bottom of messages (only auto-scroll if user is near bottom, unless forced)
+function scrollToBottom(force = false) {
+  const msgDiv = document.getElementById("messages") || messagesDiv;
+  if (!msgDiv) return;
+  const isNearBottom = msgDiv.scrollHeight - msgDiv.clientHeight - msgDiv.scrollTop <= 100;
+  const btn = document.getElementById("scrollToBottomBtn");
+  if (force || isNearBottom) {
+    msgDiv.scrollTop = msgDiv.scrollHeight;
+    if (btn) btn.style.display = "none";
+  } else if (btn) {
+    btn.style.display = "block";
+  }
+}
+
+function initScrollListener() {
+  const msgDiv = document.getElementById("messages");
+  const btn = document.getElementById("scrollToBottomBtn");
+  if (msgDiv) {
+    msgDiv.addEventListener("scroll", () => {
+      const isNearBottom = msgDiv.scrollHeight - msgDiv.clientHeight - msgDiv.scrollTop <= 100;
+      const b = document.getElementById("scrollToBottomBtn");
+      if (b) {
+        b.style.display = isNearBottom ? "none" : "block";
+      }
+    });
+  }
+  if (btn) {
+    btn.addEventListener("click", () => {
+      scrollToBottom(true);
+    });
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initScrollListener);
+} else {
+  initScrollListener();
 }
 
 // Append message to messagesDiv, inserting before stream bubble if active
@@ -601,6 +683,9 @@ function connectWebsocket() {
         if (typingIndicator) {
           typingIndicator.remove();
         }
+        if (currentBubbleElement.classList.contains("agent")) {
+          addCopyButtonToBubble(currentBubbleElement);
+        }
       }
       // Remove typing indicator from current output transcription
       if (currentOutputTranscriptionElement) {
@@ -608,6 +693,9 @@ function connectWebsocket() {
         const typingIndicator = textElement.querySelector(".typing-indicator");
         if (typingIndicator) {
           typingIndicator.remove();
+        }
+        if (currentOutputTranscriptionElement.classList.contains("agent")) {
+          addCopyButtonToBubble(currentOutputTranscriptionElement);
         }
       }
       currentMessageId = null;
@@ -954,7 +1042,7 @@ function addSubmitHandler() {
       // Add user message bubble
       const userBubble = createMessageBubble(message, true, false);
       appendMessage(userBubble);
-      scrollToBottom();
+      scrollToBottom(true);
 
       // Clear input and update button state
       messageInput.value = "";
@@ -1133,7 +1221,7 @@ function captureImageFromPreview() {
     // Display the captured image in the chat
     const imageBubble = createImageBubble(imageDataUrl, true);
     appendMessage(imageBubble);
-    scrollToBottom();
+    scrollToBottom(true);
 
     // Convert canvas to blob for sending to server
     canvas.toBlob((blob) => {
@@ -1305,9 +1393,9 @@ fileInput.addEventListener("change", (event) => {
     const mimeType = file.type;
 
     // Display the image in the chat
-    const imageBubble = createImageBubble(reader.result, true);
+    const imageBubble = createImageBubble(reader.result, true, `Uploaded image: ${file.name}`);
     appendMessage(imageBubble);
-    scrollToBottom();
+    scrollToBottom(true);
 
     // Send to server
     sendImage(base64data, mimeType);

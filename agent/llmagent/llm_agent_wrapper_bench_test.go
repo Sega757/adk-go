@@ -75,6 +75,75 @@ func BenchmarkFindUnresolvedTaskDelegations_NoDelegations(b *testing.B) {
 	}
 }
 
+func BenchmarkFindUnresolvedTaskDelegations_EmptySession(b *testing.B) {
+	ctx := context.Background()
+	svc := session.InMemoryService()
+	createResp, err := svc.Create(ctx, &session.CreateRequest{
+		AppName: "app", UserID: "user", SessionID: "sess-empty",
+	})
+	if err != nil {
+		b.Fatalf("session.Create: %v", err)
+	}
+	sess := createResp.Session
+
+	dummyAgent, err := agent.New(agent.Config{Name: "sub_agent"})
+	if err != nil {
+		b.Fatalf("agent.New: %v", err)
+	}
+	taskTool, err := workflowinternal.NewTaskAgentTool(dummyAgent)
+	if err != nil {
+		b.Fatalf("NewTaskAgentTool: %v", err)
+	}
+	toolsDict := map[string]tool.Tool{
+		taskTool.Name(): taskTool,
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for b.Loop() {
+		_ = findUnresolvedTaskDelegations(sess, "chat_coordinator", toolsDict)
+	}
+}
+
+func BenchmarkFindUnresolvedTaskDelegations_NoTaskTools(b *testing.B) {
+	ctx := context.Background()
+	svc := session.InMemoryService()
+	createResp, err := svc.Create(ctx, &session.CreateRequest{
+		AppName: "app", UserID: "user", SessionID: "sess-no-task",
+	})
+	if err != nil {
+		b.Fatalf("session.Create: %v", err)
+	}
+	sess := createResp.Session
+
+	toolsDict := map[string]tool.Tool{} // empty / no TaskAgentTool
+
+	for i := 0; i < 50; i++ {
+		ev := session.NewEvent(ctx, "inv-1")
+		ev.Author = "user"
+		if i%2 == 1 {
+			ev.Author = "chat_coordinator"
+		}
+		ev.LLMResponse = model.LLMResponse{
+			Content: &genai.Content{
+				Role:  genai.RoleModel,
+				Parts: []*genai.Part{{Text: "Hello there, how can I help you today?"}},
+			},
+		}
+		if err := svc.AppendEvent(ctx, sess, ev); err != nil {
+			b.Fatalf("AppendEvent: %v", err)
+		}
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for b.Loop() {
+		_ = findUnresolvedTaskDelegations(sess, "chat_coordinator", toolsDict)
+	}
+}
+
 func BenchmarkExtractFinishTaskFC_TextEvent(b *testing.B) {
 	ev := &session.Event{
 		LLMResponse: model.LLMResponse{

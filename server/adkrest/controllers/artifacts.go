@@ -15,6 +15,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -38,7 +39,8 @@ func (c *ArtifactsAPIController) ListArtifactsHandler(rw http.ResponseWriter, re
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	if sessionID.ID == "" {
@@ -51,7 +53,8 @@ func (c *ArtifactsAPIController) ListArtifactsHandler(rw http.ResponseWriter, re
 		SessionID: sessionID.ID,
 	})
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal error: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	files := resp.FileNames
@@ -66,7 +69,8 @@ func (c *ArtifactsAPIController) LoadArtifactHandler(rw http.ResponseWriter, req
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	if sessionID.ID == "" {
@@ -98,7 +102,8 @@ func (c *ArtifactsAPIController) LoadArtifactHandler(rw http.ResponseWriter, req
 
 	resp, err := c.artifactService.Load(req.Context(), loadReq)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal error: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	EncodeJSONResponse(resp.Part, http.StatusOK, rw)
@@ -109,7 +114,8 @@ func (c *ArtifactsAPIController) LoadArtifactVersionHandler(rw http.ResponseWrit
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	if sessionID.ID == "" {
@@ -144,7 +150,8 @@ func (c *ArtifactsAPIController) LoadArtifactVersionHandler(rw http.ResponseWrit
 
 	resp, err := c.artifactService.Load(req.Context(), loadReq)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal error: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	EncodeJSONResponse(resp.Part, http.StatusOK, rw)
@@ -155,7 +162,8 @@ func (c *ArtifactsAPIController) DeleteArtifactHandler(rw http.ResponseWriter, r
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	if sessionID.ID == "" {
@@ -174,7 +182,8 @@ func (c *ArtifactsAPIController) DeleteArtifactHandler(rw http.ResponseWriter, r
 		FileName:  artifactName,
 	})
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal error: %v", err)
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	EncodeJSONResponse(nil, http.StatusOK, rw)

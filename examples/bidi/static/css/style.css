@@ -134,6 +134,29 @@ h1 {
   flex-direction: column;
   overflow: hidden;
   border-right: 1px solid var(--border-color);
+  position: relative;
+}
+
+/* Floating scroll-to-bottom button */
+.scroll-bottom-btn {
+  position: absolute;
+  bottom: 5.5rem;
+  right: 2rem;
+  z-index: 10;
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 1.5rem;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
+  border: none;
+}
+
+.scroll-bottom-btn:hover {
+  background-color: #3367d6;
+  transform: translateY(-2px);
 }
 
 /* Messages Area */
@@ -210,11 +233,46 @@ h1 {
   background-color: var(--agent-bubble-bg);
   color: var(--agent-text-color);
   border-bottom-left-radius: 0.25rem;
+  padding-right: 2rem;
 }
 
 .bubble-text {
   margin: 0;
   line-height: 1.5;
+}
+
+/* Copy button styling for agent message bubbles */
+.bubble .copy-btn {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+  color: #5f6368;
+}
+
+.bubble:hover .copy-btn,
+.bubble:focus-within .copy-btn,
+.copy-btn:focus-visible {
+  opacity: 1;
+}
+
+.bubble .copy-btn:hover {
+  background-color: #ffffff;
+  color: #202124;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.bubble .copy-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
 }
 
 /* Interrupted message styling */

@@ -48,6 +48,9 @@ func TestIsGoogleAPI(t *testing.T) {
 }
 
 func TestEgressClient(t *testing.T) {
+	os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "1")
+	defer os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "")
+
 	registryClient := &http.Client{}
 	override := &http.Client{}
 	c := &Client{httpClient: registryClient}

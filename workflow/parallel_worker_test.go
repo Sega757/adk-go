@@ -772,3 +772,21 @@ func TestParallelWorker_RetryEmitsSpanPerAttempt(t *testing.T) {
 		t.Errorf("status multiset = {Error:%d, Unset:%d}, want {Error:1, Unset:1}", errCount, unsetCount)
 	}
 }
+
+func BenchmarkParallelWorker_Run(b *testing.B) {
+	pw, err := NewParallelWorker("parallel", upperNode, 0, defaultNodeConfig)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	mockCtx := newMockCtx(b)
+	exCtx := agent.NewContext(mockCtx)
+	input := []any{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		for range pw.Run(exCtx, input) {
+		}
+	}
+}
