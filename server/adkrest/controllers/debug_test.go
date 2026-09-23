@@ -344,6 +344,65 @@ func TestEventGraphHandler_SanitizedInternalError(t *testing.T) {
 	}
 }
 
+func TestEventGraphHandler_SanitizedBadRequestAndSessionGetError(t *testing.T) {
+	t.Run("bad_request_sanitized", func(t *testing.T) {
+		sessionService := &fakes.FakeSessionService{}
+		apiController := controllers.NewDebugAPIController(sessionService, nil, nil)
+
+		req, err := http.NewRequest(http.MethodGet, "/debug/apps/app/users//sessions/sess-1/events/event-1/graph", nil)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		// Missing user_id parameter triggers SessionIDFromHTTPParameters error
+		req = mux.SetURLVars(req, map[string]string{
+			"app_name":   "app",
+			"session_id": "sess-1",
+			"event_id":   "event-1",
+		})
+
+		rr := httptest.NewRecorder()
+		apiController.EventGraphHandler(rr, req)
+
+		if gotStatus := rr.Code; gotStatus != http.StatusBadRequest {
+			t.Errorf("got status %d, want %d", gotStatus, http.StatusBadRequest)
+		}
+
+		body := strings.TrimSpace(rr.Body.String())
+		if body != "bad request" {
+			t.Errorf("got body %q, want %q", body, "bad request")
+		}
+	})
+
+	t.Run("session_get_error_sanitized", func(t *testing.T) {
+		// Empty fake session service returns an error on Get
+		sessionService := &fakes.FakeSessionService{}
+		apiController := controllers.NewDebugAPIController(sessionService, nil, nil)
+
+		req, err := http.NewRequest(http.MethodGet, "/debug/apps/app/users/user/sessions/nonexistent/events/event-1/graph", nil)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req = mux.SetURLVars(req, map[string]string{
+			"app_name":   "app",
+			"user_id":    "user",
+			"session_id": "nonexistent",
+			"event_id":   "event-1",
+		})
+
+		rr := httptest.NewRecorder()
+		apiController.EventGraphHandler(rr, req)
+
+		if gotStatus := rr.Code; gotStatus != http.StatusInternalServerError {
+			t.Errorf("got status %d, want %d", gotStatus, http.StatusInternalServerError)
+		}
+
+		body := strings.TrimSpace(rr.Body.String())
+		if body != "internal server error" {
+			t.Errorf("got body %q, want %q", body, "internal server error")
+		}
+	})
+}
+
 func emitTestSignals(sessionID, eventID, opName string, tp *sdktrace.TracerProvider, lp *sdklog.LoggerProvider) {
 	tracer := tp.Tracer("test-tracer")
 	logger := lp.Logger("test-logger")
