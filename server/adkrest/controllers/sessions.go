@@ -38,7 +38,7 @@ func NewSessionsAPIController(service session.Service) *SessionsAPIController {
 	return &SessionsAPIController{service: service}
 }
 
-// CreateSesssionHTTP is a HTTP handler for the create session API.
+// CreateSessionHandler is a HTTP handler for the create session API.
 func (c *SessionsAPIController) CreateSessionHandler(rw http.ResponseWriter, req *http.Request) {
 	params := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(params)
@@ -58,7 +58,7 @@ func (c *SessionsAPIController) CreateSessionHandler(rw http.ResponseWriter, req
 	}
 	respSession, err := c.createSession(req.Context(), sessionID, createSessionRequest)
 	if err != nil {
-		log.Printf("Internal error: %v", err)
+		log.Printf("Internal server error in CreateSessionHandler: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -84,7 +84,7 @@ func (c *SessionsAPIController) createSession(ctx context.Context, sessionID mod
 	return models.FromSession(session.Session)
 }
 
-// DeleteSession handles deleting a specific session.
+// DeleteSessionHandler handles deleting a specific session.
 func (c *SessionsAPIController) DeleteSessionHandler(rw http.ResponseWriter, req *http.Request) {
 	params := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(params)
@@ -104,14 +104,14 @@ func (c *SessionsAPIController) DeleteSessionHandler(rw http.ResponseWriter, req
 		SessionID: sessionID.ID,
 	})
 	if err != nil {
-		log.Printf("Internal error: %v", err)
+		log.Printf("Internal server error in DeleteSessionHandler: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	EncodeJSONResponse(nil, http.StatusOK, rw)
 }
 
-// GetSession retrieves a specific session by its ID.
+// GetSessionHandler retrieves a specific session by its ID.
 func (c *SessionsAPIController) GetSessionHandler(rw http.ResponseWriter, req *http.Request) {
 	params := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(params)
@@ -130,20 +130,20 @@ func (c *SessionsAPIController) GetSessionHandler(rw http.ResponseWriter, req *h
 		SessionID: sessionID.ID,
 	})
 	if err != nil {
-		log.Printf("Internal error: %v", err)
+		log.Printf("Internal server error in GetSessionHandler: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	session, err := models.FromSession(storedSession.Session)
 	if err != nil {
-		log.Printf("Internal error: %v", err)
+		log.Printf("Internal server error in GetSessionHandler: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	EncodeJSONResponse(session, http.StatusOK, rw)
 }
 
-// ListSessions handles listing all sessions for a given app and user.
+// ListSessionsHandler handles listing all sessions for a given app and user.
 func (c *SessionsAPIController) ListSessionsHandler(rw http.ResponseWriter, req *http.Request) {
 	params := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(params)
@@ -158,14 +158,14 @@ func (c *SessionsAPIController) ListSessionsHandler(rw http.ResponseWriter, req 
 		UserID:  sessionID.UserID,
 	})
 	if err != nil {
-		log.Printf("Internal error: %v", err)
+		log.Printf("Internal server error in ListSessionsHandler: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	for _, session := range resp.Sessions {
 		respSession, err := models.FromSession(session)
 		if err != nil {
-			log.Printf("Internal error: %v", err)
+			log.Printf("Internal server error in ListSessionsHandler: %v", err)
 			http.Error(rw, "internal server error", http.StatusInternalServerError)
 			return
 		}
