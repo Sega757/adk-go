@@ -1413,6 +1413,56 @@ fileInput.addEventListener("change", (event) => {
   reader.readAsDataURL(file);
 });
 
+// Drag and drop image handling on input container
+const inputContainer = document.querySelector(".input-container");
+if (inputContainer) {
+  ["dragover", "drop"].forEach(eventName => {
+    window.addEventListener(eventName, (e) => e.preventDefault());
+  });
+
+  ["dragenter", "dragover"].forEach(eventName => {
+    inputContainer.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        inputContainer.classList.add("drag-over");
+      }
+    });
+  });
+
+  ["dragleave", "drop"].forEach(eventName => {
+    inputContainer.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      inputContainer.classList.remove("drag-over");
+    });
+  });
+
+  inputContainer.addEventListener("drop", (e) => {
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) return;
+    const dt = e.dataTransfer;
+    if (!dt || !dt.files || dt.files.length === 0) return;
+    const file = dt.files[0];
+    if (file && file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64data = reader.result.split(',')[1];
+        const mimeType = file.type;
+        const imageBubble = createImageBubble(reader.result, true, `Uploaded image: ${file.name}`);
+        appendMessage(imageBubble);
+        scrollToBottom(true);
+        sendImage(base64data, mimeType);
+        addConsoleEntry("outgoing", `File dropped: ${file.name} (${file.size} bytes)`, {
+          name: file.name,
+          size: file.size,
+          type: mimeType
+        }, "📁", "user");
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+}
+
 // Close modal when clicking outside of it or pressing Escape
 cameraModal.addEventListener("click", (event) => {
   if (event.target === cameraModal) {
