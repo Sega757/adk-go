@@ -43,14 +43,16 @@ func (c *SessionsAPIController) CreateSessionHandler(rw http.ResponseWriter, req
 	params := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(params)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	createSessionRequest := models.CreateSessionRequest{}
 	if req.Body != nil && req.Body != http.NoBody {
 		err := json.NewDecoder(http.MaxBytesReader(rw, req.Body, 10*1024*1024)).Decode(&createSessionRequest)
 		if err != nil {
-			http.Error(rw, err.Error(), http.StatusBadRequest)
+			log.Printf("Bad request: %v", err)
+			http.Error(rw, "bad request", http.StatusBadRequest)
 			return
 		}
 	}
@@ -87,7 +89,8 @@ func (c *SessionsAPIController) DeleteSessionHandler(rw http.ResponseWriter, req
 	params := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(params)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	if sessionID.ID == "" {
@@ -113,7 +116,8 @@ func (c *SessionsAPIController) GetSessionHandler(rw http.ResponseWriter, req *h
 	params := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(params)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	if sessionID.ID == "" {
@@ -144,7 +148,8 @@ func (c *SessionsAPIController) ListSessionsHandler(rw http.ResponseWriter, req 
 	params := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(params)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 	var sessions []models.Session
