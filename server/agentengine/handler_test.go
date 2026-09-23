@@ -82,3 +82,54 @@ func TestQueryHandleQueryErrorReturnsGeneric500(t *testing.T) {
 		t.Errorf("Response body = %q, want %q", gotBody, wantBody)
 	}
 }
+
+func TestQueryInvalidJSONReturnsSanitized400(t *testing.T) {
+	cfg := &launcher.Config{
+		SessionService: session.InMemoryService(),
+	}
+
+	handler, err := NewHandler(cfg, 10*time.Second, 1024*1024, "test-agent-engine")
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/reasoning_engine", bytes.NewBufferString("{invalid json}"))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+
+	wantBody := "invalid request body\n"
+	if gotBody := rr.Body.String(); gotBody != wantBody {
+		t.Errorf("Response body = %q, want %q", gotBody, wantBody)
+	}
+}
+
+func TestQueryPayloadTooLargeReturnsSanitized400(t *testing.T) {
+	cfg := &launcher.Config{
+		SessionService: session.InMemoryService(),
+	}
+
+	handler, err := NewHandler(cfg, 10*time.Second, 10, "test-agent-engine")
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	largePayload := bytes.Repeat([]byte("a"), 100)
+	req := httptest.NewRequest(http.MethodPost, "/reasoning_engine", bytes.NewBuffer(largePayload))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+
+	wantBody := "failed to read request body\n"
+	if gotBody := rr.Body.String(); gotBody != wantBody {
+		t.Errorf("Response body = %q, want %q", gotBody, wantBody)
+	}
+}
