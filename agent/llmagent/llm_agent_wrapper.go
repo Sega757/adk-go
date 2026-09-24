@@ -192,14 +192,24 @@ func ProcessLLMAgentOutput(a agent.Agent, ev *session.Event) error {
 
 	// Merge non-thought text parts; mirrors adk-python's
 	// (p.text for p in parts if p.text and not p.thought) filter.
-	var b strings.Builder
-	for _, p := range ev.Content.Parts {
-		if p == nil || p.Thought {
-			continue
+	// Fast-path single-part non-thought text outputs to avoid strings.Builder
+	// allocation and string copying on standard LLM response turns.
+	var text string
+	if len(ev.Content.Parts) == 1 {
+		p := ev.Content.Parts[0]
+		if p != nil && !p.Thought {
+			text = p.Text
 		}
-		b.WriteString(p.Text)
+	} else {
+		var b strings.Builder
+		for _, p := range ev.Content.Parts {
+			if p == nil || p.Thought {
+				continue
+			}
+			b.WriteString(p.Text)
+		}
+		text = b.String()
 	}
-	text := b.String()
 
 	var output any
 	if state.OutputSchema != nil {
