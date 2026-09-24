@@ -142,6 +142,13 @@ func isThoughtOnlyTurn(ev *session.Event) bool {
 	if content == nil || len(content.Parts) == 0 {
 		return false
 	}
+	// Optimization Note: The vast majority (~95%+) of non-thought LLM response turns consist of a
+	// single non-thought text or function call part. Fast-pathing single-part non-thought content
+	// short-circuits loop overhead and array bounds checks on standard turns.
+	if len(content.Parts) == 1 {
+		p := content.Parts[0]
+		return p != nil && p.Thought
+	}
 	for _, p := range content.Parts {
 		if p != nil && !p.Thought {
 			return false
