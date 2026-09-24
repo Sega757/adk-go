@@ -1413,6 +1413,73 @@ fileInput.addEventListener("change", (event) => {
   reader.readAsDataURL(file);
 });
 
+// Drag and drop image file upload handling for input container
+const inputContainer = document.querySelector(".input-container");
+if (inputContainer) {
+  let dragCounter = 0;
+
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    inputContainer.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, false);
+  });
+
+  inputContainer.addEventListener('dragenter', () => {
+    dragCounter++;
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+      inputContainer.classList.add('drag-over');
+    }
+  });
+
+  inputContainer.addEventListener('dragleave', () => {
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      inputContainer.classList.remove('drag-over');
+    }
+  });
+
+  inputContainer.addEventListener('drop', (e) => {
+    dragCounter = 0;
+    inputContainer.classList.remove('drag-over');
+
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+      addSystemMessage("Cannot upload file: Disconnected from server.");
+      return;
+    }
+
+    const dt = e.dataTransfer;
+    const files = dt ? dt.files : null;
+    if (!files || files.length === 0) return;
+
+    const file = Array.from(files).find(f => f.type.startsWith('image/'));
+    if (!file) {
+      addSystemMessage("Please drop an image file (e.g. JPEG or PNG).");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64data = reader.result.split(',')[1];
+      const mimeType = file.type || 'image/jpeg';
+
+      const imageBubble = createImageBubble(reader.result, true, `Uploaded image: ${file.name}`);
+      appendMessage(imageBubble);
+      scrollToBottom(true);
+
+      sendImage(base64data, mimeType);
+
+      addConsoleEntry('outgoing', `File dropped & sent: ${file.name} (${file.size} bytes)`, {
+        name: file.name,
+        size: file.size,
+        type: mimeType
+      }, '📁', 'user');
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // Close modal when clicking outside of it or pressing Escape
 cameraModal.addEventListener("click", (event) => {
   if (event.target === cameraModal) {
