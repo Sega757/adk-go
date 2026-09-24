@@ -261,7 +261,7 @@ func (r *Runner) newNodeInvocationContext(
 // waiting, but the human may answer the others; matching open history
 // calls lets each answer drive a resume until all are resolved.
 func buildResumeResponses(msg *genai.Content, state *workflow.RunState, sess session.Session) map[string]any {
-	if msg == nil {
+	if msg == nil || !utils.HasFunctionResponses(msg) {
 		return nil
 	}
 	pending := map[string]struct{}{}
@@ -368,7 +368,7 @@ func waitingInterruptIDs(state *workflow.RunState) map[string]struct{} {
 // history, letting the caller mint a fresh ID. Go analog of adk-python
 // Runner._resolve_invocation_id.
 func resolveInvocationID(sess session.Session, msg *genai.Content) string {
-	if sess == nil || msg == nil {
+	if sess == nil || msg == nil || !utils.HasFunctionResponses(msg) {
 		return ""
 	}
 	for _, fr := range utils.FunctionResponses(msg) {

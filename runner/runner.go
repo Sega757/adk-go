@@ -668,16 +668,18 @@ func findActiveTaskIsolationScope(sess session.Session) string {
 			continue
 		}
 		scope := ev.IsolationScope
-		for _, fr := range utils.FunctionResponses(ev.Content) {
-			if fr == nil || fr.Name != workflowinternal.FinishTaskToolName {
-				continue
-			}
-			if result, ok := fr.Response["result"]; ok {
-				if s, ok := result.(string); ok && s == workflowinternal.FinishTaskSuccessResult {
-					finished[scope] = struct{}{}
+		if utils.HasFunctionResponses(ev.Content) {
+			for _, fr := range utils.FunctionResponses(ev.Content) {
+				if fr == nil || fr.Name != workflowinternal.FinishTaskToolName {
+					continue
 				}
+				if result, ok := fr.Response["result"]; ok {
+					if s, ok := result.(string); ok && s == workflowinternal.FinishTaskSuccessResult {
+						finished[scope] = struct{}{}
+					}
+				}
+				break
 			}
-			break
 		}
 		if _, done := finished[scope]; done {
 			continue
@@ -725,7 +727,7 @@ func (r *Runner) findAgentToRun(session session.Session, msg *genai.Content) (ag
 // handleUserFunctionCallResponse finds the function call event that matches the function response id
 // delivered by the user in the latest event.
 func handleUserFunctionCallResponse(events session.Events, msg *genai.Content) *session.Event {
-	if events.Len() == 0 {
+	if events.Len() == 0 || !utils.HasFunctionResponses(msg) {
 		return nil
 	}
 
