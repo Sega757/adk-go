@@ -20,6 +20,8 @@ import (
 
 	"google.golang.org/genai"
 
+	"google.golang.org/adk/v2/model"
+	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/tool"
 )
 
@@ -90,6 +92,44 @@ func BenchmarkFindLongRunningFunctionCallIDs_StandardCall(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		_ = findLongRunningFunctionCallIDs(c, tools)
+	}
+}
+
+func BenchmarkIsThoughtOnlyTurn_NonThought(b *testing.B) {
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role: "model",
+				Parts: []*genai.Part{
+					{Text: "Here is the response"},
+				},
+			},
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = isThoughtOnlyTurn(ev)
+	}
+}
+
+func BenchmarkIsThoughtOnlyTurn_ThoughtOnly(b *testing.B) {
+	ev := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role: "model",
+				Parts: []*genai.Part{
+					{Text: "Thinking...", Thought: true},
+				},
+			},
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = isThoughtOnlyTurn(ev)
 	}
 }
 
