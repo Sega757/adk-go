@@ -78,7 +78,7 @@ func createFinalModelResponseEvent(invocationContext agent.InvocationContext, re
 
 // retrieveStructuredModelResponse checks if function response contains set_model_response tool and extract JSON.
 func retrieveStructuredModelResponse(ev *session.Event) (string, error) {
-	if ev == nil || ev.LLMResponse.Content == nil {
+	if ev == nil || ev.LLMResponse.Content == nil || !utils.HasFunctionResponses(ev.LLMResponse.Content) {
 		return "", nil
 	}
 

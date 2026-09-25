@@ -1048,6 +1048,9 @@ func (c *cancelledToolContext) Value(key any) any {
 // TODO: accept filters to include/exclude function calls.
 // TODO: check feasibility of running tool.Run concurrently.
 func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[string]tool.Tool, resp *model.LLMResponse, toolConfirmations map[string]*toolconfirmation.ToolConfirmation, liveSess agent.LiveSession) (mergedEvent *session.Event, err error) {
+	if resp == nil || !utils.HasFunctionCalls(resp.Content) {
+		return nil, nil
+	}
 	fnCalls := utils.FunctionCalls(resp.Content)
 
 	// Lazy-initialize toolNames only if a tool lookup fails, avoiding
