@@ -41,24 +41,26 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 			return // In python, no error is yielded.
 		}
 
-		toolsmap := make(map[string]tool.Tool)
-		for _, tool := range f.Tools {
-			toolsmap[tool.Name()] = tool
+		if ctx.Session() == nil {
+			return
 		}
 
-		var events []*session.Event
-		if ctx.Session() != nil {
-			for e := range ctx.Session().Events().All() {
-				events = append(events, e)
-			}
+		sessEvents := ctx.Session().Events()
+		if sessEvents == nil || sessEvents.Len() == 0 {
+			return
 		}
+
+		numEvents := sessEvents.Len()
 		confirmationResponses := make(map[string]toolconfirmation.ToolConfirmation)
 		confirmationEventIndex := -1
-		for k := len(events) - 1; k >= 0; k-- {
-			event := events[k]
+		for k := numEvents - 1; k >= 0; k-- {
+			event := sessEvents.At(k)
 			// Find the first event authored by user
 			if event.Author != "user" {
 				continue
+			}
+			if !utils.HasFunctionResponses(event.Content) {
+				return
 			}
 			responses := utils.FunctionResponses(event.Content)
 			if len(responses) == 0 {
@@ -106,8 +108,13 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 			return
 		}
 
+		toolsmap := make(map[string]tool.Tool, len(f.Tools))
+		for _, tool := range f.Tools {
+			toolsmap[tool.Name()] = tool
+		}
+
 		for k := confirmationEventIndex - 1; k >= 0; k-- {
-			event := events[k]
+			event := sessEvents.At(k)
 			// Find the system generated FunctionCall event requesting the tool confirmation
 			calls := utils.FunctionCalls(event.Content)
 			if len(calls) == 0 {
@@ -136,8 +143,8 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 
 			// TODO consider forward or backward pass instead of nested loops
 			// Remove the tools that have already been confirmed.
-			for j := len(events) - 1; j > confirmationEventIndex; j-- {
-				event = events[j]
+			for j := numEvents - 1; j > confirmationEventIndex; j-- {
+				event = sessEvents.At(j)
 				responses := utils.FunctionResponses(event.Content)
 				if len(responses) == 0 {
 					continue

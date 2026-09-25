@@ -319,3 +319,38 @@ func TestRequestConfirmationRequestProcessor(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkRequestConfirmationRequestProcessor_StandardUserTurn(b *testing.B) {
+	agnt, tools, _ := newMockLlmAgent()
+	sess := &fakeSession{
+		events: []*session.Event{
+			{
+				Author: "user",
+				LLMResponse: model.LLMResponse{
+					Content: &genai.Content{
+						Role: "user",
+						Parts: []*genai.Part{
+							{Text: "Hello world"},
+						},
+					},
+				},
+			},
+		},
+	}
+	ctx := icontext.NewInvocationContext(b.Context(), icontext.InvocationContextParams{
+		Agent:   agnt,
+		Session: sess,
+	})
+	req := &model.LLMRequest{}
+	flow := &llminternal.Flow{Tools: tools}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		for _, err := range llminternal.RequestConfirmationRequestProcessor(ctx, req, flow) {
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+}
