@@ -170,6 +170,47 @@ h1 {
   background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%);
 }
 
+/* Empty State */
+.empty-state {
+  margin: auto;
+  text-align: center;
+  padding: 3rem 1.5rem;
+  max-width: 420px;
+  color: #5f6368;
+  user-select: none;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+  line-height: 1;
+}
+
+.empty-state-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #202124;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state-subtitle {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #5f6368;
+}
+
 /* Scroll styling */
 #messages::-webkit-scrollbar {
   width: 8px;

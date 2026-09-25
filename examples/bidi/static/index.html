@@ -30,7 +30,13 @@
 
     <div class="main-layout">
       <div class="container">
-        <div id="messages" role="log" aria-label="Chat messages" aria-live="polite"></div>
+        <div id="messages" role="log" aria-label="Chat messages" aria-live="polite">
+          <div id="emptyState" class="empty-state">
+            <div class="empty-state-icon" aria-hidden="true">💬</div>
+            <div class="empty-state-title">Start a Conversation</div>
+            <div class="empty-state-subtitle">Type a message below, start voice streaming, or upload an image to begin.</div>
+          </div>
+        </div>
         <button type="button" id="scrollToBottomBtn" class="scroll-bottom-btn" aria-label="Scroll to bottom of chat" title="Scroll to latest message" style="display: none;">↓ New messages</button>
 
         <div class="input-container">

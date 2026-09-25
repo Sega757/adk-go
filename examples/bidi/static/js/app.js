@@ -494,6 +494,10 @@ if (document.readyState === "loading") {
 
 // Append message to messagesDiv, inserting before stream bubble if active
 function appendMessage(element) {
+  const emptyState = document.getElementById("emptyState");
+  if (emptyState) {
+    emptyState.remove();
+  }
   const streamBubble = document.getElementById("streamPreviewBubble");
   if (streamBubble) {
     messagesDiv.insertBefore(element, streamBubble);
