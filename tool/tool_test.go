@@ -169,7 +169,7 @@ func (c *testContext) AgentName() string { return "test-agent" }
 
 func (c *testContext) InvocationID() string { return "test-invocation-id" }
 func (c *testContext) AppName() string      { return "test-app" }
-func (c *testContext) Branch() string { return "test-branch" }
+func (c *testContext) Branch() string       { return "test-branch" }
 
 func (c *testContext) SessionID() string { return "test-session-id" }
 

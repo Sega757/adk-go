@@ -484,7 +484,7 @@ func (m *MockInvocationContext) UserContent() *genai.Content { return nil }
 
 func (m *MockInvocationContext) RunConfig() *agent.RunConfig { return nil } // Use context? No, RunConfig struct.
 func (m *MockInvocationContext) EndInvocation()              {}
-func (m *MockInvocationContext) Ended() bool { return false }
+func (m *MockInvocationContext) Ended() bool                 { return false }
 
 func (m *MockInvocationContext) WithContext(ctx context.Context) agent.InvocationContext { return m }
 
