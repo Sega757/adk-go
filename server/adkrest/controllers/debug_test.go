@@ -133,12 +133,13 @@ func TestSessionSpansHandler(t *testing.T) {
 
 func TestEventSpanHandler(t *testing.T) {
 	tc := []struct {
-		name       string
-		eventID    string
-		reqEventID string
-		opName     string
-		wantStatus int
-		wantBody   map[string]any
+		name            string
+		eventID         string
+		reqEventID      string
+		opName          string
+		wantStatus      int
+		wantBody        map[string]any
+		wantErrorString string
 	}{
 		{
 			name:       "span_with_generate_content_operation",
@@ -183,11 +184,12 @@ func TestEventSpanHandler(t *testing.T) {
 			},
 		},
 		{
-			name:       "span_not_found_for_event_id",
-			eventID:    "test-event",
-			reqEventID: "other-event",
-			opName:     semconv.GenAIOperationNameExecuteTool.Value.AsString(),
-			wantStatus: http.StatusNotFound,
+			name:            "span_not_found_for_event_id",
+			eventID:         "test-event",
+			reqEventID:      "other-event",
+			opName:          semconv.GenAIOperationNameExecuteTool.Value.AsString(),
+			wantStatus:      http.StatusNotFound,
+			wantErrorString: "event not found",
 		},
 		{
 			name:       "span_with_different_operation_name",
@@ -237,6 +239,11 @@ func TestEventSpanHandler(t *testing.T) {
 
 				if diff := cmp.Diff(tt.wantBody, gotBody, ignoreDynamicFields()); diff != "" {
 					t.Errorf("handler returned unexpected body (-want +got):\n%s", diff)
+				}
+			} else if tt.wantErrorString != "" {
+				gotBody := strings.TrimSpace(rr.Body.String())
+				if gotBody != tt.wantErrorString {
+					t.Errorf("got error string %q, want %q", gotBody, tt.wantErrorString)
 				}
 			}
 		})
