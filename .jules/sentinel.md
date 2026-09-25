@@ -46,3 +46,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** In `RunLiveHandler` (`server/adkrest/controllers/runtime.go`), WebSocket close frame reasons for internal server errors (`CloseInternalServerErr` / 1011) sent raw error strings (e.g., `err.Error()`, agent loader failure details) to clients, exposing application internals.
 **Learning:** WebSocket close frame reasons are sent directly to connected clients. Sending raw error messages on internal failures (1011) can leak internal file paths, stack traces, or configuration details.
 **Prevention:** Log detailed errors server-side using `log.Printf`, and return a sanitized generic reason like `"internal server error"` in WebSocket `CloseInternalServerErr` frames.
+
+## 2026-09-25 - [SSRF bypass via 0.0.0.0 / Unspecified IPs]
+**Vulnerability:** The outbound HTTP client wrapper `clientWithSSRFProtection` in `agentregistry` checked for loopback, private, and link-local IPs but failed to block unspecified IP addresses (e.g., `0.0.0.0`).
+**Learning:** `0.0.0.0` and `::` (unspecified IPs) are often routed to the local machine (`localhost`) by many operating systems (e.g. Linux/macOS) when passed to socket connect APIs, bypassing basic loopback SSRF checks and allowing attackers to reach internal services.
+**Prevention:** Always include `ip.IsUnspecified()` when enforcing SSRF protections using an IP blocklist approach in custom `net.Dialer` contexts.
