@@ -293,7 +293,8 @@ func TestAgentTransferRequestProcessor(t *testing.T) {
 			SubAgents: []agent.Agent{
 				utils.Must(agent.New(agent.Config{
 					Name: "Sub1",
-				})), utils.Must(llmagent.New(llmagent.Config{
+				})),
+				utils.Must(llmagent.New(llmagent.Config{
 					Name:  "Sub2",
 					Model: llm,
 				})),
