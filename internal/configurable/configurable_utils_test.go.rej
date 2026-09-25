@@ -1,0 +1,11 @@
+--- internal/configurable/configurable_utils_test.go
++++ internal/configurable/configurable_utils_test.go
+@@ -450,7 +450,7 @@
+		}
+		defer func() {
+			absPath := filepath.Join(cfgDir, "registries.yaml")
+-			os.Remove(absPath)
++			_ = os.Remove(absPath)
+		}()
+
+		tests := []struct {
