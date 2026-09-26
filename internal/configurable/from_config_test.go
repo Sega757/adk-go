@@ -33,7 +33,7 @@ agent_class: LoopAgent
 name: happy_agent
 max_iterations: 3
 `)
-		if err := os.WriteFile(configPath, yamlContent, 0644); err != nil {
+		if err := os.WriteFile(configPath, yamlContent, 0o644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
@@ -58,7 +58,7 @@ max_iterations: 3
 name: default_llm_agent
 model: gemini-1.5-flash
 `)
-		if err := os.WriteFile(configPath, yamlContent, 0644); err != nil {
+		if err := os.WriteFile(configPath, yamlContent, 0o644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
@@ -88,7 +88,7 @@ model: gemini-1.5-flash
 		resetRegistries(t)
 		dir := t.TempDir()
 		invalidPath := filepath.Join(dir, "invalid.yaml")
-		if err := os.WriteFile(invalidPath, []byte("invalid: yaml: : content"), 0644); err != nil {
+		if err := os.WriteFile(invalidPath, []byte("invalid: yaml: : content"), 0o644); err != nil {
 			t.Fatalf("failed to write invalid file: %v", err)
 		}
 		_, err := FromConfig(context.Background(), invalidPath)
@@ -105,7 +105,7 @@ model: gemini-1.5-flash
 agent_class: NonExistentAgentClass
 name: test_agent
 `)
-		if err := os.WriteFile(unregisteredPath, yamlContent, 0644); err != nil {
+		if err := os.WriteFile(unregisteredPath, yamlContent, 0o644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
 		_, err := FromConfig(context.Background(), unregisteredPath)
