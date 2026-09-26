@@ -28,7 +28,7 @@ import (
 // json tags are supported.
 // struct embedding is supported.
 func ConvertSnake(o any) any {
-	res, err := convertSnake("", "", o)
+	res, err := convertSnake("", o)
 	if err != nil {
 		log.Printf("Failed to convert: %+v of type %T: %v", o, o, err)
 		// better to return an original version than nothing
@@ -37,9 +37,9 @@ func ConvertSnake(o any) any {
 	return res
 }
 
-// convertSnake does the job. It includes indent for debugging purposes
+// convertSnake does the job.
 // uses reflect to traverse the object
-func convertSnake(path, indent string, o any) (any, error) {
+func convertSnake(path string, o any) (any, error) {
 	// handle nil
 	if o == nil {
 		return nil, nil
@@ -79,7 +79,7 @@ func convertSnake(path, indent string, o any) (any, error) {
 			}
 			// handle embedded structs
 			if fvt.Anonymous {
-				embed, err := convertSnake(path+"."+name, indent+".   ", fv.Interface())
+				embed, err := convertSnake(path+"."+name, fv.Interface())
 				if err != nil {
 					return nil, fmt.Errorf("failed to convert embedded struct with name:%v o: %+v %T err: %w", name, fv.Interface(), fv.Interface(), err)
 				}
@@ -94,7 +94,7 @@ func convertSnake(path, indent string, o any) (any, error) {
 			newPath := path + "." + name
 			newName := convertName(newPath, name)
 			if fv.CanInterface() {
-				val, err := convertSnake(newPath, indent+".   ", fv.Interface())
+				val, err := convertSnake(newPath, fv.Interface())
 				if err != nil {
 					return nil, fmt.Errorf("failed to convert regular struct field with path: %v err: %w", newPath, err)
 				}
@@ -122,7 +122,7 @@ func convertSnake(path, indent string, o any) (any, error) {
 	case reflect.Slice:
 		res := []any{}
 		for i := 0; i < v.Len(); i++ {
-			elem, err := convertSnake(path+".[]", indent+"    ", v.Index(i).Interface())
+			elem, err := convertSnake(path+".[]", v.Index(i).Interface())
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert slice element with path: %v err: %w", path+".[]", err)
 			}
@@ -135,7 +135,7 @@ func convertSnake(path, indent string, o any) (any, error) {
 	case reflect.Map:
 		res := make(map[string]any)
 		for _, k := range v.MapKeys() {
-			elem, err := convertSnake(path+"->", indent+"    ", v.MapIndex(k).Interface())
+			elem, err := convertSnake(path+"->", v.MapIndex(k).Interface())
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert map element with path: %v err: %w", path+"->", err)
 			}
@@ -149,7 +149,7 @@ func convertSnake(path, indent string, o any) (any, error) {
 		if v.IsNil() {
 			return nil, nil
 		}
-		return convertSnake(path+"*", indent+"    ", v.Elem().Interface())
+		return convertSnake(path+"*", v.Elem().Interface())
 	case reflect.Bool:
 		return v.Bool(), nil
 	case reflect.Float32, reflect.Float64:
@@ -191,39 +191,53 @@ var pathToName = map[string]string{
 	".LongRunningToolIDs": "long_running_tool_ids", // long_running_tool_i_ds
 }
 
-// convertName converts a name to snake case.
+// convertName converts a name to snake case using direct ASCII lowercasing and byte-writing
+// without fmt.Fprintf reflection or strings.ToLower string allocations.
 func convertName(path, name string) string {
-	// uncomment this to check how your data is processed
-	// fmt.Printf("convert(%s, %s)\n", path, name)
 	if res, ok := pathToName[path]; ok {
 		return res
 	}
 
-	l := strings.ToLower(name)
-	b := &strings.Builder{}
+	var b strings.Builder
+	b.Grow(len(name) + 4)
 	afterUnderscore := true
 	for i := 0; i < len(name); i++ {
+		ch := name[i]
+		isUp := ch >= 'A' && ch <= 'Z'
+		lower := ch
+		if isUp {
+			lower = ch + ('a' - 'A')
+		}
+
+		nextIsUp := false
+		if i+1 < len(name) {
+			nextCh := name[i+1]
+			nextIsUp = nextCh >= 'A' && nextCh <= 'Z'
+		}
+
 		// Ab  => _ab
-		if !afterUnderscore && i > 0 && i+1 < len(name) && name[i] != l[i] && name[i+1] == l[i+1] {
-			fmt.Fprintf(b, "_%c", l[i])
+		if !afterUnderscore && i > 0 && i+1 < len(name) && isUp && !nextIsUp {
+			b.WriteByte('_')
+			b.WriteByte(lower)
 			afterUnderscore = true
 			continue
 		}
 		// aB  => a_b
-		if !afterUnderscore && i+1 < len(name) && name[i] == l[i] && name[i+1] != l[i+1] {
-			fmt.Fprintf(b, "%c_", l[i])
+		if !afterUnderscore && i+1 < len(name) && !isUp && nextIsUp {
+			b.WriteByte(lower)
+			b.WriteByte('_')
 			afterUnderscore = true
 			continue
 		}
 		afterUnderscore = false
-		fmt.Fprintf(b, "%c", l[i])
+		b.WriteByte(lower)
 	}
 	return b.String()
 }
 
-// parseTag handles json tags. Accepted format is comma-separated list of strings.
-// "-", "omitempty" and "omitzero" are recognized. The remaining one is treated as a name
-// returns an error if duplicates are found
+// parseTag handles json tags without allocating slice temporaries. Accepted format is comma-separated list of strings.
+// "-", "omitempty" and "omitzero" are recognized. The remaining one is treated as a name.
+// Returns an error if duplicates are found.
 func parseTag(tag string) (name string, omitEmpty, omitZero, skip bool, err error) {
 	if tag == "" {
 		return "", false, false, false, nil
@@ -231,13 +245,16 @@ func parseTag(tag string) (name string, omitEmpty, omitZero, skip bool, err erro
 	if tag == "-" {
 		return "", false, false, true, nil
 	}
-	vals := strings.Split(tag, ",")
-	name = ""
-	omitEmpty = false
-	omitZero = false
-	skip = false
-	for _, val := range vals {
-		// ignore empty values
+	remaining := tag
+	for len(remaining) > 0 {
+		var val string
+		if idx := strings.IndexByte(remaining, ','); idx >= 0 {
+			val = remaining[:idx]
+			remaining = remaining[idx+1:]
+		} else {
+			val = remaining
+			remaining = ""
+		}
 		if val == "" {
 			continue
 		}
@@ -259,7 +276,6 @@ func parseTag(tag string) (name string, omitEmpty, omitZero, skip bool, err erro
 			name = val
 		}
 	}
-	// allow empty name
 	return name, omitEmpty, omitZero, skip, nil
 }
 
