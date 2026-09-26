@@ -450,7 +450,7 @@ max_iterations: 2
 			t.Fatalf("failed to write config file: %v", err)
 		}
 		t.Cleanup(func() {
-			os.Remove(absPath)
+			_ = os.Remove(absPath)
 		})
 
 		ag, err := ResolveAgentReference(context.Background(), "", relFile)
