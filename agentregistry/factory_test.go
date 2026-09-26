@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -48,8 +47,7 @@ func TestIsGoogleAPI(t *testing.T) {
 }
 
 func TestEgressClient(t *testing.T) {
-	os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "1")
-	defer os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "")
+	t.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "1")
 
 	registryClient := &http.Client{}
 	override := &http.Client{}
@@ -460,13 +458,13 @@ func TestMCPToolset_NoEndpoint(t *testing.T) {
 }
 
 func TestSSRFProtection(t *testing.T) {
-	os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "0")
-	defer os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "1")
+	t.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "0")
+	defer t.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "1")
 
 	// Create an HTTP test server attached to localhost.
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}))
 	defer ts.Close()
 
@@ -477,7 +475,7 @@ func TestSSRFProtection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sanity check failed: default client could not reach localhost server: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	// Apply SSRF protection
 	safeClient := clientWithSSRFProtection(http.DefaultClient)
