@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -208,6 +209,9 @@ func init() {
 		command, ok := serverParams["command"].(string)
 		if !ok {
 			return nil, fmt.Errorf("command not found in server_params")
+		}
+		if err := validateMCPCommand(command); err != nil {
+			return nil, err
 		}
 		serverArgs, ok := serverParams["args"].([]any)
 		if !ok {
@@ -526,4 +530,39 @@ func newSequentialAgent(ctx context.Context, data []byte, configPath string) (ag
 	}
 
 	return sequentialagent.New(*agentConfig)
+}
+
+var defaultAllowedMCPCommands = []string{"node", "npx", "python", "python3", "uv", "uvx", "docker", "go"}
+
+func validateMCPCommand(command string) error {
+	if strings.ContainsAny(command, "/\\") {
+		return fmt.Errorf("disallowed command %q for McpToolset: path separators are not allowed", command)
+	}
+
+	allowedList := make([]string, 0, len(defaultAllowedMCPCommands))
+	allowedSet := make(map[string]struct{})
+
+	for _, cmd := range defaultAllowedMCPCommands {
+		allowedSet[cmd] = struct{}{}
+		allowedList = append(allowedList, cmd)
+	}
+
+	if envValue := os.Getenv("ADK_ALLOWED_MCP_COMMANDS"); envValue != "" {
+		for _, rawCmd := range strings.Split(envValue, ",") {
+			cmd := strings.TrimSpace(rawCmd)
+			if cmd == "" {
+				continue
+			}
+			if _, exists := allowedSet[cmd]; !exists {
+				allowedSet[cmd] = struct{}{}
+				allowedList = append(allowedList, cmd)
+			}
+		}
+	}
+
+	if _, ok := allowedSet[command]; !ok {
+		return fmt.Errorf("disallowed command %q for McpToolset: not in allowlist [%s] (use ADK_ALLOWED_MCP_COMMANDS to extend)", command, strings.Join(allowedList, ", "))
+	}
+
+	return nil
 }

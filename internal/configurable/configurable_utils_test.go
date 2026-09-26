@@ -233,6 +233,109 @@ func TestRegisterToolsetFactory(t *testing.T) {
 		}
 	})
 
+
+	t.Run("McpToolsetCommandValidation", func(t *testing.T) {
+		resetRegistries(t)
+
+		t.Run("DefaultAllowedCommands", func(t *testing.T) {
+			allowed := []string{"node", "npx", "python", "python3", "uv", "uvx", "docker", "go"}
+			for _, cmd := range allowed {
+				args := map[string]any{
+					"stdio_connection_params": map[string]any{
+						"server_params": map[string]any{
+							"command": cmd,
+							"args":    []any{"--version"},
+						},
+					},
+					"tool_filter": []any{"tool1"},
+				}
+				_, ts, err := ResolveToolReference(context.Background(), "McpToolset", args)
+				if err != nil {
+					t.Errorf("expected command %q to be allowed, got error: %v", cmd, err)
+				}
+				if ts == nil {
+					t.Errorf("expected toolset for command %q to be non-nil", cmd)
+				}
+			}
+		})
+
+		t.Run("DisallowedCommands", func(t *testing.T) {
+			disallowed := []string{"bash", "sh", "zsh", "powershell", "curl", "wget", "nc", "evil-binary"}
+			for _, cmd := range disallowed {
+				args := map[string]any{
+					"stdio_connection_params": map[string]any{
+						"server_params": map[string]any{
+							"command": cmd,
+							"args":    []any{},
+						},
+					},
+					"tool_filter": []any{},
+				}
+				_, _, err := ResolveToolReference(context.Background(), "McpToolset", args)
+				if err == nil {
+					t.Errorf("expected error for disallowed command %q, got nil", cmd)
+				}
+			}
+		})
+
+		t.Run("PathSeparatorsRejected", func(t *testing.T) {
+			pathCmds := []string{"./node", "/usr/bin/node", "../node", "C:\\node.exe", "bin/python"}
+			for _, cmd := range pathCmds {
+				args := map[string]any{
+					"stdio_connection_params": map[string]any{
+						"server_params": map[string]any{
+							"command": cmd,
+							"args":    []any{},
+						},
+					},
+					"tool_filter": []any{},
+				}
+				_, _, err := ResolveToolReference(context.Background(), "McpToolset", args)
+				if err == nil {
+					t.Errorf("expected error for path-based command %q, got nil", cmd)
+				}
+			}
+		})
+
+		t.Run("EnvVarAllowedCommands", func(t *testing.T) {
+			t.Setenv("ADK_ALLOWED_MCP_COMMANDS", "custom-mcp-tool, cargo")
+
+			args := map[string]any{
+				"stdio_connection_params": map[string]any{
+					"server_params": map[string]any{
+						"command": "custom-mcp-tool",
+						"args":    []any{},
+					},
+				},
+				"tool_filter": []any{},
+			}
+			_, ts, err := ResolveToolReference(context.Background(), "McpToolset", args)
+			if err != nil {
+				t.Fatalf("expected custom-mcp-tool to be allowed via ADK_ALLOWED_MCP_COMMANDS, got error: %v", err)
+			}
+			if ts == nil {
+				t.Fatalf("expected toolset to be non-nil for custom-mcp-tool")
+			}
+
+			argsCargo := map[string]any{
+				"stdio_connection_params": map[string]any{
+					"server_params": map[string]any{
+						"command": "cargo",
+						"args":    []any{},
+					},
+				},
+				"tool_filter": []any{},
+			}
+			_, tsCargo, err := ResolveToolReference(context.Background(), "McpToolset", argsCargo)
+			if err != nil {
+				t.Fatalf("expected cargo to be allowed via ADK_ALLOWED_MCP_COMMANDS, got error: %v", err)
+			}
+			if tsCargo == nil {
+				t.Fatalf("expected toolset to be non-nil for cargo")
+			}
+		})
+	})
+
 	t.Run("McpToolsetInvalidArgsHandling", func(t *testing.T) {
 		resetRegistries(t)
 
