@@ -1387,6 +1387,12 @@ fileInput.addEventListener("change", (event) => {
   const file = event.target.files[0];
   if (!file) return;
 
+  if (!file.type || !file.type.startsWith('image/')) {
+    addSystemMessage("Please select an image file (e.g. JPEG or PNG).");
+    fileInput.value = '';
+    return;
+  }
+
   const reader = new FileReader();
   reader.onloadend = () => {
     const base64data = reader.result.split(',')[1];
