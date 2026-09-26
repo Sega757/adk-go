@@ -80,9 +80,11 @@ type mockLongRunningTool struct {
 func (m *mockLongRunningTool) Name() string        { return m.name }
 func (m *mockLongRunningTool) Description() string { return "" }
 func (m *mockLongRunningTool) IsLongRunning() bool { return m.isLongRunning }
+
 func (m *mockLongRunningTool) ProcessRequest(ctx agent.Context, req *model.LLMRequest) error {
 	return nil
 }
+
 func (m *mockLongRunningTool) Run(ctx agent.Context, args any) (map[string]any, error) {
 	return nil, nil
 }
