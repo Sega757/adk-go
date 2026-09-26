@@ -86,7 +86,7 @@ func TestEvent(t *testing.T) {
 			"2",
 		},
 	}
-	o, err := convertSnake("", "", event)
+	o, err := convertSnake("", event)
 	if err != nil {
 		t.Errorf("convertSnake() failed: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestEventLogProbs(t *testing.T) {
 			},
 		},
 	}
-	o, err := convertSnake("", "", event)
+	o, err := convertSnake("", event)
 	if err != nil {
 		t.Errorf("convertSnake() failed: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestEmbedded(t *testing.T) {
 		},
 		anotherString: "b",
 	}
-	got, err := convertSnake("", "", b)
+	got, err := convertSnake("", b)
 	if err != nil {
 		t.Errorf("convertSnake() failed: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestOmitEmpty(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		got, err := convertSnake("", "", tc.a)
+		got, err := convertSnake("", tc.a)
 		if err != nil {
 			t.Errorf("convertSnake() failed: %v", err)
 		}
@@ -249,5 +249,43 @@ func TestOmitEmpty(t *testing.T) {
 			t.Errorf("convertSnake() = %v, want %v, diff: \n%v", got, tc.want, diff)
 		}
 
+	}
+}
+
+func BenchmarkConvertName(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = convertName("", "RequestedToolConfirmations")
+	}
+}
+
+func BenchmarkParseTag(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _, _, _, _ = parseTag("requested_tool_confirmations,omitempty")
+	}
+}
+
+func BenchmarkConvertSnake(b *testing.B) {
+	event := session.Event{
+		ID: "1",
+		LongRunningToolIDs: []string{
+			"1",
+			"2",
+		},
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Parts: []*genai.Part{
+					{
+						Text: "Hello",
+					},
+				},
+			},
+		},
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ConvertSnake(event)
 	}
 }
