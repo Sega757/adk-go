@@ -805,8 +805,8 @@ func (c *customFuncTool) Run(ctx agent.Context, args any) (map[string]any, error
 }
 
 var (
-	_ tool.Tool                    = (*customFuncTool)(nil)
-	_ toolinternal.FunctionTool    = (*customFuncTool)(nil)
+	_ tool.Tool                     = (*customFuncTool)(nil)
+	_ toolinternal.FunctionTool     = (*customFuncTool)(nil)
 	_ toolinternal.RequestProcessor = (*customFuncTool)(nil)
 )
 
