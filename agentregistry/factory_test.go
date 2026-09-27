@@ -508,4 +508,13 @@ func TestSSRFProtection(t *testing.T) {
 	if !strings.Contains(err.Error(), "SSRF protection") {
 		t.Errorf("expected SSRF error, got: %v", err)
 	}
+
+	// 0.0.0.0 bypass test
+	_, err = safeClient.Get("http://0.0.0.0:8080/test")
+	if err == nil {
+		t.Fatalf("expected SSRF protected client to reject 0.0.0.0 request, but it succeeded")
+	}
+	if !strings.Contains(err.Error(), "SSRF protection") {
+		t.Errorf("expected SSRF error, got: %v", err)
+	}
 }

@@ -180,7 +180,7 @@ func clientWithSSRFProtection(base *http.Client) *http.Client {
 		}
 
 		for _, ip := range ips {
-			if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() {
+			if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
 				return nil, fmt.Errorf("SSRF protection: address %s resolves to restricted IP %s", host, ip.String())
 			}
 			_, cgnat, _ := net.ParseCIDR("100.64.0.0/10")
