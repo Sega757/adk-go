@@ -40,6 +40,7 @@ import (
 // discrete protocols — and both transports (JSONRPC, HTTP+JSON), which also
 // covers the HTTP_JSON->HTTP+JSON binding mapping and the 0.3.0 compat transport.
 func TestRemoteAgent_E2E(t *testing.T) {
+	t.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "1")
 	const reply = "hello from the remote agent"
 
 	tests := []struct {
