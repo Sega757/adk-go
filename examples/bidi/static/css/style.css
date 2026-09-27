@@ -170,6 +170,37 @@ h1 {
   background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%);
 }
 
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+  text-align: center;
+  color: #5f6368;
+  padding: 2rem;
+}
+
+.empty-state-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.8;
+}
+
+.empty-state h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #202124;
+  margin-bottom: 0.25rem;
+}
+
+.empty-state p {
+  font-size: 0.875rem;
+  max-width: 280px;
+  line-height: 1.4;
+}
+
 /* Scroll styling */
 #messages::-webkit-scrollbar {
   width: 8px;
