@@ -234,6 +234,7 @@ func eventBelongsToBranch(invocationBranch string, event *session.Event) bool {
 // and appends a single (merged) response.
 // If the latest function_response is for an async function_call, all events
 // between the initial function_call and the latest function_response will be removed.
+// Performance-optimized by Bolt: iterates directly over event.Content.Parts to avoid intermediate slice allocations.
 func rearrangeEventsForLatestFunctionResponse(events []*session.Event) ([]*session.Event, error) {
 	if len(events) < 2 {
 		return events, nil
@@ -243,23 +244,28 @@ func rearrangeEventsForLatestFunctionResponse(events []*session.Event) ([]*sessi
 	if !utils.HasFunctionResponses(lastEvent.Content) {
 		return events, nil
 	}
-	lastResponses := utils.FunctionResponses(lastEvent.Content)
 
-	// Create response id set
-	responseIDs := make(map[string]struct{}, len(lastResponses))
-	for _, res := range lastResponses {
-		responseIDs[res.ID] = struct{}{}
+	// Create response id set directly from Parts without slice allocations.
+	var responseIDs map[string]struct{}
+	for _, p := range lastEvent.Content.Parts {
+		if p != nil && p.FunctionResponse != nil {
+			if responseIDs == nil {
+				responseIDs = make(map[string]struct{}, len(lastEvent.Content.Parts))
+			}
+			responseIDs[p.FunctionResponse.ID] = struct{}{}
+		}
 	}
 
 	// Check if its already in the correct position
 	prevEvent := events[len(events)-2]
-	if utils.HasFunctionCalls(prevEvent.Content) {
-		prevCalls := utils.FunctionCalls(prevEvent.Content)
-		for _, call := range prevCalls {
-			if _, found := responseIDs[call.ID]; found {
-				// The latest response is already matched with the immediately
-				// preceding call event. The history is clean. Nothing to do.
-				return events, nil
+	if prevEvent.Content != nil {
+		for _, p := range prevEvent.Content.Parts {
+			if p != nil && p.FunctionCall != nil {
+				if _, found := responseIDs[p.FunctionCall.ID]; found {
+					// The latest response is already matched with the immediately
+					// preceding call event. The history is clean. Nothing to do.
+					return events, nil
+				}
 			}
 		}
 	}
@@ -270,39 +276,42 @@ func rearrangeEventsForLatestFunctionResponse(events []*session.Event) ([]*sessi
 SearchLoop: // A label to allow breaking out of the nested loop
 	for idx := len(events) - 2; idx >= 0; idx-- {
 		event := events[idx]
-		if !utils.HasFunctionCalls(event.Content) {
+		if event.Content == nil {
 			continue
 		}
-		calls := utils.FunctionCalls(event.Content)
 
-		for _, call := range calls {
-			if _, found := responseIDs[call.ID]; found {
-				// Match found. This is the event we're looking for.
-				functionCallEventIdx = idx
+		for _, p := range event.Content.Parts {
+			if p != nil && p.FunctionCall != nil {
+				if _, found := responseIDs[p.FunctionCall.ID]; found {
+					// Match found. This is the event we're looking for.
+					functionCallEventIdx = idx
 
-				// Create a new set of all call IDs from this specific event
-				allCallIDsFromMatchingEvent = make(map[string]struct{}, len(calls))
-				for _, c := range calls {
-					allCallIDsFromMatchingEvent[c.ID] = struct{}{}
-				}
-
-				// Validation check
-				// last response event should only contain the responses for the
-				// function calls in the same function call event
-				for respID := range responseIDs {
-					if _, exists := allCallIDsFromMatchingEvent[respID]; !exists {
-						return nil, fmt.Errorf(
-							"validation failed: last response event has IDs not in the matching call event. Call IDs: %v, Response IDs: %v",
-							allCallIDsFromMatchingEvent, responseIDs,
-						)
+					// Create a new set of all call IDs from this specific event
+					allCallIDsFromMatchingEvent = make(map[string]struct{}, len(event.Content.Parts))
+					for _, cp := range event.Content.Parts {
+						if cp != nil && cp.FunctionCall != nil {
+							allCallIDsFromMatchingEvent[cp.FunctionCall.ID] = struct{}{}
+						}
 					}
+
+					// Validation check
+					// last response event should only contain the responses for the
+					// function calls in the same function call event
+					for respID := range responseIDs {
+						if _, exists := allCallIDsFromMatchingEvent[respID]; !exists {
+							return nil, fmt.Errorf(
+								"validation failed: last response event has IDs not in the matching call event. Call IDs: %v, Response IDs: %v",
+								allCallIDsFromMatchingEvent, responseIDs,
+							)
+						}
+					}
+
+					// Update the tracked IDs to be ALL IDs from the call event
+					responseIDs = allCallIDsFromMatchingEvent
+
+					// Exit the search loop
+					break SearchLoop
 				}
-
-				// Update the tracked IDs to be ALL IDs from the call event
-				responseIDs = allCallIDsFromMatchingEvent
-
-				// Exit the search loop
-				break SearchLoop
 			}
 		}
 	}
@@ -329,14 +338,17 @@ SearchLoop: // A label to allow breaking out of the nested loop
 		if !utils.HasFunctionResponses(event.Content) {
 			continue
 		}
-		responses := utils.FunctionResponses(event.Content)
 
-		// Check if this event contains any response relevant to our call.
+		// Check if this event contains any response relevant to our call directly without slice allocations.
 		isRelated := false
-		for _, res := range responses {
-			if _, exists := responseIDs[res.ID]; exists {
-				isRelated = true
-				break
+		if event.Content != nil {
+			for _, p := range event.Content.Parts {
+				if p != nil && p.FunctionResponse != nil {
+					if _, exists := responseIDs[p.FunctionResponse.ID]; exists {
+						isRelated = true
+						break
+					}
+				}
 			}
 		}
 
@@ -415,32 +427,45 @@ func rearrangeEventsForFunctionResponsesInHistory(events []*session.Event) ([]*s
 			// This is a function call event, append it and search for responses
 			resultEvents = append(resultEvents, event)
 
-			calls := utils.FunctionCalls(event.Content)
+			// Performance-optimized by Bolt: find response event indices directly from Parts
+			// without intermediate utils.FunctionCalls slice allocations or map allocations for single response events.
+			firstRespIdx := -1
+			var multipleRespIndicesSet map[int]struct{}
 
-			// Find the unique indices of all corresponding response events.
-			// Using a map[int]struct{} as a set.
-			responseEventIndicesSet := make(map[int]struct{}, len(calls))
-			for _, call := range calls {
-				if index, found := callIDToResponseEventIndex[call.ID]; found {
-					responseEventIndicesSet[index] = struct{}{}
+			if event.Content != nil {
+				for _, p := range event.Content.Parts {
+					if p != nil && p.FunctionCall != nil {
+						if idx, found := callIDToResponseEventIndex[p.FunctionCall.ID]; found {
+							if firstRespIdx == -1 {
+								firstRespIdx = idx
+							} else if idx != firstRespIdx {
+								if multipleRespIndicesSet == nil {
+									multipleRespIndicesSet = map[int]struct{}{
+										firstRespIdx: {},
+										idx:          {},
+									}
+								} else {
+									multipleRespIndicesSet[idx] = struct{}{}
+								}
+							}
+						}
+					}
 				}
 			}
 
 			// If no responses were found for any calls in this event, continue.
-			if len(responseEventIndicesSet) == 0 {
+			if firstRespIdx == -1 {
 				continue
 			}
 
 			// If there's only one unique response event, append it directly.
-			if len(responseEventIndicesSet) == 1 {
-				for index := range responseEventIndicesSet { // A trick to get the single key
-					resultEvents = append(resultEvents, events[index])
-				}
+			if multipleRespIndicesSet == nil {
+				resultEvents = append(resultEvents, events[firstRespIdx])
 			} else {
 				// Multiple response events exist for that function call so we merge them.
 				// Collect and sort the indices to process events in order.
-				sortedIndices := make([]int, 0, len(responseEventIndicesSet))
-				for index := range responseEventIndicesSet {
+				sortedIndices := make([]int, 0, len(multipleRespIndicesSet))
+				for index := range multipleRespIndicesSet {
 					sortedIndices = append(sortedIndices, index)
 				}
 				sort.Ints(sortedIndices)
