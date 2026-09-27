@@ -56,6 +56,8 @@ jobs:
 
     - name: Test
       working-directory: ${{ matrix.module }}
+      env:
+        ADK_TEST_DISABLE_SSRF_PROTECTION: "1"
       run: go test -race -mod=readonly -v -count=1 -shuffle=on ./...
   
   lint:
