@@ -96,7 +96,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		var err error
 		// Unmarshal the raw bytes into our specific Pub/Sub struct
 		if err := json.Unmarshal(event.Data, &pubsub); err != nil {
-			respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to unmarshal pubsub data: %v", err))
+			// Malformed client payload must return 400 Bad Request to prevent infinite retry loops in Eventarc/PubSub
+			respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to unmarshal pubsub data: %v", err))
 			return
 		}
 		messageContent, err = messageContentFromPubSub(pubsub)

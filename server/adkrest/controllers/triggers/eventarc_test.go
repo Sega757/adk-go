@@ -222,3 +222,24 @@ func TestEventarcTriggerHandler_BodyTooLarge(t *testing.T) {
 		t.Errorf("expected error status for oversized body, got %d", rr.Code)
 	}
 }
+
+func TestEventarcTriggerHandler_InvalidPubSubData(t *testing.T) {
+	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}
+	controller := triggers.NewEventarcController(sessionService, nil, nil, nil, runner.PluginConfig{}, defaultTriggerConfig)
+
+	invalidJSONBody := bytes.NewBufferString("{invalid json body")
+	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", invalidJSONBody)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("ce-type", "google.cloud.pubsub.topic.v1.messagePublished")
+	req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+	rr := httptest.NewRecorder()
+
+	controller.EventarcTriggerHandler(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d for invalid pubsub data, got %d", http.StatusBadRequest, rr.Code)
+	}
+}

@@ -32,6 +32,7 @@ import (
 // server's tools. It exercises endpoint resolution, the streamable-HTTP
 // transport wiring, and egress-client selection.
 func TestMCPToolset_E2E(t *testing.T) {
+	t.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "1")
 	const toolName = "get_data"
 
 	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "data_mcp", Version: "v1.0.0"}, nil)
