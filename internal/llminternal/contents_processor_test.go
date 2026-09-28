@@ -1502,6 +1502,27 @@ func BenchmarkBuildContentsDefault_Transcriptions(b *testing.B) {
 	}
 }
 
+func BenchmarkConvertForeignEvent(b *testing.B) {
+	ev := &session.Event{
+		Author: "foreign_subagent",
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Parts: []*genai.Part{
+					{Text: "First context line from sub-agent"},
+					{FunctionCall: &genai.FunctionCall{Name: "sub_tool", Args: map[string]any{"key": "val"}}},
+					{FunctionResponse: &genai.FunctionResponse{Name: "sub_tool", Response: map[string]any{"res": "ok"}}},
+				},
+			},
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = llminternal.ConvertForeignEvent(ev)
+	}
+}
+
 func BenchmarkBuildContentsDefault_ToolHistory(b *testing.B) {
 	testAgent := utils.Must(llmagent.New(llmagent.Config{
 		Name:  "testAgent",
