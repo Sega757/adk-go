@@ -368,6 +368,14 @@ function addCopyButtonToBubble(messageElement) {
       }, 2000);
     }).catch(err => {
       console.error("Failed to copy message:", err);
+      copyBtn.textContent = "⚠️";
+      copyBtn.setAttribute("aria-label", "Failed to copy message");
+      copyBtn.setAttribute("title", "Failed to copy");
+      setTimeout(() => {
+        copyBtn.textContent = "📋";
+        copyBtn.setAttribute("aria-label", "Copy message text");
+        copyBtn.setAttribute("title", "Copy message");
+      }, 2000);
     });
   });
 
@@ -1390,6 +1398,12 @@ sendFileButton.addEventListener("click", () => {
 fileInput.addEventListener("change", (event) => {
   const file = event.target.files[0];
   if (!file) return;
+
+  if (!file.type || !file.type.startsWith('image/')) {
+    addSystemMessage("Please select an image file (e.g. JPEG or PNG).");
+    fileInput.value = '';
+    return;
+  }
 
   const reader = new FileReader();
   reader.onloadend = () => {
