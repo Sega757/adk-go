@@ -90,17 +90,7 @@ func authHTTPClient(base *http.Client, provider auth.CredentialProvider) *http.C
 	if base != nil {
 		*c = *base
 	}
-
-	var baseTransport http.RoundTripper = c.Transport
-	if baseTransport == nil {
-		baseTransport = http.DefaultTransport
-	}
-
-	if t, ok := baseTransport.(*http.Transport); ok {
-		baseTransport = t.Clone()
-	}
-
-	c.Transport = &auth.Transport{Provider: provider, Base: baseTransport}
+	c.Transport = &auth.Transport{Provider: provider, Base: c.Transport}
 	return c
 }
 
