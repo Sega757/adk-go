@@ -372,6 +372,17 @@ h1 {
   border-radius: 0.75rem;
   display: block;
   object-fit: contain;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bubble-image:hover {
+  transform: scale(1.02);
+}
+
+.bubble-image:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
 }
 
 /* Input Form */
@@ -1088,4 +1099,18 @@ button.active {
 .btn-secondary:hover {
   background-color: #f8f9fa;
   border-color: #bdc1c6;
+}
+
+/* Image Modal Specific Styles */
+.image-modal-content {
+  width: auto;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+#imageModalImg {
+  max-width: 100%;
+  max-height: 75vh;
+  object-fit: contain;
+  border-radius: 0.5rem;
 }

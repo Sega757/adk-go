@@ -411,6 +411,59 @@ function createMessageBubble(text, isUser, isPartial = false) {
   return messageDiv;
 }
 
+// Image Lightbox Modal handlers
+const imageModal = document.getElementById("imageModal");
+const imageModalImg = document.getElementById("imageModalImg");
+const imageModalTitle = document.getElementById("imageModalTitle");
+const closeImageModalBtn = document.getElementById("closeImageModal");
+
+function openImageModal(src, altText = "Image preview") {
+  if (!imageModal || !imageModalImg) return;
+  previouslyFocusedElement = document.activeElement;
+  imageModalImg.src = src;
+  imageModalImg.alt = altText;
+  if (imageModalTitle) imageModalTitle.textContent = altText;
+  imageModal.classList.add("show");
+  if (closeImageModalBtn) closeImageModalBtn.focus();
+}
+
+function closeImageModal() {
+  if (!imageModal) return;
+  imageModal.classList.remove("show");
+  if (imageModalImg) imageModalImg.src = "";
+  if (previouslyFocusedElement && typeof previouslyFocusedElement.focus === "function") {
+    previouslyFocusedElement.focus();
+  }
+}
+
+if (closeImageModalBtn) closeImageModalBtn.addEventListener("click", closeImageModal);
+if (imageModal) {
+  imageModal.addEventListener("click", (e) => {
+    if (e.target === imageModal) closeImageModal();
+  });
+  imageModal.addEventListener("keydown", (e) => {
+    if (e.key === "Tab" && imageModal.classList.contains("show")) {
+      const focusables = imageModal.querySelectorAll("button:not([disabled]), [tabindex]:not([tabindex='-1'])");
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  });
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && imageModal && imageModal.classList.contains("show")) {
+    closeImageModal();
+  }
+});
+
 // Create an image message bubble element
 function createImageBubble(imageDataUrl, isUser, altText = "Captured image") {
   const messageDiv = document.createElement("div");
@@ -423,6 +476,19 @@ function createImageBubble(imageDataUrl, isUser, altText = "Captured image") {
   img.src = imageDataUrl;
   img.className = "bubble-image";
   img.alt = altText;
+  img.tabIndex = 0;
+  img.setAttribute("role", "button");
+  img.setAttribute("title", "Click or press Enter to view full-size image");
+  img.setAttribute("aria-label", `View full-size ${altText}`);
+
+  const handleImageClick = () => openImageModal(imageDataUrl, altText);
+  img.addEventListener("click", handleImageClick);
+  img.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleImageClick();
+    }
+  });
 
   bubbleDiv.appendChild(img);
   messageDiv.appendChild(bubbleDiv);
