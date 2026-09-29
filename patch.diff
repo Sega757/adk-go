@@ -1,0 +1,11 @@
+--- tool/mcptoolset/set.go
++++ tool/mcptoolset/set.go
+@@ -95,7 +95,7 @@
+		baseTransport = http.DefaultTransport
+	}
+
+-	var safeTransport http.RoundTripper = baseTransport
++	safeTransport := baseTransport
+	if t, ok := safeTransport.(*http.Transport); ok {
+		safeTransport = t.Clone()
+	}

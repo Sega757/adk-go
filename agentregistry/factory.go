@@ -152,12 +152,11 @@ func clientWithSSRFProtection(base *http.Client) *http.Client {
 		baseTransport = http.DefaultTransport
 	}
 
-	var safeTransport *http.Transport
-	if t, ok := baseTransport.(*http.Transport); ok {
-		safeTransport = t.Clone()
-	} else {
-		safeTransport = http.DefaultTransport.(*http.Transport).Clone()
+	t, ok := baseTransport.(*http.Transport)
+	if !ok {
+		return base
 	}
+	safeTransport := t.Clone()
 
 	// Initialize default dialer to retain Timeouts and KeepAlive.
 	var dialer net.Dialer
