@@ -605,33 +605,39 @@ func isOtherAgentReply(currentAgentName string, ev *session.Event) bool {
 // This is to provide another aget's output as context to the current agent,
 // so that the current agent can continue to respond, such as summarizing
 // the previous agent's reply, etc.
+// Performance-optimized by Bolt: pre-allocates parts slice capacity and uses
+// direct string concatenation to avoid fmt.Sprintf reflection and slice reallocations.
 func ConvertForeignEvent(ev *session.Event) *session.Event {
 	content := utils.Content(ev)
 	if content == nil || len(content.Parts) == 0 {
 		return ev
 	}
 
-	converted := &genai.Content{
-		Role:  "user",
-		Parts: []*genai.Part{{Text: "For context:"}},
-	}
+	parts := make([]*genai.Part, 1, len(content.Parts)+1)
+	parts[0] = &genai.Part{Text: "For context:"}
+
 	for _, p := range content.Parts {
 		switch {
 		case p.Text != "":
-			converted.Parts = append(converted.Parts, &genai.Part{
-				Text: fmt.Sprintf("[%s] said: %s", ev.Author, p.Text),
+			parts = append(parts, &genai.Part{
+				Text: "[" + ev.Author + "] said: " + p.Text,
 			})
 		case p.FunctionCall != nil:
-			converted.Parts = append(converted.Parts, &genai.Part{
-				Text: fmt.Sprintf("[%s] called tool `%s` with parameters: %s", ev.Author, p.FunctionCall.Name, stringify(p.FunctionCall.Args)),
+			parts = append(parts, &genai.Part{
+				Text: "[" + ev.Author + "] called tool `" + p.FunctionCall.Name + "` with parameters: " + stringify(p.FunctionCall.Args),
 			})
 		case p.FunctionResponse != nil:
-			converted.Parts = append(converted.Parts, &genai.Part{
-				Text: fmt.Sprintf("[%s] `%s` tool returned result: %v", ev.Author, p.FunctionResponse.Name, stringify(p.FunctionResponse.Response)),
+			parts = append(parts, &genai.Part{
+				Text: "[" + ev.Author + "] `" + p.FunctionResponse.Name + "` tool returned result: " + stringify(p.FunctionResponse.Response),
 			})
 		default: // fallback to the original part for non-text and non-functionCall parts.
-			converted.Parts = append(converted.Parts, p)
+			parts = append(parts, p)
 		}
+	}
+
+	converted := &genai.Content{
+		Role:  "user",
+		Parts: parts,
 	}
 
 	return &session.Event{ // made-up event. Don't go through types.NewEvent.
