@@ -601,17 +601,21 @@ func (f *Flow) runOneStep(ctx agent.InvocationContext) iter.Seq2[*session.Event,
 				continue
 			}
 
-			// TODO: temporarily convert
-			tools := make(map[string]tool.Tool)
-			for k, v := range req.Tools {
-				tool, ok := v.(tool.Tool)
-				if !ok {
-					if !yield(nil, fmt.Errorf("unexpected tool type %T for tool %v", v, k)) {
-						return
+			// Optimization Note: Only build tools map when req.Tools is non-empty,
+			// pre-allocating map capacity to eliminate re-allocation overhead.
+			var tools map[string]tool.Tool
+			if len(req.Tools) > 0 {
+				tools = make(map[string]tool.Tool, len(req.Tools))
+				for k, v := range req.Tools {
+					tool, ok := v.(tool.Tool)
+					if !ok {
+						if !yield(nil, fmt.Errorf("unexpected tool type %T for tool %v", v, k)) {
+							return
+						}
+						continue
 					}
-					continue
+					tools[k] = tool
 				}
-				tools[k] = tool
 			}
 
 			// Build the event and yield.
@@ -1049,6 +1053,9 @@ func (c *cancelledToolContext) Value(key any) any {
 // TODO: check feasibility of running tool.Run concurrently.
 func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[string]tool.Tool, resp *model.LLMResponse, toolConfirmations map[string]*toolconfirmation.ToolConfirmation, liveSess agent.LiveSession) (mergedEvent *session.Event, err error) {
 	fnCalls := utils.FunctionCalls(resp.Content)
+	if len(fnCalls) == 0 {
+		return nil, nil
+	}
 
 	// Lazy-initialize toolNames only if a tool lookup fails, avoiding
 	// unnecessary map-key slice allocations during normal function execution.

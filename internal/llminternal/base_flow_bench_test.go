@@ -156,6 +156,25 @@ func BenchmarkFindLongRunningFunctionCallIDs_LongRunningCall(b *testing.B) {
 	}
 }
 
+func BenchmarkHandleFunctionCalls_NoCalls(b *testing.B) {
+	flow := &Flow{}
+	resp := &model.LLMResponse{
+		Content: &genai.Content{
+			Role: "model",
+			Parts: []*genai.Part{
+				{Text: "Standard text response"},
+			},
+		},
+	}
+	toolsDict := map[string]tool.Tool{}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_, _ = flow.handleFunctionCalls(nil, toolsDict, resp, nil, nil)
+	}
+}
+
 func TestTaskCompleted_PartMatching(t *testing.T) {
 	parts := []*genai.Part{
 		{
