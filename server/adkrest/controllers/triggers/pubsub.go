@@ -17,6 +17,7 @@ package triggers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"google.golang.org/adk/v2/agent"
@@ -59,19 +60,22 @@ func (c *PubSubController) PubSubTriggerHandler(w http.ResponseWriter, r *http.R
 	// Parse the request to the request model.
 	var req models.PubSubTriggerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to decode request: %v", err))
+		log.Printf("Bad request decoding PubSub trigger request: %v", err)
+		respondError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 
 	agentMessage, err := messageContentFromPubSub(req)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to retrieve message content: %v", err))
+		log.Printf("Bad request extracting PubSub message content: %v", err)
+		respondError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 
 	appName, err := appName(r)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to retrieve app name: %v", err))
+		log.Printf("Bad request retrieving app name: %v", err)
+		respondError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 

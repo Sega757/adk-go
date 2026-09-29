@@ -169,6 +169,36 @@ func TestPubSubTriggerHandler_InternalServerErrorSanitized(t *testing.T) {
 	}
 }
 
+func TestPubSubTriggerHandler_BadRequestSanitized(t *testing.T) {
+	apiController := setupTest(t, nil)
+
+	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/pubsub", bytes.NewBufferString("{invalid json string}"))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+	rr := httptest.NewRecorder()
+
+	apiController.PubSubTriggerHandler(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if bytes.Contains(rr.Body.Bytes(), []byte("invalid character")) || bytes.Contains(rr.Body.Bytes(), []byte("failed to decode")) {
+		t.Errorf("response body leaked unmarshal details: %s", body)
+	}
+
+	var resp models.TriggerResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Status != "bad request" {
+		t.Errorf("expected status 'bad request', got %q", resp.Status)
+	}
+}
+
 func TestPubSubTriggerHandler_BodyTooLarge(t *testing.T) {
 	apiController := setupTest(t, nil)
 	largeBody := bytes.NewBuffer(make([]byte, 10*1024*1024+1))
