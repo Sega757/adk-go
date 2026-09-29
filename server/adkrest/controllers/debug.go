@@ -15,7 +15,6 @@
 package controllers
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"slices"
@@ -67,7 +66,7 @@ func (c *DebugAPIController) EventSpanHandler(rw http.ResponseWriter, req *http.
 			return
 		}
 	}
-	http.Error(rw, fmt.Sprintf("event not found: %s", eventID), http.StatusNotFound)
+	http.Error(rw, "event not found", http.StatusNotFound)
 }
 
 // ADK web expects different format than in [SessionSpansHandler].

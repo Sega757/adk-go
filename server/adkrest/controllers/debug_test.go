@@ -228,6 +228,12 @@ func TestEventSpanHandler(t *testing.T) {
 				t.Fatalf("handler returned wrong status code: got %v want %v", status, tt.wantStatus)
 			}
 
+			if tt.wantStatus == http.StatusNotFound {
+				if gotBody := strings.TrimSpace(rr.Body.String()); gotBody != "event not found" {
+					t.Errorf("handler returned unexpected 404 body: got %q, want %q", gotBody, "event not found")
+				}
+			}
+
 			if tt.wantStatus == http.StatusOK {
 				var gotBody map[string]any
 				err = json.NewDecoder(rr.Body).Decode(&gotBody)
