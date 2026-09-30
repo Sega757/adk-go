@@ -242,4 +242,40 @@ func TestEventarcTriggerHandler_InvalidPubSubData(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected status %d for invalid pubsub data, got %d", http.StatusBadRequest, rr.Code)
 	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "bad request" {
+		t.Errorf("expected status 'bad request', got %q", resp["status"])
+	}
+}
+
+func TestEventarcTriggerHandler_InvalidStructuredJSON(t *testing.T) {
+	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}
+	controller := triggers.NewEventarcController(sessionService, nil, nil, nil, runner.PluginConfig{}, defaultTriggerConfig)
+
+	invalidJSONBody := bytes.NewBufferString("{invalid json body")
+	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", invalidJSONBody)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/cloudevents+json")
+	req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+	rr := httptest.NewRecorder()
+
+	controller.EventarcTriggerHandler(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d for invalid structured json, got %d", http.StatusBadRequest, rr.Code)
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "bad request" {
+		t.Errorf("expected status 'bad request', got %q", resp["status"])
+	}
 }
