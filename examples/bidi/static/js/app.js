@@ -527,6 +527,8 @@ function addSystemMessage(text) {
   scrollToBottom();
 }
 
+let unreadCount = 0;
+
 // Scroll to bottom of messages (only auto-scroll if user is near bottom, unless forced)
 function scrollToBottom(force = false) {
   const msgDiv = document.getElementById("messages") || messagesDiv;
@@ -535,8 +537,19 @@ function scrollToBottom(force = false) {
   const btn = document.getElementById("scrollToBottomBtn");
   if (force || isNearBottom) {
     msgDiv.scrollTop = msgDiv.scrollHeight;
-    if (btn) btn.style.display = "none";
+    unreadCount = 0;
+    if (btn) {
+      btn.style.display = "none";
+      btn.textContent = "↓ New messages";
+      btn.setAttribute("aria-label", "Scroll to bottom of chat");
+      btn.setAttribute("title", "Scroll to latest message");
+    }
   } else if (btn) {
+    unreadCount++;
+    const labelText = `↓ ${unreadCount} new message${unreadCount > 1 ? "s" : ""}`;
+    btn.textContent = labelText;
+    btn.setAttribute("aria-label", `Scroll to bottom (${unreadCount} new message${unreadCount > 1 ? "s" : ""})`);
+    btn.setAttribute("title", `Scroll to latest message (${unreadCount} unread)`);
     btn.style.display = "block";
   }
 }
@@ -548,8 +561,16 @@ function initScrollListener() {
     msgDiv.addEventListener("scroll", () => {
       const isNearBottom = msgDiv.scrollHeight - msgDiv.clientHeight - msgDiv.scrollTop <= 100;
       const b = document.getElementById("scrollToBottomBtn");
-      if (b) {
-        b.style.display = isNearBottom ? "none" : "block";
+      if (isNearBottom) {
+        unreadCount = 0;
+        if (b) {
+          b.style.display = "none";
+          b.textContent = "↓ New messages";
+          b.setAttribute("aria-label", "Scroll to bottom of chat");
+          b.setAttribute("title", "Scroll to latest message");
+        }
+      } else if (b) {
+        b.style.display = "block";
       }
     });
   }
