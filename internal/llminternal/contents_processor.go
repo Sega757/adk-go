@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"slices"
 	"sort"
 	"strings"
 
@@ -185,19 +184,9 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 
 	contents := make([]*genai.Content, 0, len(filtered))
 	for _, ev := range filtered {
-		content := clone(utils.Content(ev))
-		if content == nil {
-			continue
+		if content := prepareContentForRequest(utils.Content(ev)); content != nil {
+			contents = append(contents, content)
 		}
-
-		// gemini 3 in streaming returns a last response with an empty part. We need to filter it out.
-		content.Parts = slices.DeleteFunc(content.Parts, utils.IsZeroPart)
-		if len(content.Parts) == 0 {
-			continue
-		}
-
-		utils.RemoveClientFunctionCallID(content)
-		contents = append(contents, content)
 	}
 
 	// For scoped agents (task / single_turn), prepend a synthetic user
@@ -598,6 +587,65 @@ func buildContentsCurrentTurnContextOnly(agentName, branch, isolationScope strin
 
 func isOtherAgentReply(currentAgentName string, ev *session.Event) bool {
 	return ev.Author != currentAgentName && ev.Author != "user"
+}
+
+const clientFunctionCallIDPrefix = "adk-"
+
+// prepareContentForRequest creates a new genai.Content for LLMRequest.Contents.
+// Performance-optimized by Bolt: combines zero-part filtering (utils.IsZeroPart)
+// and client function call ID stripping ("adk-" prefix) into a single pass over content parts.
+// Parts without client function call IDs are reused directly in the new Parts slice
+// without deep cloning individual Part structs, eliminating per-part heap allocations.
+func prepareContentForRequest(c *genai.Content) *genai.Content {
+	if c == nil || len(c.Parts) == 0 {
+		return nil
+	}
+
+	var newParts []*genai.Part
+	for _, p := range c.Parts {
+		if utils.IsZeroPart(p) {
+			continue
+		}
+
+		// Check if part contains a client function call or response ID that needs stripping.
+		hasClientFC := p.FunctionCall != nil && strings.HasPrefix(p.FunctionCall.ID, clientFunctionCallIDPrefix)
+		hasClientFR := p.FunctionResponse != nil && strings.HasPrefix(p.FunctionResponse.ID, clientFunctionCallIDPrefix)
+
+		if !hasClientFC && !hasClientFR {
+			if newParts == nil {
+				newParts = make([]*genai.Part, 0, len(c.Parts))
+			}
+			newParts = append(newParts, p)
+			continue
+		}
+
+		// Clone the part and strip client function call/response ID to avoid mutating session history.
+		pCopy := *p
+		if hasClientFC {
+			fc := *p.FunctionCall
+			fc.ID = ""
+			pCopy.FunctionCall = &fc
+		}
+		if hasClientFR {
+			fr := *p.FunctionResponse
+			fr.ID = ""
+			pCopy.FunctionResponse = &fr
+		}
+
+		if newParts == nil {
+			newParts = make([]*genai.Part, 0, len(c.Parts))
+		}
+		newParts = append(newParts, &pCopy)
+	}
+
+	if len(newParts) == 0 {
+		return nil
+	}
+
+	return &genai.Content{
+		Role:  c.Role,
+		Parts: newParts,
+	}
 }
 
 // ConvertForeignEvent converts an event authored by another agent as
