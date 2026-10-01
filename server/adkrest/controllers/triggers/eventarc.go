@@ -84,7 +84,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		// We just read it as raw bytes into event.Data.
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to read body: %v", err))
+			log.Printf("Bad request reading Eventarc trigger body: %v", err)
+			respondError(w, http.StatusBadRequest, "bad request")
 			return
 		}
 		event.Data = bodyBytes
@@ -122,7 +123,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 
 	appName, err := appName(r)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to retrieve app name: %v", err))
+		log.Printf("Bad request retrieving app name in Eventarc trigger: %v", err)
+		respondError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 
