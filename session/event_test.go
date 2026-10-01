@@ -97,3 +97,12 @@ func TestNewEventDeterministicReplay(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkNewEvent(b *testing.B) {
+	ctx := context.Background()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = session.NewEvent(ctx, "inv-1")
+	}
+}

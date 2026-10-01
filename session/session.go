@@ -224,11 +224,12 @@ func (e *Event) IsFinalResponse() bool {
 // [platform.WithUUIDProvider]) controls them. This lets callers such as
 // workflow engines produce deterministic, replay-safe events.
 func NewEvent(ctx context.Context, invocationID string) *Event {
+	// StateDelta and ArtifactDelta maps in EventActions are lazily allocated
+	// when mutated to eliminate heap map allocations on standard events.
 	return &Event{
 		ID:           platform.NewUUID(ctx),
 		InvocationID: invocationID,
 		Timestamp:    platform.Now(ctx),
-		Actions:      EventActions{StateDelta: make(map[string]any), ArtifactDelta: make(map[string]int64)},
 	}
 }
 
