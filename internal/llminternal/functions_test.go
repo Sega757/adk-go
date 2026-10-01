@@ -186,6 +186,7 @@ func TestGenerateRequestConfirmationEvent(t *testing.T) {
 			if diff := cmp.Diff(tt.wantEvent, got,
 				cmpopts.IgnoreFields(session.Event{}, "Timestamp", "LongRunningToolIDs", "ID"),
 				cmpopts.IgnoreFields(genai.FunctionCall{}, "ID"), // Ignore generated IDs
+				cmpopts.EquateEmpty(),
 			); diff != "" {
 				t.Errorf("generateRequestConfirmationEvent() mismatch (-want +got):\n%s", diff)
 			}
