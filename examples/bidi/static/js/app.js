@@ -94,7 +94,7 @@ function updateSendButtonState() {
 
 function updateClearConsoleButtonState() {
   if (clearConsoleBtn) {
-    const hasEntries = consoleContent && consoleContent.children.length > 0;
+    const hasEntries = consoleContent && consoleContent.querySelector(".console-entry") !== null;
     clearConsoleBtn.disabled = !hasEntries;
     if (!hasEntries) {
       clearConsoleBtn.setAttribute("title", "Console is empty");
@@ -287,13 +287,24 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
     });
   }
 
+  const consoleEmptyState = document.getElementById("consoleEmptyState");
+  if (consoleEmptyState) {
+    consoleEmptyState.remove();
+  }
+
   consoleContent.appendChild(entry);
   consoleContent.scrollTop = consoleContent.scrollHeight;
   updateClearConsoleButtonState();
 }
 
 function clearConsole() {
-  consoleContent.innerHTML = '';
+  consoleContent.innerHTML = `
+    <div id="consoleEmptyState" class="console-empty-state">
+      <div class="console-empty-icon" aria-hidden="true">⚡</div>
+      <h3>Console Empty</h3>
+      <p>Real-time WebSocket events and debug logs will appear here.</p>
+    </div>
+  `;
   updateClearConsoleButtonState();
 }
 
