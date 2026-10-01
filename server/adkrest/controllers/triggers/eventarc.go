@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"google.golang.org/adk/v2/agent"
@@ -66,7 +67,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		// The entire event is in the body. Decode it.
 		// The payload (Storage or Pub/Sub) gets safely trapped in event.Data as bytes.
 		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-			respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to unmarshal eventarc request: %v", err))
+			log.Printf("Bad request decoding Eventarc trigger request: %v", err)
+			respondError(w, http.StatusBadRequest, "bad request")
 			return
 		}
 	} else {
@@ -97,12 +99,14 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		// Unmarshal the raw bytes into our specific Pub/Sub struct
 		if err := json.Unmarshal(event.Data, &pubsub); err != nil {
 			// Malformed client payload must return 400 Bad Request to prevent infinite retry loops in Eventarc/PubSub
-			respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to unmarshal pubsub data: %v", err))
+			log.Printf("Bad request unmarshaling pubsub data in Eventarc trigger: %v", err)
+			respondError(w, http.StatusBadRequest, "bad request")
 			return
 		}
 		messageContent, err = messageContentFromPubSub(pubsub)
 		if err != nil {
-			respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to retrieve message content: %v", err))
+			log.Printf("Bad request extracting message content in Eventarc trigger: %v", err)
+			respondError(w, http.StatusBadRequest, "bad request")
 			return
 		}
 	} else {
