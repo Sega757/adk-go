@@ -838,6 +838,33 @@ button.active {
   display: none;
 }
 
+.console-json-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.25rem;
+}
+
+.copy-json-btn {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.65rem;
+  background-color: #3e3e3e;
+  color: #cccccc;
+  border: 1px solid #4e4e4e;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.copy-json-btn:hover {
+  background-color: #4e4e4e;
+  color: #ffffff;
+}
+
+.copy-json-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
+}
+
 .console-entry-json pre {
   margin: 0;
   color: #9cdcfe;
