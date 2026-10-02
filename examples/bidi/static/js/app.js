@@ -245,6 +245,35 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
   if (data) {
     jsonDiv = document.createElement("div");
     jsonDiv.className = "console-entry-json collapsed";
+
+    const jsonHeader = document.createElement("div");
+    jsonHeader.className = "console-json-header";
+
+    const copyJsonBtn = document.createElement("button");
+    copyJsonBtn.className = "copy-json-btn";
+    copyJsonBtn.type = "button";
+    copyJsonBtn.setAttribute("aria-label", "Copy event JSON to clipboard");
+    copyJsonBtn.setAttribute("title", "Copy event JSON");
+    copyJsonBtn.textContent = "📋 Copy JSON";
+
+    copyJsonBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const jsonText = JSON.stringify(data, null, 2);
+      navigator.clipboard.writeText(jsonText).then(() => {
+        copyJsonBtn.textContent = "✓ Copied!";
+        copyJsonBtn.setAttribute("aria-label", "Copied event JSON to clipboard");
+        setTimeout(() => {
+          copyJsonBtn.textContent = "📋 Copy JSON";
+          copyJsonBtn.setAttribute("aria-label", "Copy event JSON to clipboard");
+        }, 2000);
+      }).catch(err => {
+        console.error("Failed to copy JSON:", err);
+      });
+    });
+
+    jsonHeader.appendChild(copyJsonBtn);
+    jsonDiv.appendChild(jsonHeader);
+
     const pre = document.createElement("pre");
     pre.textContent = JSON.stringify(data, null, 2);
     jsonDiv.appendChild(pre);
@@ -280,7 +309,7 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
     // Toggle expand/collapse on click or keyboard (Enter/Space)
     entry.addEventListener("click", toggleExpand);
     entry.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
+      if ((e.key === "Enter" || e.key === " ") && e.target === entry) {
         e.preventDefault();
         toggleExpand();
       }
