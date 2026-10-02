@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -234,6 +235,10 @@ func init() {
 			toolFilterStr[i] = s
 		}
 
+		if err := validateMCPCommand(command); err != nil {
+			return nil, err
+		}
+
 		mcpSet, err := mcptoolset.New(mcptoolset.Config{
 			Transport: &mcp.CommandTransport{
 				Command: exec.Command(command, serverArgsStr...),
@@ -248,6 +253,39 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// validateMCPCommand enforces an allowlist for commands.
+func validateMCPCommand(cmd string) error {
+	allowed := map[string]bool{
+		"node":    true,
+		"npx":     true,
+		"python":  true,
+		"python3": true,
+		"uv":      true,
+		"uvx":     true,
+		"docker":  true,
+		"go":      true,
+	}
+
+	if envAllowed := os.Getenv("ADK_ALLOWED_MCP_COMMANDS"); envAllowed != "" {
+		for _, c := range strings.Split(envAllowed, ",") {
+			c = strings.TrimSpace(c)
+			if c != "" {
+				allowed[c] = true
+			}
+		}
+	}
+
+	if !allowed[cmd] {
+		// If command contains path separators, only allow it if it is explicitly in the allowlist.
+		if strings.ContainsRune(cmd, '/') || strings.ContainsRune(cmd, '\\') {
+			return fmt.Errorf("mcp command %q with path separators is not in the allowlist", cmd)
+		}
+		return fmt.Errorf("mcp command %q is not in the allowlist", cmd)
+	}
+
+	return nil
 }
 
 // Register allows concrete implementations to add themselves to the system.
