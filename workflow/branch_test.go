@@ -37,6 +37,24 @@ func TestDeriveSubBranch(t *testing.T) {
 	}
 }
 
+func BenchmarkCommonBranchPrefix_SingleBranch(b *testing.B) {
+	branches := []string{"a.b.c"}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = commonBranchPrefix(branches)
+	}
+}
+
+func BenchmarkCommonBranchPrefix_MultipleBranches(b *testing.B) {
+	branches := []string{"a.b.x", "a.b.y", "a.b.z.w"}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = commonBranchPrefix(branches)
+	}
+}
+
 func TestCommonBranchPrefix(t *testing.T) {
 	tests := []struct {
 		name     string
