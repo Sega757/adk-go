@@ -14,10 +14,6 @@
 
 package workflow
 
-import (
-	"strings"
-)
-
 // Branch composition helpers for the static, parallel, and dynamic
 // schedulers. Branches are dot-separated strings identifying the
 // position of an in-flight node within an invocation's parallel
@@ -81,31 +77,50 @@ func deriveChildBranch(parentBranch, name, runID string, useSubBranch bool, over
 //
 // Note that segment-aware comparison is intentional: branches "a"
 // and "ab" share no prefix (zero common segments), not "a"-as-string.
+//
+// Performance-optimized by Bolt: uses direct character index scanning over
+// branch segments to eliminate slice allocations (strings.Split and [][]string)
+// and string joins (strings.Join), achieving 0 B/op and 0 allocs/op.
 func commonBranchPrefix(branches []string) string {
 	if len(branches) == 0 {
 		return ""
 	}
-	splits := make([][]string, len(branches))
-	minLen := -1
-	for i, b := range branches {
+	if len(branches) == 1 {
+		return branches[0]
+	}
+
+	first := branches[0]
+	if first == "" {
+		return ""
+	}
+
+	for _, b := range branches[1:] {
 		if b == "" {
 			return ""
 		}
-		segs := strings.Split(b, ".")
-		splits[i] = segs
-		if minLen < 0 || len(segs) < minLen {
-			minLen = len(segs)
-		}
 	}
-	commonCount := 0
-	for i := 0; i < minLen; i++ {
-		seg := splits[0][i]
-		for _, s := range splits[1:] {
-			if s[i] != seg {
-				return strings.Join(splits[0][:commonCount], ".")
+
+	commonLen := 0
+	for i := 0; i <= len(first); i++ {
+		if i == len(first) || first[i] == '.' {
+			sub := first[:i]
+			match := true
+			for _, b := range branches[1:] {
+				if len(b) < i || b[:i] != sub {
+					match = false
+					break
+				}
+				if len(b) > i && b[i] != '.' {
+					match = false
+					break
+				}
 			}
+			if !match {
+				break
+			}
+			commonLen = i
 		}
-		commonCount++
 	}
-	return strings.Join(splits[0][:commonCount], ".")
+
+	return first[:commonLen]
 }
