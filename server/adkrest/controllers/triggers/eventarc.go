@@ -16,7 +16,6 @@ package triggers
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -115,7 +114,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		// E.g. as https://googleapis.github.io/google-cloudevents/examples/binary/storage/StorageObjectData-simple.json
 		messageBytes, err := json.Marshal(event)
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to marshal agent message: %v", err))
+			log.Printf("Internal server error marshaling agent message in Eventarc trigger: %v", err)
+			respondError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		messageContent = string(messageBytes)
@@ -140,7 +140,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 	}
 
 	if _, err := c.runner.RunAgent(r.Context(), appName, userID, messageContent); err != nil {
-		respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to run agent: %v", err))
+		log.Printf("Internal server error running agent in Eventarc trigger: %v", err)
+		respondError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
