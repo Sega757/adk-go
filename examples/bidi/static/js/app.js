@@ -327,6 +327,7 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
 }
 
 function clearConsole() {
+  const clearBtnWasFocused = document.activeElement === clearConsoleBtn;
   consoleContent.innerHTML = `
     <div id="consoleEmptyState" class="console-empty-state">
       <div class="console-empty-icon" aria-hidden="true">⚡</div>
@@ -335,6 +336,9 @@ function clearConsole() {
     </div>
   `;
   updateClearConsoleButtonState();
+  if (clearBtnWasFocused && showAudioEventsCheckbox) {
+    showAudioEventsCheckbox.focus();
+  }
 }
 
 // Audio filter tooltip and console button event handlers
@@ -617,6 +621,11 @@ function initScrollListener() {
   if (btn) {
     btn.addEventListener("click", () => {
       scrollToBottom(true);
+      if (messageInput && !messageInput.disabled) {
+        messageInput.focus();
+      } else if (messagesDiv) {
+        messagesDiv.focus();
+      }
     });
   }
 }
