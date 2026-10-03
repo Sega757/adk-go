@@ -21,6 +21,7 @@ import (
 	"google.golang.org/genai"
 
 	"google.golang.org/adk/v2/internal/utils"
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/platform"
 )
 
@@ -355,4 +356,213 @@ func BenchmarkHasFunctionResponses(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = utils.HasFunctionResponses(content)
 	}
+}
+
+
+func TestAppendInstructions(t *testing.T) {
+	tests := []struct {
+		name         string
+		initialReq   func() *model.LLMRequest
+		instructions []string
+		want         func(*testing.T, *model.LLMRequest)
+	}{
+		{
+			name: "no instructions leaves request unchanged",
+			initialReq: func() *model.LLMRequest {
+				return &model.LLMRequest{}
+			},
+			instructions: nil,
+			want: func(t *testing.T, r *model.LLMRequest) {
+				if r.Config != nil {
+					t.Errorf("expected Config to remain nil, got %v", r.Config)
+				}
+			},
+		},
+		{
+			name: "nil config initializes config and system instruction",
+			initialReq: func() *model.LLMRequest {
+				return &model.LLMRequest{}
+			},
+			instructions: []string{"System Prompt 1"},
+			want: func(t *testing.T, r *model.LLMRequest) {
+				if r.Config == nil {
+					t.Fatal("expected Config to be initialized, got nil")
+				}
+				if r.Config.SystemInstruction == nil {
+					t.Fatal("expected SystemInstruction to be initialized, got nil")
+				}
+				if len(r.Config.SystemInstruction.Parts) != 1 {
+					t.Fatalf("expected 1 part, got %d", len(r.Config.SystemInstruction.Parts))
+				}
+				if got := r.Config.SystemInstruction.Parts[0].Text; got != "System Prompt 1" {
+					t.Errorf("part text = %q, want %q", got, "System Prompt 1")
+				}
+				if got := r.Config.SystemInstruction.Role; got != genai.RoleUser {
+					t.Errorf("role = %q, want %q", got, genai.RoleUser)
+				}
+			},
+		},
+		{
+			name: "nil system instruction initializes system instruction on existing config",
+			initialReq: func() *model.LLMRequest {
+				return &model.LLMRequest{
+					Config: &genai.GenerateContentConfig{
+						Temperature: genai.Ptr(float32(0.7)),
+					},
+				}
+			},
+			instructions: []string{"System Prompt 1"},
+			want: func(t *testing.T, r *model.LLMRequest) {
+				if r.Config == nil || r.Config.SystemInstruction == nil {
+					t.Fatal("expected SystemInstruction to be initialized")
+				}
+				if got := *r.Config.Temperature; got != float32(0.7) {
+					t.Errorf("expected Temperature to be preserved, got %f", got)
+				}
+				if got := r.Config.SystemInstruction.Parts[0].Text; got != "System Prompt 1" {
+					t.Errorf("part text = %q, want %q", got, "System Prompt 1")
+				}
+			},
+		},
+		{
+			name: "existing system instruction appends to last non-empty text part",
+			initialReq: func() *model.LLMRequest {
+				return &model.LLMRequest{
+					Config: &genai.GenerateContentConfig{
+						SystemInstruction: genai.NewContentFromText("Initial instruction", genai.RoleUser),
+					},
+				}
+			},
+			instructions: []string{"Additional instruction"},
+			want: func(t *testing.T, r *model.LLMRequest) {
+				if r.Config == nil || r.Config.SystemInstruction == nil {
+					t.Fatal("expected SystemInstruction to exist")
+				}
+				if len(r.Config.SystemInstruction.Parts) != 1 {
+					t.Fatalf("expected 1 part, got %d", len(r.Config.SystemInstruction.Parts))
+				}
+				wantText := "Initial instruction\n\nAdditional instruction"
+				if got := r.Config.SystemInstruction.Parts[0].Text; got != wantText {
+					t.Errorf("part text = %q, want %q", got, wantText)
+				}
+			},
+		},
+		{
+			name: "existing system instruction with empty parts appends new part",
+			initialReq: func() *model.LLMRequest {
+				return &model.LLMRequest{
+					Config: &genai.GenerateContentConfig{
+						SystemInstruction: &genai.Content{
+							Role:  genai.RoleUser,
+							Parts: []*genai.Part{},
+						},
+					},
+				}
+			},
+			instructions: []string{"New instruction"},
+			want: func(t *testing.T, r *model.LLMRequest) {
+				if r.Config == nil || r.Config.SystemInstruction == nil {
+					t.Fatal("expected SystemInstruction to exist")
+				}
+				if len(r.Config.SystemInstruction.Parts) != 1 {
+					t.Fatalf("expected 1 part, got %d", len(r.Config.SystemInstruction.Parts))
+				}
+				if got := r.Config.SystemInstruction.Parts[0].Text; got != "New instruction" {
+					t.Errorf("part text = %q, want %q", got, "New instruction")
+				}
+			},
+		},
+		{
+			name: "existing system instruction with empty last part text appends new part",
+			initialReq: func() *model.LLMRequest {
+				return &model.LLMRequest{
+					Config: &genai.GenerateContentConfig{
+						SystemInstruction: &genai.Content{
+							Role: genai.RoleUser,
+							Parts: []*genai.Part{
+								{Text: ""},
+							},
+						},
+					},
+				}
+			},
+			instructions: []string{"New instruction"},
+			want: func(t *testing.T, r *model.LLMRequest) {
+				if r.Config == nil || r.Config.SystemInstruction == nil {
+					t.Fatal("expected SystemInstruction to exist")
+				}
+				if len(r.Config.SystemInstruction.Parts) != 2 {
+					t.Fatalf("expected 2 parts, got %d", len(r.Config.SystemInstruction.Parts))
+				}
+				if got := r.Config.SystemInstruction.Parts[1].Text; got != "New instruction" {
+					t.Errorf("second part text = %q, want %q", got, "New instruction")
+				}
+			},
+		},
+		{
+			name: "multiple variadic instructions joined with double newline",
+			initialReq: func() *model.LLMRequest {
+				return &model.LLMRequest{}
+			},
+			instructions: []string{"Inst 1", "Inst 2", "Inst 3"},
+			want: func(t *testing.T, r *model.LLMRequest) {
+				if r.Config == nil || r.Config.SystemInstruction == nil {
+					t.Fatal("expected SystemInstruction to exist")
+				}
+				wantText := "Inst 1\n\nInst 2\n\nInst 3"
+				if got := r.Config.SystemInstruction.Parts[0].Text; got != wantText {
+					t.Errorf("part text = %q, want %q", got, wantText)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := tt.initialReq()
+			utils.AppendInstructions(req, tt.instructions...)
+			tt.want(t, req)
+		})
+	}
+}
+
+func TestAppendInstructionsSequential(t *testing.T) {
+	req := &model.LLMRequest{}
+
+	utils.AppendInstructions(req, "First")
+	utils.AppendInstructions(req, "Second")
+	utils.AppendInstructions(req, "Third", "Fourth")
+
+	if req.Config == nil || req.Config.SystemInstruction == nil {
+		t.Fatal("expected SystemInstruction to exist")
+	}
+
+	wantText := "First\n\nSecond\n\nThird\n\nFourth"
+	if got := req.Config.SystemInstruction.Parts[0].Text; got != wantText {
+		t.Errorf("part text = %q, want %q", got, wantText)
+	}
+}
+
+func BenchmarkAppendInstructions(b *testing.B) {
+	b.Run("single append", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			req := &model.LLMRequest{
+				Config: &genai.GenerateContentConfig{
+					SystemInstruction: genai.NewContentFromText("Initial", genai.RoleUser),
+				},
+			}
+			utils.AppendInstructions(req, "New instruction")
+		}
+	})
+
+	b.Run("variadic append", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			req := &model.LLMRequest{}
+			utils.AppendInstructions(req, "First instruction", "Second instruction", "Third instruction")
+		}
+	})
 }
