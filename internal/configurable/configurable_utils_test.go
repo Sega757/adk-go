@@ -23,12 +23,17 @@ import (
 	"testing"
 
 	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/agent/workflowagents/loopagent"
 	"google.golang.org/adk/v2/tool"
 )
 
 func resetRegistries(t *testing.T) {
 	t.Helper()
 	registryMu.Lock()
+	oldFactories := make(map[string]AgentFactory, len(registry))
+	for k, v := range registry {
+		oldFactories[k] = v
+	}
 	oldCallbacks := make(map[string]any, len(callbackRegistry))
 	for k, v := range callbackRegistry {
 		oldCallbacks[k] = v
@@ -46,9 +51,110 @@ func resetRegistries(t *testing.T) {
 	t.Cleanup(func() {
 		registryMu.Lock()
 		defer registryMu.Unlock()
+		registry = oldFactories
 		callbackRegistry = oldCallbacks
 		toolRegistry = oldTools
 		agentRegistry = oldAgents
+	})
+}
+
+
+func TestRegister(t *testing.T) {
+	resetRegistries(t)
+
+	t.Run("HappyPathCustomAgentFactory", func(t *testing.T) {
+		resetRegistries(t)
+		factoryName := "CustomTestAgent"
+		dummyFactory := func(ctx context.Context, configBytes []byte, configPath string) (agent.Agent, error) {
+			return loopagent.New(loopagent.Config{AgentConfig: agent.Config{Name: "custom_test_agent"}, MaxIterations: 1})
+		}
+
+		err := Register(factoryName, dummyFactory)
+		if err != nil {
+			t.Fatalf("unexpected error registering agent factory: %v", err)
+		}
+
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "custom.yaml")
+		yamlData := []byte("agent_class: CustomTestAgent\nname: custom_test_agent\n")
+		if err := os.WriteFile(cfgPath, yamlData, 0o644); err != nil {
+			t.Fatalf("failed to write config file: %v", err)
+		}
+
+		ag, err := FromConfig(context.Background(), cfgPath)
+		if err != nil {
+			t.Fatalf("unexpected error instantiating registered agent via FromConfig: %v", err)
+		}
+		if ag == nil || ag.Name() != "custom_test_agent" {
+			t.Fatalf("unexpected agent returned: %v", ag)
+		}
+	})
+
+	t.Run("DuplicateRegistrationRejection", func(t *testing.T) {
+		resetRegistries(t)
+		factoryName := "DupTestAgent"
+		dummyFactory1 := func(ctx context.Context, configBytes []byte, configPath string) (agent.Agent, error) {
+			return nil, nil
+		}
+		dummyFactory2 := func(ctx context.Context, configBytes []byte, configPath string) (agent.Agent, error) {
+			return nil, fmt.Errorf("factory2")
+		}
+
+		err := Register(factoryName, dummyFactory1)
+		if err != nil {
+			t.Fatalf("unexpected error on initial registration: %v", err)
+		}
+
+		err = Register(factoryName, dummyFactory2)
+		if err == nil {
+			t.Fatalf("expected error on duplicate agent registration, got nil")
+		}
+		expectedErr := fmt.Sprintf("Register called twice for agent %s", factoryName)
+		if err.Error() != expectedErr {
+			t.Errorf("got error %q, want %q", err.Error(), expectedErr)
+		}
+	})
+
+	t.Run("EmptyNameAndNilFactory", func(t *testing.T) {
+		resetRegistries(t)
+
+		// Testing current behavior when registering with empty name
+		err := Register("", func(ctx context.Context, data []byte, path string) (agent.Agent, error) {
+			return nil, nil
+		})
+		if err != nil {
+			t.Fatalf("unexpected error when registering with empty name: %v", err)
+		}
+
+		// Duplicate empty name should fail
+		err = Register("", func(ctx context.Context, data []byte, path string) (agent.Agent, error) {
+			return nil, nil
+		})
+		if err == nil {
+			t.Fatalf("expected error on duplicate empty name registration, got nil")
+		}
+
+		// Testing current behavior when registering nil factory
+		nilFactoryName := "NilFactoryAgent"
+		err = Register(nilFactoryName, nil)
+		if err != nil {
+			t.Fatalf("unexpected error when registering nil factory: %v", err)
+		}
+	})
+
+	t.Run("UnregisteredLookupError", func(t *testing.T) {
+		resetRegistries(t)
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "unregistered.yaml")
+		yamlData := []byte("agent_class: UnregisteredAgentClass\nname: test_agent\n")
+		if err := os.WriteFile(cfgPath, yamlData, 0o644); err != nil {
+			t.Fatalf("failed to write config file: %v", err)
+		}
+
+		_, err := FromConfig(context.Background(), cfgPath)
+		if err == nil {
+			t.Fatalf("expected error when looking up unregistered agent class, got nil")
+		}
 	})
 }
 
@@ -304,7 +410,11 @@ func TestConcurrentRegistration(t *testing.T) {
 
 	const numGoroutines = 100
 	var wg sync.WaitGroup
-	wg.Add(numGoroutines * 2)
+	wg.Add(numGoroutines * 4)
+
+	dummyFactory := func(ctx context.Context, configBytes []byte, configPath string) (agent.Agent, error) {
+		return nil, nil
+	}
 
 	for i := 0; i < numGoroutines; i++ {
 		keyName := fmt.Sprintf("concurrent_cb_%d", i)
@@ -313,10 +423,22 @@ func TestConcurrentRegistration(t *testing.T) {
 			_ = RegisterCallback(k, func() {})
 		}(keyName)
 
+		agentKeyName := fmt.Sprintf("concurrent_agent_%d", i)
+		go func(k string) {
+			defer wg.Done()
+			_ = Register(k, dummyFactory)
+		}(agentKeyName)
+
 		collidingKey := "concurrent_colliding_cb"
 		go func() {
 			defer wg.Done()
 			_ = RegisterCallback(collidingKey, func() {})
+		}()
+
+		collidingAgentKey := "concurrent_colliding_agent"
+		go func() {
+			defer wg.Done()
+			_ = Register(collidingAgentKey, dummyFactory)
 		}()
 	}
 
