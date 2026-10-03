@@ -25,6 +25,7 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/platform"
 	"google.golang.org/adk/v2/session"
+	"google.golang.org/adk/v2/session/internal/sessioninternal"
 )
 
 // storageSession corresponds to the 'sessions' table.
@@ -49,10 +50,10 @@ func (storageSession) TableName() string {
 func createStorageSession(ctx context.Context, s *localSession) (*storageSession, error) {
 	now := platform.Now(ctx)
 	return &storageSession{
-		UserID:     s.userID,
-		AppName:    s.appName,
-		ID:         s.sessionID,
-		State:      s.state,
+		UserID:     s.UserID(),
+		AppName:    s.AppName(),
+		ID:         s.ID(),
+		State:      s.Session.State,
 		CreateTime: now,
 		UpdateTime: now,
 	}, nil
@@ -61,11 +62,13 @@ func createStorageSession(ctx context.Context, s *localSession) (*storageSession
 // Helper to map from GORM struct to internal struct
 func createSessionFromStorageSession(storage *storageSession) (*localSession, error) {
 	return &localSession{
-		appName:   storage.AppName,
-		userID:    storage.UserID,
-		sessionID: storage.ID,
-		state:     storage.State,
-		updatedAt: storage.UpdateTime,
+		Session: sessioninternal.Session{
+			AppName:   storage.AppName,
+			UserID:    storage.UserID,
+			SessionID: storage.ID,
+			State:     storage.State,
+			UpdatedAt: storage.UpdateTime,
+		},
 	}, nil
 }
 

@@ -26,6 +26,7 @@ import (
 	"google.golang.org/adk/v2/internal/sessionutils"
 	"google.golang.org/adk/v2/platform"
 	"google.golang.org/adk/v2/session"
+	"google.golang.org/adk/v2/session/internal/sessioninternal"
 )
 
 // databaseService is an database implementation of sessionService.Service.
@@ -83,11 +84,13 @@ func (s *databaseService) Create(ctx context.Context, req *session.CreateRequest
 		stateMap = make(map[string]any)
 	}
 	val := &localSession{
-		appName:   req.AppName,
-		userID:    req.UserID,
-		sessionID: sessionID,
-		state:     stateMap,
-		updatedAt: platform.Now(ctx),
+		Session: sessioninternal.Session{
+			AppName:   req.AppName,
+			UserID:    req.UserID,
+			SessionID: sessionID,
+			State:     stateMap,
+			UpdatedAt: platform.Now(ctx),
+		},
 	}
 	createdSession, err := createStorageSession(ctx, val)
 	if err != nil {
@@ -131,8 +134,8 @@ func (s *databaseService) Create(ctx context.Context, req *session.CreateRequest
 			return fmt.Errorf("error creating session on database: %w", err)
 		}
 
-		val.state = mergeStates(storageApp.State, storageUser.State, sessionState)
-		val.updatedAt = createdSession.UpdateTime
+		val.Session.State = mergeStates(storageApp.State, storageUser.State, sessionState)
+		val.Session.UpdatedAt = createdSession.UpdateTime
 		return nil
 	})
 	if err != nil {
@@ -201,7 +204,7 @@ func (s *databaseService) Get(ctx context.Context, req *session.GetRequest) (*se
 	}
 
 	responseSession, err := createSessionFromStorageSession(&foundSession)
-	responseSession.state = mergeStates(storageApp.State, storageUser.State, responseSession.state)
+	responseSession.Session.State = mergeStates(storageApp.State, storageUser.State, responseSession.Session.State)
 	if err != nil {
 		return nil, fmt.Errorf("failed to map storage object: %w", err)
 	}
@@ -217,7 +220,7 @@ func (s *databaseService) Get(ctx context.Context, req *session.GetRequest) (*se
 		}
 		responseEvents = append(responseEvents, evt)
 	}
-	responseSession.events = responseEvents
+	responseSession.Session.Events = responseEvents
 
 	return &session.GetResponse{
 		Session: responseSession,
@@ -289,7 +292,7 @@ func (s *databaseService) List(ctx context.Context, req *session.ListRequest) (*
 		if !ok {
 			userState = &storageUserState{AppName: appName, UserID: userID, State: make(map[string]any)}
 		}
-		sess.state = mergeStates(storageApp.State, userState.State, sess.state)
+		sess.Session.State = mergeStates(storageApp.State, userState.State, sess.Session.State)
 		responseSessions = append(responseSessions, sess)
 	}
 
@@ -355,7 +358,7 @@ func (s *databaseService) AppendEvent(ctx context.Context, curSession session.Se
 	}
 
 	// update local session last update time
-	sess.updatedAt = event.Timestamp
+	sess.Session.UpdatedAt = event.Timestamp
 	return nil
 }
 
@@ -378,7 +381,7 @@ func (s *databaseService) applyEvent(ctx context.Context, session *localSession,
 		// Ensure the session object is not stale.
 		// We use UnixMicro() for microsecond-level precision, matching the Python code.
 		storageUpdateTime := storageSess.UpdateTime.UnixMicro()
-		sessionUpdateTime := session.updatedAt.UnixMicro()
+		sessionUpdateTime := session.Session.UpdatedAt.UnixMicro()
 		if storageUpdateTime > sessionUpdateTime {
 			return fmt.Errorf(
 				"stale session error: last update time from request (%s) is older than in database (%s)",
@@ -442,7 +445,7 @@ func (s *databaseService) applyEvent(ctx context.Context, session *localSession,
 			return fmt.Errorf("failed to save session state: %w", err)
 		}
 
-		session.updatedAt = storageSess.UpdateTime
+		session.Session.UpdatedAt = storageSess.UpdateTime
 
 		return nil // Returning nil commits the transaction.
 	})
