@@ -319,3 +319,57 @@ func TestRequestConfirmationRequestProcessor(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkRequestConfirmationRequestProcessor_StandardTurn(b *testing.B) {
+	agnt, tools, err := newMockLlmAgent()
+	if err != nil {
+		b.Fatalf("error creating mock llmagent: %v", err)
+	}
+
+	// Create a standard session history containing text conversation events (no tool confirmations)
+	events := []*session.Event{
+		{
+			Author: "user",
+			LLMResponse: model.LLMResponse{
+				Content: &genai.Content{
+					Parts: []*genai.Part{{Text: "Hello agent!"}},
+				},
+			},
+		},
+		{
+			Author: "agent",
+			LLMResponse: model.LLMResponse{
+				Content: &genai.Content{
+					Parts: []*genai.Part{{Text: "Hello user! How can I help you today?"}},
+				},
+			},
+		},
+		{
+			Author: "user",
+			LLMResponse: model.LLMResponse{
+				Content: &genai.Content{
+					Parts: []*genai.Part{{Text: "What is the capital of France?"}},
+				},
+			},
+		},
+	}
+
+	ctx := icontext.NewInvocationContext(b.Context(), icontext.InvocationContextParams{
+		Agent:   agnt,
+		Session: &fakeSession{events: events},
+	})
+	llmReq := &model.LLMRequest{}
+	flow := &llminternal.Flow{Tools: tools}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		iter := llminternal.RequestConfirmationRequestProcessor(ctx, llmReq, flow)
+		for _, err := range iter {
+			if err != nil {
+				b.Fatalf("unexpected error: %v", err)
+			}
+		}
+	}
+}
