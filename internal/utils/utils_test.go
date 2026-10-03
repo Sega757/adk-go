@@ -358,7 +358,6 @@ func BenchmarkHasFunctionResponses(b *testing.B) {
 	}
 }
 
-
 func TestAppendInstructions(t *testing.T) {
 	tests := []struct {
 		name         string

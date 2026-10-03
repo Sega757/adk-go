@@ -210,7 +210,7 @@ type RequestInput struct {
 // Note: when multiple agents participate in one invocation, there could be
 // multiple events with IsFinalResponse() as True, for each participating agent.
 func (e *Event) IsFinalResponse() bool {
-	if (e.Actions.SkipSummarization) || len(e.LongRunningToolIDs) > 0 {
+	if e.Actions.SkipSummarization || len(e.LongRunningToolIDs) > 0 {
 		return true
 	}
 
