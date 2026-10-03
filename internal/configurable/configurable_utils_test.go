@@ -58,7 +58,6 @@ func resetRegistries(t *testing.T) {
 	})
 }
 
-
 func TestRegister(t *testing.T) {
 	resetRegistries(t)
 
