@@ -17,6 +17,7 @@ package skilltool
 
 import (
 	"fmt"
+	"strings"
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
@@ -62,6 +63,9 @@ func loadSkill(ctx agent.Context, args LoadSkillArgs, source skill.Source) (*Loa
 	if args.Name == "" {
 		return nil, fmt.Errorf("skill name is required to load a skill")
 	}
+	if err := validateSkillName(args.Name); err != nil {
+		return nil, err
+	}
 	frontmatter, err := source.LoadFrontmatter(ctx, args.Name)
 	if err != nil {
 		return nil, fmt.Errorf("load frontmatter for skill %q: %w", args.Name, err)
@@ -82,4 +86,11 @@ func loadSkill(ctx agent.Context, args LoadSkillArgs, source skill.Source) (*Loa
 			AllowedTools:  frontmatter.AllowedTools,
 		},
 	}, nil
+}
+
+func validateSkillName(name string) error {
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, "..") {
+		return fmt.Errorf("invalid skill name %q: path traversal or separators not allowed", name)
+	}
+	return nil
 }

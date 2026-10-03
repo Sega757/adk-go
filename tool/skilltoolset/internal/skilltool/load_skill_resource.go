@@ -17,6 +17,7 @@ package skilltool
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
@@ -56,8 +57,14 @@ func loadSkillResource(ctx agent.Context, args LoadSkillResourceArgs, source ski
 	if args.SkillName == "" {
 		return nil, fmt.Errorf("skill name is required to load a resource")
 	}
+	if err := validateSkillName(args.SkillName); err != nil {
+		return nil, err
+	}
 	if args.ResourcePath == "" {
 		return nil, fmt.Errorf("resource path is required to load a resource for skill %q", args.SkillName)
+	}
+	if err := validateResourcePath(args.ResourcePath); err != nil {
+		return nil, err
 	}
 	reader, err := source.LoadResource(ctx, args.SkillName, args.ResourcePath)
 	if err != nil {
@@ -78,4 +85,11 @@ func loadSkillResource(ctx agent.Context, args LoadSkillResourceArgs, source ski
 		Path:      args.ResourcePath,
 		Content:   string(content),
 	}, nil
+}
+
+func validateResourcePath(resPath string) error {
+	if strings.Contains(resPath, "..") || strings.HasPrefix(resPath, "/") || strings.HasPrefix(resPath, "\\") {
+		return fmt.Errorf("invalid resource path %q: path traversal or absolute paths not allowed", resPath)
+	}
+	return nil
 }

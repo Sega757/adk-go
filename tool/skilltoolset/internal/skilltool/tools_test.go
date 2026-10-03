@@ -153,6 +153,14 @@ func TestLoadSkill(t *testing.T) {
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("LoadSkill result mismatch (-want +got):\n%s", diff)
 	}
+
+	invalidNames := []string{"../skill1", "skill1/sub", "skill1\\sub", ".."}
+	for _, invalidName := range invalidNames {
+		_, err := functionTool.Run(createToolContext(t), map[string]any{"name": invalidName})
+		if err == nil {
+			t.Errorf("LoadSkill tool.Run with invalid name %q expected error, got nil", invalidName)
+		}
+	}
 }
 
 func TestLoadSkillResource(t *testing.T) {
@@ -183,5 +191,27 @@ func TestLoadSkillResource(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, result); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	invalidSkillNames := []string{"../skill1", "skill1/sub", "skill1\\sub"}
+	for _, invalidName := range invalidSkillNames {
+		_, err := functionTool.Run(createToolContext(t), map[string]any{
+			"skill_name":    invalidName,
+			"resource_path": "assets/data.txt",
+		})
+		if err == nil {
+			t.Errorf("LoadSkillResource tool.Run with invalid skill_name %q expected error, got nil", invalidName)
+		}
+	}
+
+	invalidResourcePaths := []string{"../assets/data.txt", "/assets/data.txt", "\\assets\\data.txt"}
+	for _, invalidPath := range invalidResourcePaths {
+		_, err := functionTool.Run(createToolContext(t), map[string]any{
+			"skill_name":    "skill1",
+			"resource_path": invalidPath,
+		})
+		if err == nil {
+			t.Errorf("LoadSkillResource tool.Run with invalid resource_path %q expected error, got nil", invalidPath)
+		}
 	}
 }
