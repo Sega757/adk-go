@@ -291,6 +291,12 @@ func validateMCPCommand(cmd string) error {
 // Register allows concrete implementations to add themselves to the system.
 // This replaces Python's dynamic importlib logic.
 func Register(name string, factory AgentFactory) error {
+	if name == "" {
+		return fmt.Errorf("Register called with empty name")
+	}
+	if factory == nil {
+		return fmt.Errorf("Register called with nil factory for %s", name)
+	}
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	if _, dup := registry[name]; dup {
