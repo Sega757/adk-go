@@ -260,3 +260,68 @@ func nodeState(t *testing.T, state *RunState, name string) *NodeState {
 	}
 	return ns
 }
+
+func BenchmarkFirstUserInput(b *testing.B) {
+	b.Run("EmptyEvents", func(b *testing.B) {
+		events := sliceEvents{
+			modelEvent("node", "hello", false),
+		}
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = firstUserInput(events, "")
+		}
+	})
+
+	b.Run("SinglePart", func(b *testing.B) {
+		ev := &session.Event{Author: "user"}
+		ev.Content = &genai.Content{
+			Parts: []*genai.Part{
+				{Text: "Hello, this is a single part user prompt."},
+			},
+		}
+		events := sliceEvents{ev}
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = firstUserInput(events, "")
+		}
+	})
+
+	b.Run("MultiPart", func(b *testing.B) {
+		parts := make([]*genai.Part, 20)
+		for i := range parts {
+			parts[i] = &genai.Part{Text: "Part of the multi-part user message text chunk. "}
+		}
+		ev := &session.Event{Author: "user"}
+		ev.Content = &genai.Content{Parts: parts}
+		events := sliceEvents{ev}
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = firstUserInput(events, "")
+		}
+	})
+
+	b.Run("WithFunctionResponses", func(b *testing.B) {
+		ev1 := &session.Event{Author: "user"}
+		ev1.Content = &genai.Content{
+			Parts: []*genai.Part{
+				{FunctionResponse: &genai.FunctionResponse{ID: "fn1"}},
+				{Text: "resuming"},
+			},
+		}
+		ev2 := &session.Event{Author: "user"}
+		ev2.Content = &genai.Content{
+			Parts: []*genai.Part{
+				{Text: "Actual user text prompt after function response turn."},
+			},
+		}
+		events := sliceEvents{ev1, ev2}
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = firstUserInput(events, "")
+		}
+	})
+}
