@@ -412,20 +412,43 @@ func firstUserInput(events session.Events, invocationID string) any {
 		if invocationID != "" && ev.InvocationID != invocationID {
 			continue
 		}
-		var text string
+
 		hasFR := false
+		partCount := 0
+		totalLen := 0
+		var firstText string
+
 		for _, p := range ev.Content.Parts {
 			if p == nil {
 				continue
 			}
 			if p.FunctionResponse != nil {
 				hasFR = true
+				break
 			}
-			text += p.Text
+			if len(p.Text) > 0 {
+				partCount++
+				totalLen += len(p.Text)
+				firstText = p.Text
+			}
 		}
-		if hasFR {
+
+		if hasFR || partCount == 0 {
 			continue
 		}
+
+		if partCount == 1 {
+			return firstText
+		}
+
+		var sb strings.Builder
+		sb.Grow(totalLen)
+		for _, p := range ev.Content.Parts {
+			if p != nil && len(p.Text) > 0 {
+				sb.WriteString(p.Text)
+			}
+		}
+		text := sb.String()
 		if text != "" {
 			return text
 		}
