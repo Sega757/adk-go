@@ -274,12 +274,12 @@ func (c *RuntimeAPIController) RunLiveHandler(rw http.ResponseWriter, req *http.
 	}
 
 	if appName == "" || userID == "" || sessionID == "" {
-		return fmt.Errorf("appName, userId, and sessionId are required")
+		return newStatusError(fmt.Errorf("appName, userId, and sessionId are required"), http.StatusBadRequest)
 	}
 
 	ws, err := upgrader.Upgrade(rw, req, nil)
 	if err != nil {
-		return fmt.Errorf("failed to upgrade to websocket: %w", err)
+		return newStatusError(fmt.Errorf("failed to upgrade to websocket: %w", err), http.StatusBadRequest)
 	}
 	// Limit WebSocket read size to 10MB to prevent memory exhaustion DoS attacks
 	ws.SetReadLimit(10 * 1024 * 1024)
