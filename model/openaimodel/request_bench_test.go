@@ -69,3 +69,26 @@ func BenchmarkConvertOutputItems(b *testing.B) {
 		_, _ = convertOutputItems(items)
 	}
 }
+
+func BenchmarkFlattenContentText_SinglePart(b *testing.B) {
+	content := genai.NewContentFromText("You are a helpful assistant.", genai.RoleUser)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_, _ = flattenContentText(content)
+	}
+}
+
+func BenchmarkFlattenContentText_MultiPart(b *testing.B) {
+	content := &genai.Content{
+		Parts: []*genai.Part{
+			{Text: "You are a helpful assistant."},
+			{Text: "Always respond concisely."},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_, _ = flattenContentText(content)
+	}
+}
