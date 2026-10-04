@@ -133,7 +133,8 @@ func TestFunctionNode_RunDoesNotValidate(t *testing.T) {
 		return raw, nil
 	}
 	node, err := NewFunctionNodeWithSchema[Input, map[string]any](
-		"test", fn, mustSchema[Input](t), mustSchema[TargetOutput](t), defaultNodeConfig)
+		"test", fn, mustSchema[Input](t), mustSchema[TargetOutput](t), defaultNodeConfig,
+	)
 	if err != nil {
 		t.Fatalf("NewFunctionNodeWithSchema failed: %v", err)
 	}
@@ -170,7 +171,8 @@ func TestFunctionNode_ValidateOutput(t *testing.T) {
 		return nil, nil // body unused: ValidateOutput is exercised directly
 	}
 	schemaNode, err := NewFunctionNodeWithSchema[Input, map[string]any](
-		"test", fn, mustSchema[Input](t), mustSchema[TargetOutput](t), defaultNodeConfig)
+		"test", fn, mustSchema[Input](t), mustSchema[TargetOutput](t), defaultNodeConfig,
+	)
 	if err != nil {
 		t.Fatalf("NewFunctionNodeWithSchema failed: %v", err)
 	}

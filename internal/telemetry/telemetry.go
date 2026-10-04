@@ -143,7 +143,8 @@ func StartExecuteToolSpan(ctx context.Context, params StartExecuteToolSpanParams
 	spanCtx, span := tracer.Start(ctx, fmt.Sprintf("execute_tool %s", toolName), trace.WithAttributes(
 		semconv.GenAIOperationNameExecuteTool,
 		semconv.GenAIToolName(toolName),
-		gcpVertexAgentToolCallArgsName.String(safeSerialize(params.Args))))
+		gcpVertexAgentToolCallArgsName.String(safeSerialize(params.Args)),
+	))
 	return spanCtx, span
 }
 

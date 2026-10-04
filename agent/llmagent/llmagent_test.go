@@ -912,7 +912,8 @@ func TestAgentTransfer(t *testing.T) {
 	}
 	transferResponse := func() *genai.Content {
 		return genai.NewContentFromFunctionResponse(
-			"transfer_to_agent", map[string]any{}, "user")
+			"transfer_to_agent", map[string]any{}, "user",
+		)
 	}
 	text := func(text string) *genai.Content {
 		return genai.NewContentFromText(
@@ -970,7 +971,8 @@ func TestAgentTransfer(t *testing.T) {
 		model := testModel(
 			transferCall("sub_agent_1"),
 			text("response1"),
-			text("response2"))
+			text("response2"),
+		)
 
 		subAgent1, err := llmagent.New(llmagent.Config{
 			Name:  "sub_agent_1",
@@ -1006,7 +1008,8 @@ func TestAgentTransfer(t *testing.T) {
 		model := testModel(
 			transferCall("sub_agent_1"),
 			text("response1"),
-			text("response2"))
+			text("response2"),
+		)
 
 		subAgent1, err := llmagent.New(llmagent.Config{
 			Name:                     "sub_agent_1",
@@ -1045,7 +1048,8 @@ func TestAgentTransfer(t *testing.T) {
 			transferCall("sub_agent_1"),
 			transferCall("sub_agent_1_1"),
 			text("response1"),
-			text("response2"))
+			text("response2"),
+		)
 
 		subAgent1_1, err := llmagent.New(llmagent.Config{
 			Name:                     "sub_agent_1_1",

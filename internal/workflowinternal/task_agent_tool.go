@@ -84,7 +84,9 @@ func createTaskAgentFuncDeclaration(curAgent agent.Agent) *genai.FunctionDeclara
 		Description: strings.TrimSpace(
 			fmt.Sprintf(
 				"%s\nIMPORTANT: This tool delegates execution to a specialized agent. Do NOT call this tool in parallel with any other tools.",
-				curAgent.Description())),
+				curAgent.Description(),
+			),
+		),
 	}
 
 	agentInputSchema := getInputSchema(curAgent)

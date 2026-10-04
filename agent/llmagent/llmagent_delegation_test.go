@@ -761,7 +761,8 @@ always contains everything needed for both steps.`,
 
 	// --- Turn 1: order + payment in one user message ---
 	events1 := dr.turn(
-		"Order 2 pizzas. Pay with card 4111111111111111, cvv 123.")
+		"Order 2 pizzas. Pay with card 4111111111111111, cvv 123.",
+	)
 
 	// Both delegation FCs present.
 	if got := len(collectFCsByName(events1, "order_collector")); got != 1 {

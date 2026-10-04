@@ -1,6 +1,6 @@
 module google.golang.org/adk/plugin/agentanalytics
 
-go 1.26.5
+go 1.25.0
 
 require (
 	cloud.google.com/go/bigquery v1.79.0
