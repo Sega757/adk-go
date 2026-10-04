@@ -74,10 +74,15 @@ func TestCalculateDelayWithJitter(t *testing.T) {
 		Jitter:        0.5,
 	}
 
-	// With jitter 0.5, delay for 1st failed attempt (base 1s) should be in [0.5s, 1.5s]
-	got := CalculateDelay(cfg, 1)
-	if got < 500*time.Millisecond || got > 1500*time.Millisecond {
-		t.Errorf("CalculateDelay with jitter returned %v, expected in range [0.5s, 1.5s]", got)
+	// Run multiple iterations to verify jitter values consistently stay within bounds [0.5s, 1.5s].
+	minExpected := 500 * time.Millisecond
+	maxExpected := 1500 * time.Millisecond
+
+	for i := 0; i < 100; i++ {
+		got := CalculateDelay(cfg, 1)
+		if got < minExpected || got > maxExpected {
+			t.Errorf("CalculateDelay with jitter iteration %d returned %v, expected in range [%v, %v]", i, got, minExpected, maxExpected)
+		}
 	}
 }
 
