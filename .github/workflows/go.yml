@@ -81,7 +81,7 @@ jobs:
       with:
         working-directory: ${{ matrix.module }}
         install-mode: goinstall
-        version: v2.14.0
+        version: v2.12.0
 
   guardrail:
     runs-on: ubuntu-latest
