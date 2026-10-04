@@ -15,6 +15,7 @@
 package llminternal
 
 import (
+	"context"
 	"iter"
 	"testing"
 
@@ -84,6 +85,61 @@ func TestRequestProcessors(t *testing.T) {
 				if count != 0 {
 					t.Fatalf("expected 0 iterations, got %d", count)
 				}
+			})
+
+			t.Run("canceled context", func(t *testing.T) {
+				t.Parallel()
+
+				cCtx, cancel := context.WithCancel(t.Context())
+				cancel()
+
+				mockAgent, err := agent.New(agent.Config{Name: "test_agent"})
+				if err != nil {
+					t.Fatalf("failed to create agent: %v", err)
+				}
+				ctx := icontext.NewInvocationContext(cCtx, icontext.InvocationContextParams{
+					Agent: mockAgent,
+				})
+				req := &model.LLMRequest{}
+				flow := &Flow{}
+
+				seq := tc.fn(ctx, req, flow)
+				if seq == nil {
+					t.Fatal("expected non-nil iter.Seq2")
+				}
+
+				count := 0
+				for event, err := range seq {
+					count++
+					t.Errorf("expected no yield, got event=%v, err=%v", event, err)
+				}
+				if count != 0 {
+					t.Fatalf("expected 0 iterations, got %d", count)
+				}
+			})
+
+			t.Run("early yield break", func(t *testing.T) {
+				t.Parallel()
+
+				mockAgent, err := agent.New(agent.Config{Name: "test_agent"})
+				if err != nil {
+					t.Fatalf("failed to create agent: %v", err)
+				}
+				ctx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{
+					Agent: mockAgent,
+				})
+				req := &model.LLMRequest{}
+				flow := &Flow{}
+
+				seq := tc.fn(ctx, req, flow)
+				if seq == nil {
+					t.Fatal("expected non-nil iter.Seq2")
+				}
+
+				// Simulate early break where yield returns false
+				seq(func(event *session.Event, err error) bool {
+					return false
+				})
 			})
 		})
 	}
