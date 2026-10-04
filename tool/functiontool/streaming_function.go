@@ -163,7 +163,8 @@ func (f *streamingFunctionTool[TArgs]) RunStream(ctx agent.Context, args any) it
 			if requireConfirmation {
 				err := ctx.RequestConfirmation(
 					fmt.Sprintf("Please approve or reject the tool call %s() by responding with a FunctionResponse with an expected ToolConfirmation payload.",
-						f.Name()), nil)
+						f.Name()), nil,
+				)
 				if err != nil {
 					yield("", err)
 					return

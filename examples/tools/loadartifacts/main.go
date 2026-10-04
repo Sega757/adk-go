@@ -98,7 +98,8 @@ func main() {
 		Part: genai.NewPartFromText(
 			"An old silent pond..." +
 				"A frog jumps into the pond," +
-				"splash! Silence again."),
+				"splash! Silence again.",
+		),
 	})
 	if err != nil {
 		log.Fatalf("Failed to save artifact: %v", err)

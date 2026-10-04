@@ -224,7 +224,8 @@ func (t *confirmationTool) Run(ctx agent.Context, args any) (map[string]any, err
 		if requireConfirmation {
 			err := ctx.RequestConfirmation(
 				fmt.Sprintf("Please approve or reject the tool call %s() by responding with a FunctionResponse with an expected ToolConfirmation payload.",
-					t.Name()), nil)
+					t.Name()), nil,
+			)
 			if err != nil {
 				return nil, err
 			}

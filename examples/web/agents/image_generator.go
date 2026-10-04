@@ -46,7 +46,8 @@ func generateImage(ctx agent.Context, input generateImageInput) (generateImageRe
 		ctx,
 		"imagen-3.0-generate-002",
 		input.Prompt,
-		&genai.GenerateImagesConfig{NumberOfImages: 1})
+		&genai.GenerateImagesConfig{NumberOfImages: 1},
+	)
 	if err != nil {
 		return generateImageResult{
 			Status: "fail",
@@ -82,7 +83,8 @@ func GetImageGeneratorAgent(ctx context.Context, model model.LLM) agent.Agent {
 			Name:        "generate_image",
 			Description: "Generates image and saves in artifact service.",
 		},
-		generateImage)
+		generateImage,
+	)
 	if err != nil {
 		log.Fatalf("Failed to create generate image tool: %v", err)
 	}

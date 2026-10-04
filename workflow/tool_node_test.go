@@ -272,7 +272,8 @@ func TestToolNode_ValidateOutput(t *testing.T) {
 	// Node carrying a Result output schema.
 	schemaNode := &ToolNode{
 		BaseNode: NewBaseNodeWithSchemas(
-			"greet", "", defaultNodeConfig, nil, resolveTestSchema[Result](t)),
+			"greet", "", defaultNodeConfig, nil, resolveTestSchema[Result](t),
+		),
 	}
 	// Node with no output schema.
 	nilSchemaNode := &ToolNode{

@@ -142,7 +142,8 @@ func main() {
 			ProjectID:       projectID,
 			Location:        location,
 			ReasoningEngine: agentEngineID,
-		})
+		},
+	)
 	if err != nil {
 		log.Fatalf("Failed to create session service: %v", err)
 	}

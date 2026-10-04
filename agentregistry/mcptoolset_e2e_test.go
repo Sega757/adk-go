@@ -42,7 +42,8 @@ func TestMCPToolset_E2E(t *testing.T) {
 		})
 
 	mcpSrv := httptest.NewServer(mcp.NewStreamableHTTPHandler(
-		func(*http.Request) *mcp.Server { return mcpServer }, nil))
+		func(*http.Request) *mcp.Server { return mcpServer }, nil,
+	))
 	defer mcpSrv.Close()
 	// The toolset holds a persistent streamable-HTTP connection with no public
 	// close; force-close it (runs before Close) so the server can shut down.

@@ -114,7 +114,8 @@ func TestFunctionTool_Simple(t *testing.T) {
 			Name:        "get_weather_report",
 			Description: "Retrieves the current weather report for a specified city.",
 		},
-		weatherReport)
+		weatherReport,
+	)
 	if err != nil {
 		t.Fatalf("NewFunctionTool failed: %v", err)
 	}
@@ -228,7 +229,8 @@ func TestFunctionTool_DifferentFunctionDeclarations_ConsolidatedInOneGenAiTool(t
 			Name:        "string_identity",
 			Description: "returns the input value",
 		},
-		stringIdentityFunc)
+		stringIdentityFunc,
+	)
 	if err != nil {
 		t.Fatalf("NewFunctionTool failed: %v", err)
 	}
@@ -279,7 +281,8 @@ func TestFunctionTool_ReturnsBasicType(t *testing.T) {
 			Name:        "get_weather_report",
 			Description: "Retrieves the current weather report for a specified city.",
 		},
-		weatherReport)
+		weatherReport,
+	)
 	if err != nil {
 		t.Fatalf("NewFunctionTool failed: %v", err)
 	}
@@ -358,7 +361,8 @@ func TestFunctionTool_MapInput(t *testing.T) {
 		},
 		func(ctx agent.Context, input map[string]int) (Output, error) {
 			return Output{Sum: input["a"] + input["b"]}, nil
-		})
+		},
+	)
 	if err != nil {
 		t.Fatalf("NewFunctionTool failed: %v", err)
 	}
