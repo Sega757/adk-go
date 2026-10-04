@@ -277,11 +277,11 @@ func validateMCPCommand(cmd string) error {
 		}
 	}
 
+	if strings.ContainsRune(cmd, '/') || strings.ContainsRune(cmd, '\\') {
+		return fmt.Errorf("mcp command %q with path separators is not allowed", cmd)
+	}
+
 	if !allowed[cmd] {
-		// If command contains path separators, only allow it if it is explicitly in the allowlist.
-		if strings.ContainsRune(cmd, '/') || strings.ContainsRune(cmd, '\\') {
-			return fmt.Errorf("mcp command %q with path separators is not in the allowlist", cmd)
-		}
 		return fmt.Errorf("mcp command %q is not in the allowlist", cmd)
 	}
 

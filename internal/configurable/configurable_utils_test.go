@@ -372,6 +372,23 @@ func TestRegisterToolsetFactory(t *testing.T) {
 				t.Fatalf("expected error for non-string tool_filter element, got nil")
 			}
 		})
+
+		t.Run("McpCommandPathTraversal", func(t *testing.T) {
+			args := map[string]any{
+				"stdio_connection_params": map[string]any{
+					"server_params": map[string]any{
+						"command": "../node",
+						"args":    []any{"valid"},
+					},
+				},
+				"tool_filter": []any{"tool1"},
+			}
+			t.Setenv("ADK_ALLOWED_MCP_COMMANDS", "../node")
+			_, _, err := ResolveToolReference(context.Background(), "McpToolset", args)
+			if err == nil {
+				t.Fatalf("expected error for path traversal in command, got nil")
+			}
+		})
 	})
 
 	t.Run("CrossTypeCollisionWithToolFactory", func(t *testing.T) {
