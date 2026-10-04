@@ -15,7 +15,7 @@
 package workflow
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"time"
 )
 
