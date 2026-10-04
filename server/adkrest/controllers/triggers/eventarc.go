@@ -16,8 +16,8 @@ package triggers
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"google.golang.org/adk/v2/agent"
@@ -66,7 +66,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		// The entire event is in the body. Decode it.
 		// The payload (Storage or Pub/Sub) gets safely trapped in event.Data as bytes.
 		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-			respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to unmarshal eventarc request: %v", err))
+			log.Printf("Bad request decoding Eventarc trigger request: %v", err)
+			respondError(w, http.StatusBadRequest, "bad request")
 			return
 		}
 	} else {
@@ -82,7 +83,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		// We just read it as raw bytes into event.Data.
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to read body: %v", err))
+			log.Printf("Bad request reading Eventarc trigger body: %v", err)
+			respondError(w, http.StatusBadRequest, "bad request")
 			return
 		}
 		event.Data = bodyBytes
@@ -97,12 +99,14 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		// Unmarshal the raw bytes into our specific Pub/Sub struct
 		if err := json.Unmarshal(event.Data, &pubsub); err != nil {
 			// Malformed client payload must return 400 Bad Request to prevent infinite retry loops in Eventarc/PubSub
-			respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to unmarshal pubsub data: %v", err))
+			log.Printf("Bad request unmarshaling pubsub data in Eventarc trigger: %v", err)
+			respondError(w, http.StatusBadRequest, "bad request")
 			return
 		}
 		messageContent, err = messageContentFromPubSub(pubsub)
 		if err != nil {
-			respondError(w, http.StatusBadRequest, fmt.Sprintf("failed to retrieve message content: %v", err))
+			log.Printf("Bad request extracting message content in Eventarc trigger: %v", err)
+			respondError(w, http.StatusBadRequest, "bad request")
 			return
 		}
 	} else {
@@ -110,7 +114,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 		// E.g. as https://googleapis.github.io/google-cloudevents/examples/binary/storage/StorageObjectData-simple.json
 		messageBytes, err := json.Marshal(event)
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to marshal agent message: %v", err))
+			log.Printf("Internal server error marshaling agent message in Eventarc trigger: %v", err)
+			respondError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		messageContent = string(messageBytes)
@@ -118,7 +123,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 
 	appName, err := appName(r)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to retrieve app name: %v", err))
+		log.Printf("Bad request retrieving app name in Eventarc trigger: %v", err)
+		respondError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 
@@ -134,7 +140,8 @@ func (c *EventarcController) EventarcTriggerHandler(w http.ResponseWriter, r *ht
 	}
 
 	if _, err := c.runner.RunAgent(r.Context(), appName, userID, messageContent); err != nil {
-		respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to run agent: %v", err))
+		log.Printf("Internal server error running agent in Eventarc trigger: %v", err)
+		respondError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 

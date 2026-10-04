@@ -153,7 +153,8 @@ func requestVacationDays(ctx agent.Context, args RequestVacationArgs) (*RequestV
 			"Please approve or reject the tool call request_time_off() by responding with a FunctionResponse with an expected ToolConfirmation payload.",
 			ConfirmationPayload{
 				DaysApproved: 0,
-			})
+			},
+		)
 		if err != nil {
 			return nil, err
 		}

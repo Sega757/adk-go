@@ -1,0 +1,83 @@
+--- server/adkrest/controllers/runtime_test.go
++++ server/adkrest/controllers/runtime_test.go
+@@ -336,7 +336,9 @@
+		panic(err)
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+-	defer conn.Close()
++	defer func() {
++		_ = conn.Close()
++	}()
+
+	// 2. Read server's prompt for user input (function tool call).
+@@ -386,7 +388,9 @@
+		panic(err)
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+-	defer conn.Close()
++	defer func() {
++		_ = conn.Close()
++	}()
+
+	// 2. Wait for server to close with generic message
+--- internal/configurable/configurable_utils_test.go
++++ internal/configurable/configurable_utils_test.go
+@@ -450,7 +450,7 @@
+		}
+		defer func() {
+			absPath := filepath.Join(cfgDir, "registries.yaml")
+-			os.Remove(absPath)
++			_ = os.Remove(absPath)
+		}()
+
+		tests := []struct {
+--- agentregistry/factory_test.go
++++ agentregistry/factory_test.go
+@@ -49,8 +49,8 @@
+ func TestSSRFProtection(t *testing.T) {
+	// Enable SSRF protection explicitly for this test
+-	os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "1")
+-	defer os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "")
++	_ = os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "1")
++	defer func() { _ = os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "") }()
+
+	baseClient := &http.Client{
+@@ -460,11 +460,11 @@
+
+ func TestClientWithSSRFProtection(t *testing.T) {
+-	os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "0")
++	_ = os.Setenv("ADK_TEST_DISABLE_SSRF_PROTECTION", "0")
+	base := &http.Client{}
+	client := clientWithSSRFProtection(base)
+
+	// Setup a simple local server
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+-		w.Write([]byte("OK"))
++		_, _ = w.Write([]byte("OK"))
+	}))
+	defer srv.Close()
+@@ -477,7 +477,7 @@
+	resp, err := client.Get(srv.URL)
+	if err == nil {
+-		resp.Body.Close()
++		_ = resp.Body.Close()
+		t.Error("Expected error when accessing localhost, got nil")
+	} else if !strings.Contains(err.Error(), "SSRF protection") {
+--- internal/metacore/validator.go
++++ internal/metacore/validator.go
+@@ -33,12 +33,12 @@
+
+ var (
+	// ErrRCannotBlockOrModify is returned when R attempts to BLOCK or MODIFY execution.
+-	ErrRCannotBlockOrModify = errors.New("Reasoning Engine (R) has no privilege to block or modify execution")
++	ErrRCannotBlockOrModify = errors.New("reasoning Engine (R) has no privilege to block or modify execution")
+	// ErrECannotInitiate is returned when E attempts to INITIATE action.
+-	ErrECannotInitiate      = errors.New("Empathy Layer (E) has no privilege to initiate action")
++	ErrECannotInitiate      = errors.New("empathy Layer (E) has no privilege to initiate action")
+
+	// ErrNilDecisionPacket is returned when a validation function receives a nil DecisionPacket.
+-	ErrNilDecisionPacket    = errors.New("Decision Packet (R) cannot be nil")
++	ErrNilDecisionPacket    = errors.New("decision Packet (R) cannot be nil")
+ )

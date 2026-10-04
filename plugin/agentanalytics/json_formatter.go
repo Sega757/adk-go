@@ -100,7 +100,7 @@ func recursiveSmartTruncate(obj any, maxLength int) (any, bool, error) {
 		val := reflect.ValueOf(obj)
 
 		// Unpack interfaces and pointers
-		for val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface {
+		for val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface {
 			if val.IsNil() {
 				return nil, false, nil
 			}

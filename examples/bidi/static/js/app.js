@@ -94,7 +94,7 @@ function updateSendButtonState() {
 
 function updateClearConsoleButtonState() {
   if (clearConsoleBtn) {
-    const hasEntries = consoleContent && consoleContent.children.length > 0;
+    const hasEntries = consoleContent && consoleContent.querySelector(".console-entry") !== null;
     clearConsoleBtn.disabled = !hasEntries;
     if (!hasEntries) {
       clearConsoleBtn.setAttribute("title", "Console is empty");
@@ -245,6 +245,35 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
   if (data) {
     jsonDiv = document.createElement("div");
     jsonDiv.className = "console-entry-json collapsed";
+
+    const jsonHeader = document.createElement("div");
+    jsonHeader.className = "console-json-header";
+
+    const copyJsonBtn = document.createElement("button");
+    copyJsonBtn.className = "copy-json-btn";
+    copyJsonBtn.type = "button";
+    copyJsonBtn.setAttribute("aria-label", "Copy event JSON to clipboard");
+    copyJsonBtn.setAttribute("title", "Copy event JSON");
+    copyJsonBtn.textContent = "📋 Copy JSON";
+
+    copyJsonBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const jsonText = JSON.stringify(data, null, 2);
+      navigator.clipboard.writeText(jsonText).then(() => {
+        copyJsonBtn.textContent = "✓ Copied!";
+        copyJsonBtn.setAttribute("aria-label", "Copied event JSON to clipboard");
+        setTimeout(() => {
+          copyJsonBtn.textContent = "📋 Copy JSON";
+          copyJsonBtn.setAttribute("aria-label", "Copy event JSON to clipboard");
+        }, 2000);
+      }).catch(err => {
+        console.error("Failed to copy JSON:", err);
+      });
+    });
+
+    jsonHeader.appendChild(copyJsonBtn);
+    jsonDiv.appendChild(jsonHeader);
+
     const pre = document.createElement("pre");
     pre.textContent = JSON.stringify(data, null, 2);
     jsonDiv.appendChild(pre);
@@ -280,11 +309,16 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
     // Toggle expand/collapse on click or keyboard (Enter/Space)
     entry.addEventListener("click", toggleExpand);
     entry.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
+      if ((e.key === "Enter" || e.key === " ") && e.target === entry) {
         e.preventDefault();
         toggleExpand();
       }
     });
+  }
+
+  const consoleEmptyState = document.getElementById("consoleEmptyState");
+  if (consoleEmptyState) {
+    consoleEmptyState.remove();
   }
 
   consoleContent.appendChild(entry);
@@ -293,8 +327,18 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
 }
 
 function clearConsole() {
-  consoleContent.innerHTML = '';
+  const clearBtnWasFocused = document.activeElement === clearConsoleBtn;
+  consoleContent.innerHTML = `
+    <div id="consoleEmptyState" class="console-empty-state">
+      <div class="console-empty-icon" aria-hidden="true">⚡</div>
+      <h3>Console Empty</h3>
+      <p>Real-time WebSocket events and debug logs will appear here.</p>
+    </div>
+  `;
   updateClearConsoleButtonState();
+  if (clearBtnWasFocused && showAudioEventsCheckbox) {
+    showAudioEventsCheckbox.focus();
+  }
 }
 
 // Audio filter tooltip and console button event handlers
@@ -527,6 +571,8 @@ function addSystemMessage(text) {
   scrollToBottom();
 }
 
+let unreadCount = 0;
+
 // Scroll to bottom of messages (only auto-scroll if user is near bottom, unless forced)
 function scrollToBottom(force = false) {
   const msgDiv = document.getElementById("messages") || messagesDiv;
@@ -535,8 +581,19 @@ function scrollToBottom(force = false) {
   const btn = document.getElementById("scrollToBottomBtn");
   if (force || isNearBottom) {
     msgDiv.scrollTop = msgDiv.scrollHeight;
-    if (btn) btn.style.display = "none";
+    unreadCount = 0;
+    if (btn) {
+      btn.style.display = "none";
+      btn.textContent = "↓ New messages";
+      btn.setAttribute("aria-label", "Scroll to bottom of chat");
+      btn.setAttribute("title", "Scroll to latest message");
+    }
   } else if (btn) {
+    unreadCount++;
+    const labelText = `↓ ${unreadCount} new message${unreadCount > 1 ? "s" : ""}`;
+    btn.textContent = labelText;
+    btn.setAttribute("aria-label", `Scroll to bottom (${unreadCount} new message${unreadCount > 1 ? "s" : ""})`);
+    btn.setAttribute("title", `Scroll to latest message (${unreadCount} unread)`);
     btn.style.display = "block";
   }
 }
@@ -548,14 +605,27 @@ function initScrollListener() {
     msgDiv.addEventListener("scroll", () => {
       const isNearBottom = msgDiv.scrollHeight - msgDiv.clientHeight - msgDiv.scrollTop <= 100;
       const b = document.getElementById("scrollToBottomBtn");
-      if (b) {
-        b.style.display = isNearBottom ? "none" : "block";
+      if (isNearBottom) {
+        unreadCount = 0;
+        if (b) {
+          b.style.display = "none";
+          b.textContent = "↓ New messages";
+          b.setAttribute("aria-label", "Scroll to bottom of chat");
+          b.setAttribute("title", "Scroll to latest message");
+        }
+      } else if (b) {
+        b.style.display = "block";
       }
     });
   }
   if (btn) {
     btn.addEventListener("click", () => {
       scrollToBottom(true);
+      if (messageInput && !messageInput.disabled) {
+        messageInput.focus();
+      } else if (messagesDiv) {
+        messagesDiv.focus();
+      }
     });
   }
 }

@@ -158,7 +158,9 @@ func (n *ToolNode) ValidateOutput(out any) (any, error) {
 // Run implements the Node interface and executes the tool.
 func (n *ToolNode) Run(ctx agent.Context, input any) iter.Seq2[*session.Event, error] {
 	return func(yield func(*session.Event, error) bool) {
-		eventActions := &session.EventActions{StateDelta: make(map[string]any), ArtifactDelta: make(map[string]int64)}
+		// StateDelta and ArtifactDelta maps in EventActions are lazily allocated
+		// on demand when mutated during tool execution.
+		eventActions := &session.EventActions{}
 		toolCtx := agent.NewToolContext(ctx, uuid.NewString(), eventActions, nil)
 
 		toolOutput, err := n.runTool(toolCtx, input)

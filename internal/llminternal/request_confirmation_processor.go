@@ -41,24 +41,24 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 			return // In python, no error is yielded.
 		}
 
-		toolsmap := make(map[string]tool.Tool)
-		for _, tool := range f.Tools {
-			toolsmap[tool.Name()] = tool
+		if ctx.Session() == nil {
+			return
+		}
+		sessEvents := ctx.Session().Events()
+		if sessEvents == nil || sessEvents.Len() == 0 {
+			return
 		}
 
-		var events []*session.Event
-		if ctx.Session() != nil {
-			for e := range ctx.Session().Events().All() {
-				events = append(events, e)
-			}
-		}
-		confirmationResponses := make(map[string]toolconfirmation.ToolConfirmation)
+		var confirmationResponses map[string]toolconfirmation.ToolConfirmation
 		confirmationEventIndex := -1
-		for k := len(events) - 1; k >= 0; k-- {
-			event := events[k]
+		for k := sessEvents.Len() - 1; k >= 0; k-- {
+			event := sessEvents.At(k)
 			// Find the first event authored by user
 			if event.Author != "user" {
 				continue
+			}
+			if !utils.HasFunctionResponses(event.Content) {
+				return
 			}
 			responses := utils.FunctionResponses(event.Content)
 			if len(responses) == 0 {
@@ -96,6 +96,9 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 						}
 					}
 				}
+				if confirmationResponses == nil {
+					confirmationResponses = make(map[string]toolconfirmation.ToolConfirmation)
+				}
 				confirmationResponses[funcResp.ID] = tc
 			}
 			confirmationEventIndex = k
@@ -106,9 +109,17 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 			return
 		}
 
+		toolsmap := make(map[string]tool.Tool, len(f.Tools))
+		for _, tool := range f.Tools {
+			toolsmap[tool.Name()] = tool
+		}
+
 		for k := confirmationEventIndex - 1; k >= 0; k-- {
-			event := events[k]
+			event := sessEvents.At(k)
 			// Find the system generated FunctionCall event requesting the tool confirmation
+			if !utils.HasFunctionCalls(event.Content) {
+				continue
+			}
 			calls := utils.FunctionCalls(event.Content)
 			if len(calls) == 0 {
 				continue
@@ -136,8 +147,11 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 
 			// TODO consider forward or backward pass instead of nested loops
 			// Remove the tools that have already been confirmed.
-			for j := len(events) - 1; j > confirmationEventIndex; j-- {
-				event = events[j]
+			for j := sessEvents.Len() - 1; j > confirmationEventIndex; j-- {
+				event = sessEvents.At(j)
+				if !utils.HasFunctionResponses(event.Content) {
+					continue
+				}
 				responses := utils.FunctionResponses(event.Content)
 				if len(responses) == 0 {
 					continue
@@ -153,7 +167,7 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 				continue
 			}
 
-			parts := make([]*genai.Part, 0)
+			parts := make([]*genai.Part, 0, len(toolsToResumeByFunctionCallID))
 			toolsToResumeConfirmation := make(map[string]*toolconfirmation.ToolConfirmation, len(toolsToResumeByFunctionCallID))
 			for callID, cc := range toolsToResumeByFunctionCallID {
 				parts = append(parts, &genai.Part{FunctionCall: &cc.call})

@@ -91,7 +91,8 @@ func (c *PubSubController) PubSubTriggerHandler(w http.ResponseWriter, r *http.R
 	}
 
 	if _, err := c.runner.RunAgent(r.Context(), appName, userID, agentMessage); err != nil {
-		respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to run agent: %v", err))
+		log.Printf("Internal server error running agent in PubSub trigger: %v", err)
+		respondError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 

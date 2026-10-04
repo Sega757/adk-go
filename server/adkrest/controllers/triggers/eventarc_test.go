@@ -207,8 +207,91 @@ func TestEventarcTriggerHandler_BodyTooLarge(t *testing.T) {
 	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}
 	controller := triggers.NewEventarcController(sessionService, nil, nil, nil, runner.PluginConfig{}, defaultTriggerConfig)
 
-	largeBody := bytes.NewBuffer(make([]byte, 10*1024*1024+1))
-	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", largeBody)
+	t.Run("StructuredMode", func(t *testing.T) {
+		largeBody := bytes.NewBuffer(make([]byte, 10*1024*1024+1))
+		req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", largeBody)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/cloudevents+json")
+		req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+		rr := httptest.NewRecorder()
+
+		controller.EventarcTriggerHandler(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("expected status %d for oversized body in structured mode, got %d", http.StatusBadRequest, rr.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp["status"] != "bad request" {
+			t.Errorf("expected status 'bad request', got %q", resp["status"])
+		}
+	})
+
+	t.Run("BinaryMode", func(t *testing.T) {
+		largeBody := bytes.NewBuffer(make([]byte, 10*1024*1024+1))
+		req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", largeBody)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+		rr := httptest.NewRecorder()
+
+		controller.EventarcTriggerHandler(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("expected status %d for oversized body in binary mode, got %d", http.StatusBadRequest, rr.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp["status"] != "bad request" {
+			t.Errorf("expected status 'bad request', got %q", resp["status"])
+		}
+	})
+}
+
+func TestEventarcTriggerHandler_MissingAppName(t *testing.T) {
+	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}
+	controller := triggers.NewEventarcController(sessionService, nil, nil, nil, runner.PluginConfig{}, defaultTriggerConfig)
+
+	req, err := http.NewRequest(http.MethodPost, "/triggers/eventarc", bytes.NewBufferString("{}"))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/cloudevents+json")
+	rr := httptest.NewRecorder()
+
+	controller.EventarcTriggerHandler(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d for missing app name, got %d", http.StatusBadRequest, rr.Code)
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "bad request" {
+		t.Errorf("expected status 'bad request', got %q", resp["status"])
+	}
+}
+
+func TestEventarcTriggerHandler_InternalServerErrorSanitized(t *testing.T) {
+	mockResults := []error{bytes.ErrTooLarge}
+	mockAgentRunCount := 0
+	testAgent := createMockAgent(t, mockResults, &mockAgentRunCount, nil)
+
+	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}
+	agentLoader := agent.NewSingleLoader(testAgent)
+	controller := triggers.NewEventarcController(sessionService, agentLoader, nil, nil, runner.PluginConfig{}, defaultTriggerConfig)
+
+	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", bytes.NewBufferString(`{"specversion":"1.0","type":"google.cloud.storage.object.v1.finalized","source":"//storage.googleapis.com","id":"123"}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -218,8 +301,21 @@ func TestEventarcTriggerHandler_BodyTooLarge(t *testing.T) {
 
 	controller.EventarcTriggerHandler(rr, req)
 
-	if rr.Code == http.StatusOK {
-		t.Errorf("expected error status for oversized body, got %d", rr.Code)
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if bytes.Contains(rr.Body.Bytes(), []byte("failed to run agent")) || bytes.Contains(rr.Body.Bytes(), []byte("bytes.Buffer: too large")) {
+		t.Errorf("response body leaked internal error details: %s", body)
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "internal server error" {
+		t.Errorf("expected status 'internal server error', got %q", resp["status"])
 	}
 }
 
@@ -241,5 +337,41 @@ func TestEventarcTriggerHandler_InvalidPubSubData(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected status %d for invalid pubsub data, got %d", http.StatusBadRequest, rr.Code)
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "bad request" {
+		t.Errorf("expected status 'bad request', got %q", resp["status"])
+	}
+}
+
+func TestEventarcTriggerHandler_InvalidStructuredJSON(t *testing.T) {
+	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}
+	controller := triggers.NewEventarcController(sessionService, nil, nil, nil, runner.PluginConfig{}, defaultTriggerConfig)
+
+	invalidJSONBody := bytes.NewBufferString("{invalid json body")
+	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", invalidJSONBody)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/cloudevents+json")
+	req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+	rr := httptest.NewRecorder()
+
+	controller.EventarcTriggerHandler(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d for invalid structured json, got %d", http.StatusBadRequest, rr.Code)
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "bad request" {
+		t.Errorf("expected status 'bad request', got %q", resp["status"])
 	}
 }

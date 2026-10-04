@@ -354,7 +354,8 @@ func appendTools(r *model.LLMRequest, tools ...tool.Tool) error {
 }
 
 var transferToAgentPromptTmpl = template.Must(
-	template.New("transfer_to_agent_prompt").Parse(agentTransferInstructionTemplate))
+	template.New("transfer_to_agent_prompt").Parse(agentTransferInstructionTemplate),
+)
 
 func instructionsForTransferToAgent(curAgent, parent agent.Agent, targets []agent.Agent) (string, error) {
 	cur := asLLMAgent(curAgent)

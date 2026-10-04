@@ -210,7 +210,7 @@ type RequestInput struct {
 // Note: when multiple agents participate in one invocation, there could be
 // multiple events with IsFinalResponse() as True, for each participating agent.
 func (e *Event) IsFinalResponse() bool {
-	if (e.Actions.SkipSummarization) || len(e.LongRunningToolIDs) > 0 {
+	if e.Actions.SkipSummarization || len(e.LongRunningToolIDs) > 0 {
 		return true
 	}
 
@@ -224,11 +224,12 @@ func (e *Event) IsFinalResponse() bool {
 // [platform.WithUUIDProvider]) controls them. This lets callers such as
 // workflow engines produce deterministic, replay-safe events.
 func NewEvent(ctx context.Context, invocationID string) *Event {
+	// StateDelta and ArtifactDelta maps in EventActions are lazily allocated
+	// when mutated to eliminate heap map allocations on standard events.
 	return &Event{
 		ID:           platform.NewUUID(ctx),
 		InvocationID: invocationID,
 		Timestamp:    platform.Now(ctx),
-		Actions:      EventActions{StateDelta: make(map[string]any), ArtifactDelta: make(map[string]int64)},
 	}
 }
 

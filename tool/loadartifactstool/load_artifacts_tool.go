@@ -155,7 +155,8 @@ func (t *artifactsTool) appendInitialInstructions(ctx agent.Context, req *model.
 			" to load the artifact. Do not generate any text other than the"+
 			" function call. Whenever you are asked about artifacts, you"+
 			" should first load it. You must always load an artifact to access its"+
-			" content, even if it has been loaded before.", string(artifactNamesJSON))
+			" content, even if it has been loaded before.", string(artifactNamesJSON),
+	)
 
 	utils.AppendInstructions(req, instructions)
 	return nil
