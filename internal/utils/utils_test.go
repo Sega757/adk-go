@@ -571,6 +571,7 @@ func TestAppendInstructions(t *testing.T) {
 		})
 	}
 }
+
 func TestAppendInstructionsSequential(t *testing.T) {
 	req := &model.LLMRequest{}
 
