@@ -217,16 +217,37 @@ func (p *loggingPlugin) beforeModel(ctx agent.Context, req *model.LLMRequest) (*
 	p.log(fmt.Sprintf("   Model: %s", modelName))
 	p.log(fmt.Sprintf("   Agent: %s", ctx.AgentName()))
 
-	if req.Config != nil && req.Config.SystemInstruction != nil && len(req.Config.SystemInstruction.Parts) > 0 {
-		// Assuming SystemInstruction is a Content object with parts
-		sysInstruction := ""
-		for _, part := range req.Config.SystemInstruction.Parts {
-			sysInstruction += part.Text
+	if req.Config != nil && req.Config.SystemInstruction != nil {
+		parts := req.Config.SystemInstruction.Parts
+		var sysInstruction string
+		switch len(parts) {
+		case 0:
+		case 1:
+			text := parts[0].Text
+			if len(text) > 200 {
+				sysInstruction = text[:200] + "..."
+			} else {
+				sysInstruction = text
+			}
+		default:
+			var sb strings.Builder
+			for _, p := range parts {
+				sb.WriteString(p.Text)
+				if sb.Len() >= 200 {
+					break
+				}
+			}
+			full := sb.String()
+			if len(full) > 200 {
+				sysInstruction = full[:200] + "..."
+			} else {
+				sysInstruction = full
+			}
 		}
-		if len(sysInstruction) > 200 {
-			sysInstruction = sysInstruction[:200] + "..."
+
+		if sysInstruction != "" {
+			p.log(fmt.Sprintf("   System Instruction: '%s'", sysInstruction))
 		}
-		p.log(fmt.Sprintf("   System Instruction: '%s'", sysInstruction))
 	}
 
 	if len(req.Tools) > 0 {
