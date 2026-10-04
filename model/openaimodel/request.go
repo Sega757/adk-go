@@ -355,8 +355,19 @@ func applyGenerationConfig(params *responses.ResponseNewParams, cfg *genai.Gener
 }
 
 func flattenContentText(content *genai.Content) (string, error) {
-	if content == nil {
+	if content == nil || len(content.Parts) == 0 {
 		return "", nil
+	}
+	// Fast-path: single text part system instruction return text directly without Builder allocations.
+	if len(content.Parts) == 1 {
+		p := content.Parts[0]
+		if p == nil {
+			return "", nil
+		}
+		if p.Text == "" {
+			return "", fmt.Errorf("non-text system instruction part %T", p)
+		}
+		return p.Text, nil
 	}
 	var b strings.Builder
 	for _, part := range content.Parts {
