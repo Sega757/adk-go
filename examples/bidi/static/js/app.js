@@ -113,7 +113,7 @@ function setControlsDisabled(disabled) {
   const sendBtn = document.getElementById("sendButton");
 
   const defaultTooltips = {
-    message: "Type a message and press Enter to send (Esc to clear)",
+    message: "Type a message and press Enter to send (Esc to clear, Ctrl+V to paste image)",
     startAudioButton: is_audio ? "Stop microphone audio streaming" : "Start microphone audio streaming",
     cameraButton: "Open live camera preview to capture image",
     streamVideoButton: isVideoStreaming ? "Stop live video streaming" : "Start live video streaming",
@@ -366,6 +366,43 @@ if (messageInput) {
     if (e.key === "Escape" && messageInput.value) {
       messageInput.value = "";
       updateSendButtonState();
+    }
+  });
+  messageInput.addEventListener("paste", (e) => {
+    const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+
+        if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+          addSystemMessage("Cannot paste image: Disconnected from server.");
+          return;
+        }
+
+        const file = item.getAsFile();
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64data = reader.result.split(',')[1];
+          const mimeType = file.type || "image/png";
+
+          const imageBubble = createImageBubble(reader.result, true, "Pasted image from clipboard");
+          appendMessage(imageBubble);
+          scrollToBottom(true);
+
+          sendImage(base64data, mimeType);
+
+          addConsoleEntry('outgoing', `Image pasted: ${file.size || base64data.length} bytes (${mimeType})`, {
+            size: file.size,
+            type: mimeType
+          }, '📋', 'user');
+        };
+        reader.readAsDataURL(file);
+        break;
+      }
     }
   });
 }
