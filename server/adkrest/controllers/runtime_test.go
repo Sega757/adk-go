@@ -519,3 +519,47 @@ func TestRunSSEHandler_SanitizesBadRequestAndNotFoundErrors(t *testing.T) {
 		}
 	})
 }
+
+func TestRunLiveHandler_BadRequestErrors(t *testing.T) {
+	fakeAgent, _ := agent.New(agent.Config{Name: "app"})
+	sessionService := fakes.FakeSessionService{}
+	controller := NewRuntimeAPIController(
+		&sessionService,
+		nil,
+		agent.NewSingleLoader(fakeAgent),
+		nil,
+		10*time.Second,
+		runner.PluginConfig{},
+		false,
+	)
+
+	handler := NewErrorHandler(controller.RunLiveHandler)
+
+	t.Run("missing query parameters", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/run_live", nil)
+		rec := httptest.NewRecorder()
+
+		handler(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+		}
+		if got := rec.Body.String(); !strings.Contains(got, "appName, userId, and sessionId are required") {
+			t.Errorf("expected body to contain error message, got %q", got)
+		}
+	})
+
+	t.Run("failed websocket upgrade", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/run_live?appName=app&userId=user&sessionId=sess", nil)
+		rec := httptest.NewRecorder()
+
+		handler(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+		}
+		if got := rec.Body.String(); !strings.Contains(got, "failed to upgrade to websocket") {
+			t.Errorf("expected body to contain websocket upgrade error, got %q", got)
+		}
+	})
+}
