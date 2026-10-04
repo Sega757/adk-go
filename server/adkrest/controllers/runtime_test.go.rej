@@ -1,0 +1,24 @@
+--- server/adkrest/controllers/runtime_test.go
++++ server/adkrest/controllers/runtime_test.go
+@@ -336,7 +336,9 @@
+		panic(err)
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+-	defer conn.Close()
++	defer func() {
++		_ = conn.Close()
++	}()
+
+	// 2. Read server's prompt for user input (function tool call).
+@@ -386,7 +388,9 @@
+		panic(err)
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+-	defer conn.Close()
++	defer func() {
++		_ = conn.Close()
++	}()
+
+	// 2. Wait for server to close with generic message
