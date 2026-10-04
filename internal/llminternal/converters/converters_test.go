@@ -26,18 +26,25 @@ import (
 func TestGenai2LLMResponse(t *testing.T) {
 	t.Parallel()
 
-	testUsage := &genai.GenerateContentResponseUsageMetadata{
-		PromptTokenCount: 10,
-		TotalTokenCount:  25,
+	sampleUsage := &genai.GenerateContentResponseUsageMetadata{
+		CandidatesTokenCount: 10,
+		PromptTokenCount:     5,
+		TotalTokenCount:      15,
 	}
-	testGrounding := &genai.GroundingMetadata{
-		SearchEntryPoint: &genai.SearchEntryPoint{RenderedContent: "test"},
+	sampleGrounding := &genai.GroundingMetadata{
+		SearchEntryPoint: &genai.SearchEntryPoint{RenderedContent: "search rendering"},
 	}
-	testCitation := &genai.CitationMetadata{
-		Citations: []*genai.Citation{{StartIndex: 0, EndIndex: 10}},
+	sampleCitation := &genai.CitationMetadata{
+		Citations: []*genai.Citation{
+			{StartIndex: 0, EndIndex: 10, URI: "https://example.com"},
+		},
 	}
-	testLogprobs := &genai.LogprobsResult{
-		ChosenCandidates: []*genai.LogprobsResultCandidate{{Token: "hello"}},
+	sampleLogprobs := &genai.LogprobsResult{
+		ChosenCandidates: []*genai.LogprobsResultCandidate{{Token: "hello", LogProbability: -0.1}},
+	}
+	sampleContent := &genai.Content{
+		Role:  "model",
+		Parts: []*genai.Part{genai.NewPartFromText("Hello world")},
 	}
 
 	tests := []struct {
@@ -46,130 +53,173 @@ func TestGenai2LLMResponse(t *testing.T) {
 		want *model.LLMResponse
 	}{
 		{
-			name: "standard candidate with content and full metadata",
+			name: "CandidateWithContentAndMetadata",
 			res: &genai.GenerateContentResponse{
 				ModelVersion:  "gemini-2.5-flash",
-				UsageMetadata: testUsage,
+				UsageMetadata: sampleUsage,
 				Candidates: []*genai.Candidate{
 					{
-						Content:           genai.NewContentFromText("Hello world", genai.RoleModel),
-						GroundingMetadata: testGrounding,
+						Content:           sampleContent,
 						FinishReason:      genai.FinishReasonStop,
-						CitationMetadata:  testCitation,
-						AvgLogprobs:       0.95,
-						LogprobsResult:    testLogprobs,
+						GroundingMetadata: sampleGrounding,
+						CitationMetadata:  sampleCitation,
+						AvgLogprobs:       -0.05,
+						LogprobsResult:    sampleLogprobs,
 					},
 				},
 			},
 			want: &model.LLMResponse{
-				Content:           genai.NewContentFromText("Hello world", genai.RoleModel),
-				GroundingMetadata: testGrounding,
+				Content:           sampleContent,
+				GroundingMetadata: sampleGrounding,
 				FinishReason:      genai.FinishReasonStop,
-				CitationMetadata:  testCitation,
-				AvgLogprobs:       0.95,
-				LogprobsResult:    testLogprobs,
-				UsageMetadata:     testUsage,
+				CitationMetadata:  sampleCitation,
+				AvgLogprobs:       -0.05,
+				LogprobsResult:    sampleLogprobs,
+				UsageMetadata:     sampleUsage,
 				ModelVersion:      "gemini-2.5-flash",
 			},
 		},
 		{
-			name: "clean stop with empty content",
+			name: "CandidateWithEmptyContentAndFinishReasonStop",
 			res: &genai.GenerateContentResponse{
 				ModelVersion:  "gemini-2.5-flash",
-				UsageMetadata: testUsage,
+				UsageMetadata: sampleUsage,
 				Candidates: []*genai.Candidate{
 					{
-						Content:      &genai.Content{Parts: []*genai.Part{}, Role: genai.RoleModel},
+						Content:      &genai.Content{Parts: []*genai.Part{}, Role: "model"},
 						FinishReason: genai.FinishReasonStop,
 					},
 				},
-			},
-			want: &model.LLMResponse{
-				Content:       &genai.Content{Parts: []*genai.Part{}, Role: genai.RoleModel},
-				FinishReason:  genai.FinishReasonStop,
-				UsageMetadata: testUsage,
-				ModelVersion:  "gemini-2.5-flash",
-			},
-		},
-		{
-			name: "blocked or filtered candidate with finish message",
-			res: &genai.GenerateContentResponse{
-				ModelVersion:  "gemini-2.5-flash",
-				UsageMetadata: testUsage,
-				Candidates: []*genai.Candidate{
-					{
-						Content:           &genai.Content{Parts: []*genai.Part{}, Role: genai.RoleModel},
-						FinishReason:      genai.FinishReasonSafety,
-						FinishMessage:     "Content blocked by safety filter",
-						GroundingMetadata: testGrounding,
-						CitationMetadata:  testCitation,
-						AvgLogprobs:       0.1,
-						LogprobsResult:    testLogprobs,
-					},
-				},
-			},
-			want: &model.LLMResponse{
-				ErrorCode:         string(genai.FinishReasonSafety),
-				ErrorMessage:      "Content blocked by safety filter",
-				GroundingMetadata: testGrounding,
-				FinishReason:      genai.FinishReasonSafety,
-				CitationMetadata:  testCitation,
-				AvgLogprobs:       0.1,
-				LogprobsResult:    testLogprobs,
-				UsageMetadata:     testUsage,
-				ModelVersion:      "gemini-2.5-flash",
-			},
-		},
-		{
-			name: "prompt feedback block without candidates",
-			res: &genai.GenerateContentResponse{
-				ModelVersion:  "gemini-2.5-flash",
-				UsageMetadata: testUsage,
-				PromptFeedback: &genai.GenerateContentResponsePromptFeedback{
-					BlockReason:        genai.BlockedReasonSafety,
-					BlockReasonMessage: "Prompt violates safety guidelines",
-				},
-			},
-			want: &model.LLMResponse{
-				ErrorCode:     string(genai.BlockedReasonSafety),
-				ErrorMessage:  "Prompt violates safety guidelines",
-				UsageMetadata: testUsage,
-				ModelVersion:  "gemini-2.5-flash",
-			},
-		},
-		{
-			name: "empty stream fallback with zero candidates and nil prompt feedback",
-			res: &genai.GenerateContentResponse{
-				ModelVersion:  "gemini-3.1-flash-lite",
-				UsageMetadata: testUsage,
 			},
 			want: &model.LLMResponse{
 				Content:       &genai.Content{Parts: []*genai.Part{}, Role: "model"},
-				UsageMetadata: testUsage,
-				ModelVersion:  "gemini-3.1-flash-lite",
+				FinishReason:  genai.FinishReasonStop,
+				UsageMetadata: sampleUsage,
+				ModelVersion:  "gemini-2.5-flash",
 			},
 		},
 		{
-			name: "multi-candidate evaluates first candidate deterministically",
+			name: "CandidateWithNonStopFinishReasonAndEmptyParts",
 			res: &genai.GenerateContentResponse{
 				ModelVersion:  "gemini-2.5-flash",
-				UsageMetadata: testUsage,
+				UsageMetadata: sampleUsage,
 				Candidates: []*genai.Candidate{
 					{
-						Content:      genai.NewContentFromText("Candidate 1", genai.RoleModel),
+						Content:           &genai.Content{Parts: []*genai.Part{}, Role: "model"},
+						FinishReason:      genai.FinishReasonSafety,
+						FinishMessage:     "Blocked by safety filter",
+						GroundingMetadata: sampleGrounding,
+						CitationMetadata:  sampleCitation,
+						AvgLogprobs:       -0.2,
+						LogprobsResult:    sampleLogprobs,
+					},
+				},
+			},
+			want: &model.LLMResponse{
+				ErrorCode:         "SAFETY",
+				ErrorMessage:      "Blocked by safety filter",
+				GroundingMetadata: sampleGrounding,
+				FinishReason:      genai.FinishReasonSafety,
+				CitationMetadata:  sampleCitation,
+				AvgLogprobs:       -0.2,
+				LogprobsResult:    sampleLogprobs,
+				UsageMetadata:     sampleUsage,
+				ModelVersion:      "gemini-2.5-flash",
+			},
+		},
+		{
+			name: "CandidateWithNonStopFinishReasonButHasContentParts",
+			res: &genai.GenerateContentResponse{
+				ModelVersion:  "gemini-2.5-flash",
+				UsageMetadata: sampleUsage,
+				Candidates: []*genai.Candidate{
+					{
+						Content:      sampleContent,
+						FinishReason: genai.FinishReasonMaxTokens,
+					},
+				},
+			},
+			want: &model.LLMResponse{
+				Content:       sampleContent,
+				FinishReason:  genai.FinishReasonMaxTokens,
+				UsageMetadata: sampleUsage,
+				ModelVersion:  "gemini-2.5-flash",
+			},
+		},
+		{
+			name: "CandidateWithNilContentAndNonStopFinishReason",
+			res: &genai.GenerateContentResponse{
+				ModelVersion:  "gemini-2.5-flash",
+				UsageMetadata: sampleUsage,
+				Candidates: []*genai.Candidate{
+					{
+						Content:       nil,
+						FinishReason:  genai.FinishReasonRecitation,
+						FinishMessage: "Recitation detected",
+					},
+				},
+			},
+			want: &model.LLMResponse{
+				ErrorCode:     "RECITATION",
+				ErrorMessage:  "Recitation detected",
+				FinishReason:  genai.FinishReasonRecitation,
+				UsageMetadata: sampleUsage,
+				ModelVersion:  "gemini-2.5-flash",
+			},
+		},
+		{
+			name: "MultipleCandidatesEvaluatesFirstCandidate",
+			res: &genai.GenerateContentResponse{
+				ModelVersion:  "gemini-2.5-flash",
+				UsageMetadata: sampleUsage,
+				Candidates: []*genai.Candidate{
+					{
+						Content:      sampleContent,
 						FinishReason: genai.FinishReasonStop,
 					},
 					{
-						Content:      genai.NewContentFromText("Candidate 2", genai.RoleModel),
+						Content: &genai.Content{
+							Role:  "model",
+							Parts: []*genai.Part{genai.NewPartFromText("Second candidate")},
+						},
 						FinishReason: genai.FinishReasonStop,
 					},
 				},
 			},
 			want: &model.LLMResponse{
-				Content:       genai.NewContentFromText("Candidate 1", genai.RoleModel),
+				Content:       sampleContent,
 				FinishReason:  genai.FinishReasonStop,
-				UsageMetadata: testUsage,
+				UsageMetadata: sampleUsage,
 				ModelVersion:  "gemini-2.5-flash",
+			},
+		},
+		{
+			name: "PromptFeedbackBlockedResponse",
+			res: &genai.GenerateContentResponse{
+				ModelVersion:  "gemini-2.5-flash",
+				UsageMetadata: sampleUsage,
+				PromptFeedback: &genai.GenerateContentResponsePromptFeedback{
+					BlockReason:        genai.BlockedReasonSafety,
+					BlockReasonMessage: "Prompt blocked due to safety settings",
+				},
+			},
+			want: &model.LLMResponse{
+				ErrorCode:     "SAFETY",
+				ErrorMessage:  "Prompt blocked due to safety settings",
+				UsageMetadata: sampleUsage,
+				ModelVersion:  "gemini-2.5-flash",
+			},
+		},
+		{
+			name: "EmptyStreamChunkFallback",
+			res: &genai.GenerateContentResponse{
+				ModelVersion:  "gemini-3.1-flash-lite",
+				UsageMetadata: sampleUsage,
+			},
+			want: &model.LLMResponse{
+				Content:       &genai.Content{Parts: []*genai.Part{}, Role: "model"},
+				UsageMetadata: sampleUsage,
+				ModelVersion:  "gemini-3.1-flash-lite",
 			},
 		},
 	}
