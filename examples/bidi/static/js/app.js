@@ -504,6 +504,12 @@ function openImageModal(src, altText = "Image preview") {
   imageModalImg.src = src;
   imageModalImg.alt = altText;
   if (imageModalTitle) imageModalTitle.textContent = altText;
+  const downloadImageBtn = document.getElementById("downloadImageBtn");
+  if (downloadImageBtn) {
+    downloadImageBtn.href = src;
+    const cleanFilename = (altText || "chat-image").toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    downloadImageBtn.download = `${cleanFilename || "chat-image"}.png`;
+  }
   imageModal.classList.add("show");
   if (closeImageModalBtn) closeImageModalBtn.focus();
 }
@@ -524,7 +530,7 @@ if (imageModal) {
   });
   imageModal.addEventListener("keydown", (e) => {
     if (e.key === "Tab" && imageModal.classList.contains("show")) {
-      const focusables = imageModal.querySelectorAll("button:not([disabled]), [tabindex]:not([tabindex='-1'])");
+      const focusables = imageModal.querySelectorAll("button:not([disabled]), a[href]:not([disabled]), [tabindex]:not([tabindex='-1'])");
       if (focusables.length === 0) return;
       const first = focusables[0];
       const last = focusables[focusables.length - 1];

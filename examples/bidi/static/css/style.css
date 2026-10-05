@@ -1135,6 +1135,10 @@ button.active {
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-primary:hover {
