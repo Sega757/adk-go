@@ -520,6 +520,71 @@ func TestRunSSEHandler_SanitizesBadRequestAndNotFoundErrors(t *testing.T) {
 	})
 }
 
+func TestRunHandler_SanitizesSessionNotFoundError(t *testing.T) {
+	fakeAgent, _ := agent.New(agent.Config{Name: "app"})
+	sessionService := fakes.FakeSessionService{}
+	controller := NewRuntimeAPIController(
+		&sessionService,
+		nil,
+		agent.NewSingleLoader(fakeAgent),
+		nil,
+		10*time.Second,
+		runner.PluginConfig{},
+		false,
+	)
+
+	handler := NewErrorHandler(controller.RunHandler)
+
+	reqObj := models.RunAgentRequest{
+		AppName:   "app",
+		UserId:    "user",
+		SessionId: "nonExistentSession",
+		NewMessage: genai.Content{
+			Parts: []*genai.Part{{Text: "Hello"}},
+		},
+	}
+	reqBytes, _ := json.Marshal(reqObj)
+	req := httptest.NewRequest(http.MethodPost, "/run", bytes.NewBuffer(reqBytes))
+	rec := httptest.NewRecorder()
+
+	handler(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+	if got := rec.Body.String(); got != "not found\n" {
+		t.Errorf("expected sanitized body %q, got %q", "not found\n", got)
+	}
+}
+
+func TestRunHandler_SanitizesDecodeError(t *testing.T) {
+	fakeAgent, _ := agent.New(agent.Config{Name: "app"})
+	sessionService := fakes.FakeSessionService{}
+	controller := NewRuntimeAPIController(
+		&sessionService,
+		nil,
+		agent.NewSingleLoader(fakeAgent),
+		nil,
+		10*time.Second,
+		runner.PluginConfig{},
+		false,
+	)
+
+	handler := NewErrorHandler(controller.RunHandler)
+
+	req := httptest.NewRequest(http.MethodPost, "/run", bytes.NewBufferString("{invalid json}"))
+	rec := httptest.NewRecorder()
+
+	handler(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+	if got := rec.Body.String(); got != "bad request\n" {
+		t.Errorf("expected sanitized body %q, got %q", "bad request\n", got)
+	}
+}
+
 func TestRunLiveHandler_BadRequestErrors(t *testing.T) {
 	fakeAgent, _ := agent.New(agent.Config{Name: "app"})
 	sessionService := fakes.FakeSessionService{}

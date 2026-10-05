@@ -51,3 +51,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** The outbound HTTP client wrapper `clientWithSSRFProtection` in `agentregistry` checked for loopback, private, and link-local IPs but failed to block unspecified IP addresses (e.g., `0.0.0.0` or `::` in IPv6).
 **Learning:** `0.0.0.0` and `::` (unspecified IPs) are often routed to the local machine (`localhost`) by many operating systems (e.g. Linux/macOS) when passed to socket connect APIs, bypassing basic loopback SSRF checks and allowing attackers to reach internal services.
 **Prevention:** Always include `ip.IsUnspecified()` when enforcing SSRF protections using an IP blocklist approach in custom `net.Dialer` contexts.
+
+## 2026-10-05 - [Prevent Information Leakage in REST Controller Error Responses]
+**Vulnerability:** In `RunHandler` (`server/adkrest/controllers/runtime.go`), `validateSessionExists` and `decodeRequestBody` returned wrapped raw error messages (e.g., `failed to get session: <err.Error()>` or `failed to decode request: <err.Error()>`) with non-500 status codes (404/400). `NewErrorHandler` preserved non-500 status errors verbatim, leaking internal database errors or JSON decoding details in HTTP response bodies to callers.
+**Learning:** `NewErrorHandler` preserves non-500 `statusError` strings. Returning raw wrapped errors (like `fmt.Errorf("failed to get session: %w", err)`) in non-500 status errors directly exposes internal backend error details (such as GORM/database connection failures or internal file paths) to API clients.
+**Prevention:** Log detailed error information server-side using `log.Printf` and return sanitized, generic error strings (e.g. `"not found"` or `"bad request"`) in `newStatusError`.
