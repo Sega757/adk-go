@@ -205,7 +205,8 @@ func (c *RuntimeAPIController) validateSessionExists(ctx context.Context, appNam
 		SessionID: sessionID,
 	})
 	if err != nil {
-		return newStatusError(fmt.Errorf("failed to get session: %w", err), http.StatusNotFound)
+		log.Printf("Session validation failed: %v", err)
+		return newStatusError(fmt.Errorf("not found"), http.StatusNotFound)
 	}
 	return nil
 }
@@ -248,7 +249,8 @@ func decodeRequestBody(rw http.ResponseWriter, req *http.Request) (models.RunAge
 	d := json.NewDecoder(http.MaxBytesReader(rw, req.Body, 10*1024*1024))
 	d.DisallowUnknownFields()
 	if err := d.Decode(&runAgentRequest); err != nil {
-		return runAgentRequest, newStatusError(fmt.Errorf("failed to decode request: %w", err), http.StatusBadRequest)
+		log.Printf("Failed to decode request body: %v", err)
+		return runAgentRequest, newStatusError(fmt.Errorf("bad request"), http.StatusBadRequest)
 	}
 	return runAgentRequest, nil
 }
