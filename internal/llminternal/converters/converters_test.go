@@ -194,6 +194,40 @@ func TestGenai2LLMResponse(t *testing.T) {
 			},
 		},
 		{
+			name: "CandidateWithNilCandidateFirstElementFallback",
+			res: &genai.GenerateContentResponse{
+				ModelVersion:  "gemini-2.5-flash",
+				UsageMetadata: sampleUsage,
+				Candidates:    []*genai.Candidate{nil},
+			},
+			want: &model.LLMResponse{
+				Content:       &genai.Content{Parts: []*genai.Part{}, Role: "model"},
+				UsageMetadata: sampleUsage,
+				ModelVersion:  "gemini-2.5-flash",
+			},
+		},
+		{
+			name: "CandidateWithNonNilContentButNilPartsAndNonStopFinishReason",
+			res: &genai.GenerateContentResponse{
+				ModelVersion:  "gemini-2.5-flash",
+				UsageMetadata: sampleUsage,
+				Candidates: []*genai.Candidate{
+					{
+						Content:       &genai.Content{Parts: nil, Role: "model"},
+						FinishReason:  genai.FinishReasonBlocklist,
+						FinishMessage: "Blocked by blocklist",
+					},
+				},
+			},
+			want: &model.LLMResponse{
+				ErrorCode:     "BLOCKLIST",
+				ErrorMessage:  "Blocked by blocklist",
+				FinishReason:  genai.FinishReasonBlocklist,
+				UsageMetadata: sampleUsage,
+				ModelVersion:  "gemini-2.5-flash",
+			},
+		},
+		{
 			name: "PromptFeedbackBlockedResponse",
 			res: &genai.GenerateContentResponse{
 				ModelVersion:  "gemini-2.5-flash",
@@ -220,6 +254,18 @@ func TestGenai2LLMResponse(t *testing.T) {
 				Content:       &genai.Content{Parts: []*genai.Part{}, Role: "model"},
 				UsageMetadata: sampleUsage,
 				ModelVersion:  "gemini-3.1-flash-lite",
+			},
+		},
+		{
+			name: "EmptyResponseWithNilUsageMetadata",
+			res: &genai.GenerateContentResponse{
+				ModelVersion:  "gemini-2.5-flash",
+				UsageMetadata: nil,
+			},
+			want: &model.LLMResponse{
+				Content:       &genai.Content{Parts: []*genai.Part{}, Role: "model"},
+				UsageMetadata: nil,
+				ModelVersion:  "gemini-2.5-flash",
 			},
 		},
 	}
