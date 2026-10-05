@@ -176,10 +176,23 @@ type mergeHeadersInterceptor struct {
 	base http.RoundTripper
 }
 
+// trackingHeaderKeys holds canonical HTTP header keys to avoid per-request slice allocations.
+var trackingHeaderKeys = [2]string{"X-Goog-Api-Client", "User-Agent"}
+
+// RoundTrip merges multi-valued tracking headers into single space-separated strings.
+// Optimized to avoid slice allocations by using a static array for keys, directly reading
+// canonical map entries to avoid req.Header.Values() slice copies, and skipping strings.Join
+// when len(values) <= 1.
 func (h *mergeHeadersInterceptor) RoundTrip(req *http.Request) (*http.Response, error) {
-	for _, headerName := range []string{"x-goog-api-client", "user-agent"} {
-		if values := req.Header.Values(headerName); len(values) > 0 {
-			req.Header.Set(headerName, strings.Join(values, " "))
+	if req.Header != nil {
+		for _, key := range trackingHeaderKeys {
+			values := req.Header[key]
+			if len(values) == 0 {
+				values = req.Header.Values(key)
+			}
+			if len(values) > 1 {
+				req.Header.Set(key, strings.Join(values, " "))
+			}
 		}
 	}
 
