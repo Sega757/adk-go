@@ -257,6 +257,24 @@ func TestGenai2LLMResponse(t *testing.T) {
 			},
 		},
 		{
+			name: "NilCandidateElementWithPromptFeedback",
+			res: &genai.GenerateContentResponse{
+				ModelVersion:  "gemini-2.5-flash",
+				UsageMetadata: sampleUsage,
+				Candidates:    []*genai.Candidate{nil},
+				PromptFeedback: &genai.GenerateContentResponsePromptFeedback{
+					BlockReason:        genai.BlockedReasonSafety,
+					BlockReasonMessage: "Blocked before candidate evaluation",
+				},
+			},
+			want: &model.LLMResponse{
+				ErrorCode:     "SAFETY",
+				ErrorMessage:  "Blocked before candidate evaluation",
+				UsageMetadata: sampleUsage,
+				ModelVersion:  "gemini-2.5-flash",
+			},
+		},
+		{
 			name: "EmptyResponseWithNilUsageMetadata",
 			res: &genai.GenerateContentResponse{
 				ModelVersion:  "gemini-2.5-flash",
