@@ -181,15 +181,35 @@ func (t *artifactsTool) processLoadArtifactsFunctionCall(ctx agent.Context, req 
 		return nil
 	}
 	artifactNamesRaw, ok := functionResponse.Response["artifact_names"]
-	if !ok {
+	if !ok || artifactNamesRaw == nil {
 		return nil
 	}
-	artifactNames, ok := artifactNamesRaw.([]string)
-	if !ok {
-		return fmt.Errorf("invalid artifact names type: %T, expected []string", artifactNamesRaw)
+
+	var artifactNames []string
+	switch v := artifactNamesRaw.(type) {
+	case []string:
+		artifactNames = v
+	case []any:
+		artifactNames = make([]string, len(v))
+		for i, elem := range v {
+			s, ok := elem.(string)
+			if !ok {
+				return fmt.Errorf("failed to convert element %d (%v of type %T) to string", i, elem, elem)
+			}
+			artifactNames[i] = s
+		}
+	default:
+		return fmt.Errorf("invalid artifact names type: %T, expected []string or []any", artifactNamesRaw)
 	}
+
 	if len(artifactNames) == 0 {
 		return nil
+	}
+
+	for _, name := range artifactNames {
+		if err := validateArtifactName(name); err != nil {
+			return err
+		}
 	}
 
 	results := make([]*genai.Content, len(artifactNames))
