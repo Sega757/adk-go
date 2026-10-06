@@ -403,3 +403,11 @@ func BenchmarkReplacePronouns(b *testing.B) {
 		_ = replacePronouns(input)
 	}
 }
+
+func BenchmarkReplacePronouns_NoPronouns(b *testing.B) {
+	b.ReportAllocs()
+	input := "This is a standard agent instruction without any pronouns."
+	for i := 0; i < b.N; i++ {
+		_ = replacePronouns(input)
+	}
+}
