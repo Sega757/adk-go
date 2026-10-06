@@ -262,12 +262,22 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
       navigator.clipboard.writeText(jsonText).then(() => {
         copyJsonBtn.textContent = "✓ Copied!";
         copyJsonBtn.setAttribute("aria-label", "Copied event JSON to clipboard");
+        copyJsonBtn.setAttribute("title", "Copied!");
         setTimeout(() => {
           copyJsonBtn.textContent = "📋 Copy JSON";
           copyJsonBtn.setAttribute("aria-label", "Copy event JSON to clipboard");
+          copyJsonBtn.setAttribute("title", "Copy event JSON");
         }, 2000);
       }).catch(err => {
         console.error("Failed to copy JSON:", err);
+        copyJsonBtn.textContent = "⚠️ Failed";
+        copyJsonBtn.setAttribute("aria-label", "Failed to copy event JSON to clipboard");
+        copyJsonBtn.setAttribute("title", "Failed to copy");
+        setTimeout(() => {
+          copyJsonBtn.textContent = "📋 Copy JSON";
+          copyJsonBtn.setAttribute("aria-label", "Copy event JSON to clipboard");
+          copyJsonBtn.setAttribute("title", "Copy event JSON");
+        }, 2000);
       });
     });
 
