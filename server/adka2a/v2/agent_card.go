@@ -234,30 +234,45 @@ func buildDescriptionFromInstructions(agent agent.Agent, llmState *llminternal.S
 	return description
 }
 
-type pronounSub struct {
-	re     *regexp.Regexp
-	target string
+var pronounRegex = regexp.MustCompile(`(?i)\b(you were|you are|you're|you've|yours|your|you)\b`)
+
+func hasYou(s string) bool {
+	for i := 0; i < len(s)-2; i++ {
+		if (s[i] == 'y' || s[i] == 'Y') &&
+			(s[i+1] == 'o' || s[i+1] == 'O') &&
+			(s[i+2] == 'u' || s[i+2] == 'U') {
+			return true
+		}
+	}
+	return false
 }
 
-var pronounSubstitutions = []pronounSub{
-	// Keep sorted by len(original) DESC to ensure longer phrases are matched first
-	// which prevents "you" in "you are" from being replaced on its own.
-	{regexp.MustCompile(`(?i)\byou were\b`), "I was"},
-	{regexp.MustCompile(`(?i)\byou are\b`), "I am"},
-	{regexp.MustCompile(`(?i)\byou're\b`), "I am"},
-	{regexp.MustCompile(`(?i)\byou've\b`), "I have"},
-	{regexp.MustCompile(`(?i)\byours\b`), "mine"},
-	{regexp.MustCompile(`(?i)\byour\b`), "my"},
-	{regexp.MustCompile(`(?i)\byou\b`), "I"},
+func replacePronounMatch(match string) string {
+	switch strings.ToLower(match) {
+	case "you were":
+		return "I was"
+	case "you are", "you're":
+		return "I am"
+	case "you've":
+		return "I have"
+	case "yours":
+		return "mine"
+	case "your":
+		return "my"
+	case "you":
+		return "I"
+	default:
+		return match
+	}
 }
 
 // Replaces pronouns and conjugate common verbs for agent description.
 // Examples: "You are" -> "I am", "your" -> "my"
 func replacePronouns(instruction string) string {
-	for _, sub := range pronounSubstitutions {
-		instruction = sub.re.ReplaceAllString(instruction, sub.target)
+	if !hasYou(instruction) {
+		return instruction
 	}
-	return instruction
+	return pronounRegex.ReplaceAllStringFunc(instruction, replacePronounMatch)
 }
 
 func getDefaultAgentDescription(state *iagent.State) string {
@@ -309,6 +324,10 @@ func getInternalState(agent agent.Agent) *iagent.State {
 }
 
 func isWorkflowAgent(state *iagent.State) bool {
-	workflowAgents := []iagent.Type{iagent.TypeLoopAgent, iagent.TypeSequentialAgent, iagent.TypeParallelAgent}
-	return slices.Contains(workflowAgents, state.AgentType)
+	switch state.AgentType {
+	case iagent.TypeLoopAgent, iagent.TypeSequentialAgent, iagent.TypeParallelAgent:
+		return true
+	default:
+		return false
+	}
 }
