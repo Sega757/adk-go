@@ -30,7 +30,7 @@ import (
 	"google.golang.org/adk/v2/session"
 )
 
-func newTestInvocationContext(t *testing.T, agentName string, events ...*session.Event) agent.InvocationContext {
+func newTestInvocationContext(t testing.TB, agentName string, events ...*session.Event) agent.InvocationContext {
 	t.Helper()
 	ctx := t.Context()
 	store := session.InMemoryService()
@@ -149,6 +149,16 @@ func TestGetUserFunctionCallAt(t *testing.T) {
 				t.Error("getUserFunctionCallAt() = nil, want non-nil")
 			}
 		})
+	}
+}
+
+func BenchmarkPresentAsUserMessage(b *testing.B) {
+	ictx := newTestInvocationContext(b, "test")
+	event := newEventFromParts("other-agent", genai.NewPartFromText("Hello from remote agent!"))
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = presentAsUserMessage(ictx, event)
 	}
 }
 
