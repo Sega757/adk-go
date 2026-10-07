@@ -16,7 +16,6 @@ package remoteagent
 
 import (
 	"fmt"
-	"slices"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/log"
@@ -65,9 +64,12 @@ func isFunctionCallEvent(event *session.Event, callID string) bool {
 	if event == nil || event.Content == nil {
 		return false
 	}
-	return slices.ContainsFunc(event.Content.Parts, func(part *genai.Part) bool {
-		return part.FunctionCall != nil && part.FunctionCall.ID == callID
-	})
+	for _, part := range event.Content.Parts {
+		if part.FunctionCall != nil && part.FunctionCall.ID == callID {
+			return true
+		}
+	}
+	return false
 }
 
 // getFunctionResponseCallID finds the first part with non-nil FunctionResponse and returns the call ID.
@@ -75,13 +77,12 @@ func getFunctionResponseCallID(event *session.Event) (string, bool) {
 	if event.Content == nil {
 		return "", false
 	}
-	responsePartIndex := slices.IndexFunc(event.Content.Parts, func(part *genai.Part) bool {
-		return part.FunctionResponse != nil
-	})
-	if responsePartIndex < 0 {
-		return "", false
+	for _, part := range event.Content.Parts {
+		if part.FunctionResponse != nil {
+			return part.FunctionResponse.ID, true
+		}
 	}
-	return event.Content.Parts[responsePartIndex].FunctionResponse.ID, true
+	return "", false
 }
 
 // toMissingRemoteSessionParts returns content parts for all events we think are not present in the remote session
@@ -128,30 +129,32 @@ func toMissingRemoteSessionParts(ctx agent.InvocationContext, events session.Eve
 	return result, contextID
 }
 
+var forContextPart = &genai.Part{Text: "For context:"}
+
 func presentAsUserMessage(ctx agent.InvocationContext, agentEvent *session.Event) *session.Event {
 	event := session.NewEvent(ctx, ctx.InvocationID())
 	event.Author = "user"
 
-	if agentEvent.Content == nil {
+	if agentEvent.Content == nil || len(agentEvent.Content.Parts) == 0 {
 		return event
 	}
 
 	parts := make([]*genai.Part, 0, len(agentEvent.Content.Parts)+1)
-	parts = append(parts, &genai.Part{Text: "For context:"})
+	parts = append(parts, forContextPart)
 	for _, part := range agentEvent.Content.Parts {
 		if part.Thought {
 			continue
 		}
 		if part.Text != "" {
-			text := fmt.Sprintf("[%s] said: %s", agentEvent.Author, part.Text)
+			text := "[" + agentEvent.Author + "] said: " + part.Text
 			parts = append(parts, genai.NewPartFromText(text))
 		} else if part.FunctionCall != nil {
 			call := part.FunctionCall
-			text := fmt.Sprintf("[%s] called tool %s with parameters: %v", agentEvent.Author, call.Name, call.Args)
+			text := "[" + agentEvent.Author + "] called tool " + call.Name + " with parameters: " + fmt.Sprint(call.Args)
 			parts = append(parts, genai.NewPartFromText(text))
 		} else if part.FunctionResponse != nil {
 			resp := part.FunctionResponse
-			text := fmt.Sprintf("[%s] %s tool returned result: %v", agentEvent.Author, resp.Name, resp.Response)
+			text := "[" + agentEvent.Author + "] " + resp.Name + " tool returned result: " + fmt.Sprint(resp.Response)
 			parts = append(parts, genai.NewPartFromText(text))
 		} else {
 			parts = append(parts, part)
