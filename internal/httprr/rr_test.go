@@ -334,3 +334,36 @@ func (badRespTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp.Body = io.NopCloser(iotest.ErrReader(errors.New("TRANSPORT ERROR")))
 	return resp, nil
 }
+
+func BenchmarkRecording(b *testing.B) {
+	b.Run("Disabled", func(b *testing.B) {
+		*record = ""
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			_, _ = Recording("testfile")
+		}
+	})
+
+	b.Run("Enabled", func(b *testing.B) {
+		*record = "r+"
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			_, _ = Recording("r_file")
+		}
+		*record = ""
+	})
+
+	b.Run("Parallel", func(b *testing.B) {
+		*record = "r+"
+		b.ReportAllocs()
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				_, _ = Recording("r_file")
+			}
+		})
+		*record = ""
+	})
+}
