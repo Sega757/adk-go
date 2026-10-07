@@ -81,6 +81,7 @@ function updateSendButtonState() {
   if (!sendButton) return;
   if (!websocket || websocket.readyState !== WebSocket.OPEN) {
     sendButton.disabled = true;
+    sendButton.setAttribute("title", "Connect to server to enable control");
     return;
   }
   const hasText = messageInput && messageInput.value.trim().length > 0;
@@ -88,7 +89,7 @@ function updateSendButtonState() {
   if (!hasText) {
     sendButton.setAttribute("title", "Type a message to enable send");
   } else {
-    sendButton.removeAttribute("title");
+    sendButton.setAttribute("title", "Send message to agent");
   }
 }
 
@@ -99,7 +100,7 @@ function updateClearConsoleButtonState() {
     if (!hasEntries) {
       clearConsoleBtn.setAttribute("title", "Console is empty");
     } else {
-      clearConsoleBtn.removeAttribute("title");
+      clearConsoleBtn.setAttribute("title", "Clear all event console log entries");
     }
   }
 }
