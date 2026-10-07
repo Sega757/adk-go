@@ -15,9 +15,22 @@
 package workflow
 
 import (
-	"math/rand/v2"
+	cryptorand "crypto/rand"
+	"encoding/binary"
 	"time"
 )
+
+// secureFloat64 returns a pseudo-random float64 in [0.0, 1.0) using crypto/rand.
+func secureFloat64() (float64, error) {
+	var b [8]byte
+	if _, err := cryptorand.Read(b[:]); err != nil {
+		return 0, err
+	}
+	// Use 53 bits for standard IEEE 754 float64 precision
+	const maxUint53 = 1 << 53
+	val := binary.LittleEndian.Uint64(b[:]) & (maxUint53 - 1)
+	return float64(val) / float64(maxUint53), nil
+}
 
 // CalculateDelay calculates the delay before the next retry attempt.
 // failedAttempts is the number of times the node has already failed.
@@ -43,11 +56,13 @@ func CalculateDelay(cfg *RetryConfig, failedAttempts int) time.Duration {
 	}
 
 	if cfg.Jitter > 0 {
-		randVal := rand.Float64()
-		randomOffset := (randVal*2.0 - 1.0) * cfg.Jitter * delay
-		delay += randomOffset
-		if delay < 0 {
-			delay = 0
+		randVal, err := secureFloat64()
+		if err == nil {
+			randomOffset := (randVal*2.0 - 1.0) * cfg.Jitter * delay
+			delay += randomOffset
+			if delay < 0 {
+				delay = 0
+			}
 		}
 	}
 
