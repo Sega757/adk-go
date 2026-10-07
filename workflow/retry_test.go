@@ -78,10 +78,47 @@ func TestCalculateDelayWithJitter(t *testing.T) {
 	minExpected := 500 * time.Millisecond
 	maxExpected := 1500 * time.Millisecond
 
+	seenMap := make(map[time.Duration]bool)
+
 	for i := 0; i < 100; i++ {
 		got := CalculateDelay(cfg, 1)
 		if got < minExpected || got > maxExpected {
 			t.Errorf("CalculateDelay with jitter iteration %d returned %v, expected in range [%v, %v]", i, got, minExpected, maxExpected)
+		}
+		if got < 0 {
+			t.Errorf("CalculateDelay with jitter returned negative delay: %v", got)
+		}
+		seenMap[got] = true
+	}
+
+	// Non-zero variance check: Ensure crypto/rand produces varying values.
+	if len(seenMap) <= 1 {
+		t.Errorf("CalculateDelay with jitter produced non-varying results across 100 iterations: %v", seenMap)
+	}
+}
+
+func TestCalculateDelayWithExtremeJitter(t *testing.T) {
+	cfg := &RetryConfig{
+		InitialDelay: time.Second,
+		Jitter:       2.0, // High jitter multiplier that could yield negative offsets
+	}
+
+	for i := 0; i < 100; i++ {
+		got := CalculateDelay(cfg, 1)
+		if got < 0 {
+			t.Fatalf("CalculateDelay returned negative delay %v with extreme jitter", got)
+		}
+	}
+}
+
+func TestSecureFloat64(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		v, err := secureFloat64()
+		if err != nil {
+			t.Fatalf("secureFloat64 returned error: %v", err)
+		}
+		if v < 0.0 || v >= 1.0 {
+			t.Fatalf("secureFloat64 returned out-of-range value %f, expected [0.0, 1.0)", v)
 		}
 	}
 }
