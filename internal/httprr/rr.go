@@ -27,7 +27,13 @@ import (
 	"testing"
 )
 
-var record = new(string)
+var (
+	record        = new(string)
+	recordMu      sync.RWMutex
+	cachedPattern string
+	cachedRe      *regexp.Regexp
+	cachedErr     error
+)
 
 func init() {
 	if testing.Testing() {
@@ -119,14 +125,31 @@ func Open(file string, rt http.RoundTripper) (*RecordReplay, error) {
 // for the given file.
 // It returns an error if the flag is set to an invalid value.
 func Recording(file string) (bool, error) {
-	if *record != "" {
-		re, err := regexp.Compile(*record)
-		if err != nil {
-			return false, fmt.Errorf("invalid -httprecord flag: %v", err)
+	pattern := *record
+	if pattern == "" {
+		return false, nil
+	}
+
+	recordMu.RLock()
+	re, err := cachedRe, cachedErr
+	matched := pattern == cachedPattern
+	recordMu.RUnlock()
+
+	if !matched {
+		recordMu.Lock()
+		if pattern != cachedPattern {
+			cachedPattern = pattern
+			cachedRe, cachedErr = regexp.Compile(pattern)
 		}
-		if re.MatchString(file) {
-			return true, nil
-		}
+		re, err = cachedRe, cachedErr
+		recordMu.Unlock()
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("invalid -httprecord flag: %v", err)
+	}
+	if re.MatchString(file) {
+		return true, nil
 	}
 	return false, nil
 }
