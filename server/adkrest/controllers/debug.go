@@ -53,6 +53,10 @@ func (c *DebugAPIController) EventSpanHandler(rw http.ResponseWriter, req *http.
 		http.Error(rw, "event_id parameter is required", http.StatusBadRequest)
 		return
 	}
+	if c.debugTelemetry == nil {
+		http.Error(rw, "event not found", http.StatusNotFound)
+		return
+	}
 	spans := c.debugTelemetry.GetSpansByEventID(eventID)
 	key := string(semconv.GenAIOperationNameKey)
 	// Return only generate content and execute tool spans.
@@ -93,6 +97,10 @@ func (c *DebugAPIController) SessionSpansHandler(rw http.ResponseWriter, req *ht
 	sessionID := params["session_id"]
 	if sessionID == "" {
 		http.Error(rw, "session_id parameter is required", http.StatusBadRequest)
+		return
+	}
+	if c.debugTelemetry == nil {
+		EncodeJSONResponse([]services.DebugSpan{}, http.StatusOK, rw)
 		return
 	}
 	spans := c.debugTelemetry.GetSpansBySessionID(sessionID)

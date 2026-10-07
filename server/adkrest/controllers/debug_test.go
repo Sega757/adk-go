@@ -303,6 +303,46 @@ func (e *errAgentLoader) RootAgent() agent.Agent {
 	return nil
 }
 
+func TestDebugHandlers_NilTelemetry(t *testing.T) {
+	apiController := controllers.NewDebugAPIController(nil, nil, nil)
+
+	t.Run("event_span_handler", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/debug/events/test-event/span", nil)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req = mux.SetURLVars(req, map[string]string{"event_id": "test-event"})
+		rr := httptest.NewRecorder()
+
+		apiController.EventSpanHandler(rr, req)
+
+		if gotStatus := rr.Code; gotStatus != http.StatusNotFound {
+			t.Fatalf("handler returned wrong status code: got %v want %v", gotStatus, http.StatusNotFound)
+		}
+		if gotBody := strings.TrimSpace(rr.Body.String()); gotBody != "event not found" {
+			t.Errorf("handler returned unexpected body: got %q, want %q", gotBody, "event not found")
+		}
+	})
+
+	t.Run("session_spans_handler", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/debug/sessions/test-session/spans", nil)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req = mux.SetURLVars(req, map[string]string{"session_id": "test-session"})
+		rr := httptest.NewRecorder()
+
+		apiController.SessionSpansHandler(rr, req)
+
+		if gotStatus := rr.Code; gotStatus != http.StatusOK {
+			t.Fatalf("handler returned wrong status code: got %v want %v", gotStatus, http.StatusOK)
+		}
+		if gotBody := strings.TrimSpace(rr.Body.String()); gotBody != "[]" {
+			t.Errorf("handler returned unexpected body: got %q, want %q", gotBody, "[]")
+		}
+	})
+}
+
 func TestEventGraphHandler_SanitizedInternalError(t *testing.T) {
 	storedSessions := map[fakes.SessionKey]fakes.TestSession{
 		{

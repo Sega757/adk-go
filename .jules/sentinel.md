@@ -56,3 +56,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** In `RunHandler` (`server/adkrest/controllers/runtime.go`), `validateSessionExists` and `decodeRequestBody` returned wrapped raw error messages (e.g., `failed to get session: <err.Error()>` or `failed to decode request: <err.Error()>`) with non-500 status codes (404/400). `NewErrorHandler` preserved non-500 status errors verbatim, leaking internal database errors or JSON decoding details in HTTP response bodies to callers.
 **Learning:** `NewErrorHandler` preserves non-500 `statusError` strings. Returning raw wrapped errors (like `fmt.Errorf("failed to get session: %w", err)`) in non-500 status errors directly exposes internal backend error details (such as GORM/database connection failures or internal file paths) to API clients.
 **Prevention:** Log detailed error information server-side using `log.Printf` and return sanitized, generic error strings (e.g. `"not found"` or `"bad request"`) in `newStatusError`.
+
+## 2026-10-10 - [Prevent Nil Pointer Dereference DoS in Debug Handlers]
+**Vulnerability:** In `DebugAPIController` (`server/adkrest/controllers/debug.go`), `EventSpanHandler` and `SessionSpansHandler` dereferenced `c.debugTelemetry` without checking if it was `nil`.
+**Learning:** When optional controller services (such as debug telemetry) are uninitialized or disabled (`nil`), HTTP endpoints attempting to access them will panic on incoming requests, causing a Denial of Service (DoS) vulnerability.
+**Prevention:** Always check if optional service dependencies are `nil` before calling methods on them in HTTP handlers, returning an appropriate HTTP response (such as 404 Not Found or an empty dataset) instead of allowing panic.
