@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -147,6 +148,9 @@ func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.R
 
 	for event, err := range resp {
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(req.Context().Err(), context.Canceled) {
+				return
+			}
 			err := flashErrorEvent(rc, rw, err)
 			// The error is returned only when we cannot communicate with the client
 			// Exit the handler as connection is closed.
@@ -386,6 +390,9 @@ func (c *RuntimeAPIController) RunLiveHandler(rw http.ResponseWriter, req *http.
 
 	for event, err := range eventIter {
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(req.Context().Err(), context.Canceled) {
+				break
+			}
 			log.Printf("RunLive failed: %v\n", err)
 			_ = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "internal server error"))
 			break

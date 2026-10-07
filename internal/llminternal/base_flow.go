@@ -239,10 +239,13 @@ func (s *liveSessionImpl) Send(req agent.LiveRequest) error {
 	}
 }
 
-func (s *liveSessionImpl) recvIter() iter.Seq2[*session.Event, error] {
+func (s *liveSessionImpl) recvIter(ctx context.Context) iter.Seq2[*session.Event, error] {
 	return func(yield func(*session.Event, error) bool) {
 		for {
 			select {
+			case <-ctx.Done():
+				yield(nil, ctx.Err())
+				return
 			case res := <-s.outputCh:
 				if !yield(res.event, res.err) {
 					return
@@ -552,7 +555,7 @@ func (f *Flow) RunLive(ctx agent.InvocationContext) (agent.LiveSession, iter.Seq
 		}
 	}()
 
-	return sess, sess.recvIter(), nil
+	return sess, sess.recvIter(ctx), nil
 }
 
 func (f *Flow) runOneStep(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
