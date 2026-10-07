@@ -25,6 +25,7 @@ import (
 	"google.golang.org/adk/v2/internal/utils"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/platform"
+	"google.golang.org/adk/v2/session"
 )
 
 func TestGenerateFunctionCallIDUsesProvider(t *testing.T) {
@@ -191,6 +192,37 @@ func TestHelperFunctions(t *testing.T) {
 }
 
 func TestHasFunctionCalls(t *testing.T) {
+	callParts := []*genai.Part{{Text: "call"}, {FunctionCall: &genai.FunctionCall{Name: "fn"}}}
+	callContent := &genai.Content{Parts: callParts}
+	callEvent := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: callContent,
+		},
+	}
+
+	if !utils.HasFunctionCalls(callContent) {
+		t.Errorf("HasFunctionCalls(*genai.Content) = false, want true")
+	}
+	if !utils.HasFunctionCalls(callParts) {
+		t.Errorf("HasFunctionCalls([]*genai.Part) = false, want true")
+	}
+	if !utils.HasFunctionCalls(callEvent) {
+		t.Errorf("HasFunctionCalls(*session.Event) = false, want true")
+	}
+
+	var nilContent *genai.Content
+	var nilParts []*genai.Part
+	var nilEvent *session.Event
+	if utils.HasFunctionCalls(nilContent) {
+		t.Errorf("HasFunctionCalls(nilContent) = true, want false")
+	}
+	if utils.HasFunctionCalls(nilParts) {
+		t.Errorf("HasFunctionCalls(nilParts) = true, want false")
+	}
+	if utils.HasFunctionCalls(nilEvent) {
+		t.Errorf("HasFunctionCalls(nilEvent) = true, want false")
+	}
+
 	tests := []struct {
 		name    string
 		content *genai.Content
@@ -233,6 +265,37 @@ func TestHasFunctionCalls(t *testing.T) {
 }
 
 func TestHasFunctionResponses(t *testing.T) {
+	respParts := []*genai.Part{{Text: "resp"}, {FunctionResponse: &genai.FunctionResponse{Name: "fn"}}}
+	respContent := &genai.Content{Parts: respParts}
+	respEvent := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: respContent,
+		},
+	}
+
+	if !utils.HasFunctionResponses(respContent) {
+		t.Errorf("HasFunctionResponses(*genai.Content) = false, want true")
+	}
+	if !utils.HasFunctionResponses(respParts) {
+		t.Errorf("HasFunctionResponses([]*genai.Part) = false, want true")
+	}
+	if !utils.HasFunctionResponses(respEvent) {
+		t.Errorf("HasFunctionResponses(*session.Event) = false, want true")
+	}
+
+	var nilContent *genai.Content
+	var nilParts []*genai.Part
+	var nilEvent *session.Event
+	if utils.HasFunctionResponses(nilContent) {
+		t.Errorf("HasFunctionResponses(nilContent) = true, want false")
+	}
+	if utils.HasFunctionResponses(nilParts) {
+		t.Errorf("HasFunctionResponses(nilParts) = true, want false")
+	}
+	if utils.HasFunctionResponses(nilEvent) {
+		t.Errorf("HasFunctionResponses(nilEvent) = true, want false")
+	}
+
 	tests := []struct {
 		name    string
 		content *genai.Content
@@ -317,18 +380,40 @@ func BenchmarkIsZeroPart(b *testing.B) {
 }
 
 func BenchmarkHasFunctionCalls(b *testing.B) {
-	content := &genai.Content{
-		Parts: []*genai.Part{
-			{Text: "thinking..."},
-			{FunctionCall: &genai.FunctionCall{Name: "search"}},
+	parts := []*genai.Part{
+		{Text: "thinking..."},
+		{FunctionCall: &genai.FunctionCall{Name: "search"}},
+	}
+	content := &genai.Content{Parts: parts}
+	event := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: content,
 		},
 	}
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = utils.HasFunctionCalls(content)
-	}
+	b.Run("Content", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = utils.HasFunctionCalls(content)
+		}
+	})
+
+	b.Run("Parts", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = utils.HasFunctionCalls(parts)
+		}
+	})
+
+	b.Run("Event", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = utils.HasFunctionCalls(event)
+		}
+	})
 }
 
 func BenchmarkHasFunctionCalls_LegacyFunctionCallsSlice(b *testing.B) {
@@ -347,17 +432,39 @@ func BenchmarkHasFunctionCalls_LegacyFunctionCallsSlice(b *testing.B) {
 }
 
 func BenchmarkHasFunctionResponses(b *testing.B) {
-	content := &genai.Content{
-		Parts: []*genai.Part{
-			{FunctionResponse: &genai.FunctionResponse{Name: "search"}},
+	parts := []*genai.Part{
+		{FunctionResponse: &genai.FunctionResponse{Name: "search"}},
+	}
+	content := &genai.Content{Parts: parts}
+	event := &session.Event{
+		LLMResponse: model.LLMResponse{
+			Content: content,
 		},
 	}
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = utils.HasFunctionResponses(content)
-	}
+	b.Run("Content", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = utils.HasFunctionResponses(content)
+		}
+	})
+
+	b.Run("Parts", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = utils.HasFunctionResponses(parts)
+		}
+	})
+
+	b.Run("Event", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = utils.HasFunctionResponses(event)
+		}
+	})
 }
 
 func TestAppendInstructions(t *testing.T) {

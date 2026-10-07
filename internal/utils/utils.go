@@ -83,16 +83,35 @@ func Content(ev *session.Event) *genai.Content {
 	return ev.LLMResponse.Content
 }
 
-// Belows are useful utilities that help working with genai.Content
-// included in types.Event.
-// TODO: Use generics.
-// HasFunctionCalls reports whether content c contains any FunctionCall.
-// It provides a zero-allocation alternative to checking len(FunctionCalls(c)) > 0.
-func HasFunctionCalls(c *genai.Content) bool {
-	if c == nil {
-		return false
+// PartContainer represents types that contain genai.Part items.
+type PartContainer interface {
+	*genai.Content | []*genai.Part | *session.Event
+}
+
+// extractParts extracts the slice of parts from a PartContainer with zero allocations.
+func extractParts[T PartContainer](c T) []*genai.Part {
+	switch v := any(c).(type) {
+	case *genai.Content:
+		if v == nil {
+			return nil
+		}
+		return v.Parts
+	case []*genai.Part:
+		return v
+	case *session.Event:
+		if v == nil || v.Content == nil {
+			return nil
+		}
+		return v.Content.Parts
+	default:
+		return nil
 	}
-	for _, p := range c.Parts {
+}
+
+// HasFunctionCalls reports whether container c contains any FunctionCall.
+// It provides a zero-allocation alternative to checking len(FunctionCalls(c)) > 0.
+func HasFunctionCalls[T PartContainer](c T) bool {
+	for _, p := range extractParts(c) {
 		if p != nil && p.FunctionCall != nil {
 			return true
 		}
@@ -100,13 +119,10 @@ func HasFunctionCalls(c *genai.Content) bool {
 	return false
 }
 
-// HasFunctionResponses reports whether content c contains any FunctionResponse.
+// HasFunctionResponses reports whether container c contains any FunctionResponse.
 // It provides a zero-allocation alternative to checking len(FunctionResponses(c)) > 0.
-func HasFunctionResponses(c *genai.Content) bool {
-	if c == nil {
-		return false
-	}
-	for _, p := range c.Parts {
+func HasFunctionResponses[T PartContainer](c T) bool {
+	for _, p := range extractParts(c) {
 		if p != nil && p.FunctionResponse != nil {
 			return true
 		}
