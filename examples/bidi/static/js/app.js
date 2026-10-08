@@ -421,13 +421,30 @@ clearConsoleBtn.addEventListener('click', clearConsole);
 updateClearConsoleButtonState();
 
 // Update connection status UI
-function updateConnectionStatus(connected) {
-  if (connected) {
-    statusIndicator.classList.remove("disconnected");
+function updateConnectionStatus(state) {
+  const container = statusIndicator ? statusIndicator.closest(".connection-status") : null;
+  if (typeof state === "boolean") {
+    state = state ? "connected" : "disconnected";
+  }
+  if (!statusIndicator || !statusText) return;
+
+  statusIndicator.classList.remove("connecting", "disconnected");
+
+  if (state === "connected") {
     statusText.textContent = "Connected";
+    if (container) container.setAttribute("title", "Connected to ADK streaming server");
+  } else if (state === "connecting") {
+    statusIndicator.classList.add("connecting");
+    statusText.textContent = "Connecting...";
+    if (container) container.setAttribute("title", "Connecting to ADK streaming server...");
+  } else if (state === "reconnecting") {
+    statusIndicator.classList.add("connecting");
+    statusText.textContent = "Reconnecting...";
+    if (container) container.setAttribute("title", "Reconnecting to ADK streaming server...");
   } else {
     statusIndicator.classList.add("disconnected");
     statusText.textContent = "Disconnected";
+    if (container) container.setAttribute("title", "Disconnected from ADK streaming server");
   }
 }
 
@@ -731,7 +748,8 @@ function sanitizeEventForDisplay(event) {
 }
 
 // WebSocket handlers
-function connectWebsocket() {
+function connectWebsocket(isReconnect = false) {
+  updateConnectionStatus(isReconnect ? "reconnecting" : "connecting");
   // Connect websocket
   const ws_url = getWebSocketUrl();
   websocket = new WebSocket(ws_url);
@@ -739,7 +757,7 @@ function connectWebsocket() {
   // Handle connection open
   websocket.onopen = function () {
     console.log("WebSocket connection opened.");
-    updateConnectionStatus(true);
+    updateConnectionStatus("connected");
     addSystemMessage("Connected to ADK streaming server");
 
     // Log to console
@@ -1189,7 +1207,7 @@ function connectWebsocket() {
   // Handle connection close
   websocket.onclose = function (e) {
     console.log("WebSocket connection closed.", e);
-    updateConnectionStatus(false);
+    updateConnectionStatus("disconnected");
     setControlsDisabled(true);
     if (isVideoStreaming) {
       toggleVideoStreaming();
@@ -1217,13 +1235,13 @@ function connectWebsocket() {
         sessionId: sessionId
       }, '🔄', 'system');
 
-      connectWebsocket();
+      connectWebsocket(true);
     }, 5000);
   };
 
   websocket.onerror = function (e) {
     console.log("WebSocket error: ", e);
-    updateConnectionStatus(false);
+    updateConnectionStatus("disconnected");
     setControlsDisabled(true);
 
     // Log to console
