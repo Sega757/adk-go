@@ -148,7 +148,7 @@ func TestRunSSEHandler(t *testing.T) {
 				{err: fmt.Errorf("agent failed")},
 			},
 			wantStatus: http.StatusOK,
-			wantBody:   []string{"event: error\ndata: {\"error\":\"agent failed\"}\n\n"},
+			wantBody:   []string{"event: error\ndata: {\"error\":\"internal server error\"}\n\n"},
 		},
 		{
 			name: "interleaved success and error",
@@ -161,9 +161,9 @@ func TestRunSSEHandler(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantBody: []string{
 				"data: {", "Hello from agent",
-				"event: error\ndata: {\"error\":\"agent failed\"}\n\n",
+				"event: error\ndata: {\"error\":\"internal server error\"}\n\n",
 				"data: {", "More data",
-				"event: error\ndata: {\"error\":\"agent failed again\"}\n\n",
+				"event: error\ndata: {\"error\":\"internal server error\"}\n\n",
 			},
 		},
 	}

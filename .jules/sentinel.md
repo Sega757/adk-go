@@ -61,3 +61,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** In `DebugAPIController` (`server/adkrest/controllers/debug.go`), `EventSpanHandler` and `SessionSpansHandler` dereferenced `c.debugTelemetry` without checking if it was `nil`.
 **Learning:** When optional controller services (such as debug telemetry) are uninitialized or disabled (`nil`), HTTP endpoints attempting to access them will panic on incoming requests, causing a Denial of Service (DoS) vulnerability.
 **Prevention:** Always check if optional service dependencies are `nil` before calling methods on them in HTTP handlers, returning an appropriate HTTP response (such as 404 Not Found or an empty dataset) instead of allowing panic.
+
+## 2026-10-15 - [Prevent Information Leakage in SSE Error Events]
+**Vulnerability:** In `RunSSEHandler` (`server/adkrest/controllers/runtime.go`), `flashErrorEvent` sent `origError.Error()` directly in SSE stream JSON payloads (`{"error":"..."}`), leaking internal error details without server-side logging.
+**Learning:** SSE streaming error helpers must sanitize client error messages to generic strings like `"internal server error"` and log detailed error context server-side with `log.Printf`.
+**Prevention:** Always log internal errors server-side before serializing SSE event payloads, and send sanitized generic error messages in client-facing event JSON.

@@ -174,11 +174,12 @@ func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.R
 }
 
 func flashErrorEvent(rc *http.ResponseController, rw http.ResponseWriter, origError error) error {
+	log.Printf("Internal error in SSE agent execution: %v", origError)
 	_, err := fmt.Fprintf(rw, "event: error\n")
 	if err != nil {
 		return fmt.Errorf("write error event: %w", err)
 	}
-	safeErrorJSON, err := json.Marshal(map[string]string{"error": origError.Error()})
+	safeErrorJSON, err := json.Marshal(map[string]string{"error": "internal server error"})
 	if err != nil {
 		// Skip reporting error if it fails to marshal to the client (to avoid recursive error reporting).
 		return fmt.Errorf("marshal error event: %w", err)
