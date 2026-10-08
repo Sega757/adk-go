@@ -982,16 +982,20 @@ func (f *Flow) finalizeModelResponseEvent(ctx agent.InvocationContext, resp *res
 
 // findLongRunningFunctionCallIDs iterates over the FunctionCalls and
 // returns the callIDs of the long running functions.
+// Performance-optimized by Bolt: iterates directly over c.Parts to avoid intermediate
+// slice allocations from utils.FunctionCalls for standard (non-long-running) turns.
 func findLongRunningFunctionCallIDs(c *genai.Content, tools map[string]tool.Tool) []string {
-	fnCalls := utils.FunctionCalls(c)
-	if len(fnCalls) == 0 {
+	if c == nil {
 		return nil
 	}
 	var res []string
-	for _, fc := range fnCalls {
-		if tool, ok := tools[fc.Name]; ok && fc.ID != "" && tool.IsLongRunning() {
-			if !slices.Contains(res, fc.ID) {
-				res = append(res, fc.ID)
+	for _, p := range c.Parts {
+		if p != nil && p.FunctionCall != nil {
+			fc := p.FunctionCall
+			if tool, ok := tools[fc.Name]; ok && fc.ID != "" && tool.IsLongRunning() {
+				if !slices.Contains(res, fc.ID) {
+					res = append(res, fc.ID)
+				}
 			}
 		}
 	}
@@ -1051,7 +1055,22 @@ func (c *cancelledToolContext) Value(key any) any {
 //
 // TODO: accept filters to include/exclude function calls.
 // TODO: check feasibility of running tool.Run concurrently.
+func hasFunctionCalls(c *genai.Content) bool {
+	if c == nil {
+		return false
+	}
+	for _, p := range c.Parts {
+		if p != nil && p.FunctionCall != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func (f *Flow) handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[string]tool.Tool, resp *model.LLMResponse, toolConfirmations map[string]*toolconfirmation.ToolConfirmation, liveSess agent.LiveSession) (mergedEvent *session.Event, err error) {
+	if resp == nil || !hasFunctionCalls(resp.Content) {
+		return nil, nil
+	}
 	fnCalls := utils.FunctionCalls(resp.Content)
 	if len(fnCalls) == 0 {
 		return nil, nil
