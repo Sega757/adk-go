@@ -332,8 +332,12 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
     consoleEmptyState.remove();
   }
 
+  const isNearBottom = consoleContent.scrollHeight - consoleContent.clientHeight - consoleContent.scrollTop <= 60;
+
   consoleContent.appendChild(entry);
-  consoleContent.scrollTop = consoleContent.scrollHeight;
+  if (isNearBottom) {
+    consoleContent.scrollTop = consoleContent.scrollHeight;
+  }
   updateClearConsoleButtonState();
 }
 
