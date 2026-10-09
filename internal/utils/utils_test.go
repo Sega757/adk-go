@@ -151,6 +151,109 @@ func TestIsZeroPart(t *testing.T) {
 	}
 }
 
+
+func TestFunctionCalls(t *testing.T) {
+	fc1 := &genai.FunctionCall{Name: "fn1", ID: "1"}
+	fc2 := &genai.FunctionCall{Name: "fn2", ID: "2"}
+	fc3 := &genai.FunctionCall{Name: "fn3", ID: "3"}
+
+	tests := []struct {
+		name         string
+		content      *genai.Content
+		want         []*genai.FunctionCall
+		wantCap      int
+		checkWantCap bool
+	}{
+		{
+			name:    "nil content",
+			content: nil,
+			want:    nil,
+		},
+		{
+			name:    "nil parts in content",
+			content: &genai.Content{Parts: nil},
+			want:    nil,
+		},
+		{
+			name:    "empty parts in content",
+			content: &genai.Content{Parts: []*genai.Part{}},
+			want:    nil,
+		},
+		{
+			name: "parts without function call",
+			content: &genai.Content{
+				Parts: []*genai.Part{
+					nil,
+					{Text: "hello"},
+					{FunctionResponse: &genai.FunctionResponse{Name: "res1"}},
+				},
+			},
+			want: nil,
+		},
+		{
+			name: "mixed parts preserves order and extracts calls",
+			content: &genai.Content{
+				Parts: []*genai.Part{
+					{Text: "thought process..."},
+					{FunctionCall: fc1},
+					nil,
+					{FunctionResponse: &genai.FunctionResponse{Name: "fn_res"}},
+					{FunctionCall: fc2},
+					{Text: "ending text"},
+				},
+			},
+			want:         []*genai.FunctionCall{fc1, fc2},
+			wantCap:      6,
+			checkWantCap: true,
+		},
+		{
+			name: "exclusively function call parts",
+			content: &genai.Content{
+				Parts: []*genai.Part{
+					{FunctionCall: fc1},
+					{FunctionCall: fc2},
+					{FunctionCall: fc3},
+				},
+			},
+			want:         []*genai.FunctionCall{fc1, fc2, fc3},
+			wantCap:      3,
+			checkWantCap: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := utils.FunctionCalls(tt.content)
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("FunctionCalls() returned slice length %d, want %d", len(got), len(tt.want))
+			}
+
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("FunctionCalls() = %v, want nil", got)
+				}
+				return
+			}
+
+			// Verify pointer identity and order
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("FunctionCalls()[%d] pointer mismatch: got %p (%+v), want exact pointer %p (%+v)",
+						i, got[i], got[i], tt.want[i], tt.want[i])
+				}
+			}
+
+			// Verify slice capacity pre-allocation
+			if tt.checkWantCap {
+				if cap(got) != tt.wantCap {
+					t.Errorf("cap(FunctionCalls()) = %d, want %d (equal to len(c.Parts))", cap(got), tt.wantCap)
+				}
+			}
+		})
+	}
+}
+
 func TestHelperFunctions(t *testing.T) {
 	content := &genai.Content{
 		Parts: []*genai.Part{
