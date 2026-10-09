@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"iter"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,7 +34,6 @@ import (
 	"google.golang.org/adk/v2/internal/toolinternal"
 	"google.golang.org/adk/v2/internal/typeutil"
 	"google.golang.org/adk/v2/model"
-	"google.golang.org/adk/v2/model/gemini"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/functiontool"
@@ -70,19 +68,7 @@ func createToolContext(t *testing.T) agent.Context {
 	return agent.NewToolContext(invCtx, "", &session.EventActions{}, nil)
 }
 
-//go:generate go test -v -httprecord=.*
-
 func TestFunctionTool_Simple(t *testing.T) {
-	ctx := t.Context()
-	// TODO: this model creation code was copied from model/genai_test.go. Refactor so both tests can share.
-	modelName := "gemini-2.5-flash"
-	replayTrace := filepath.Join("testdata", t.Name()+".httprr")
-	cfg := testutil.NewGeminiTestClientConfig(t, replayTrace)
-	m, err := gemini.NewModel(ctx, modelName, cfg)
-	if err != nil {
-		t.Fatalf("model.NewGeminiModel(%q) failed: %v", modelName, err)
-	}
-
 	type Args struct {
 		City string `json:"city"`
 	}
@@ -122,74 +108,87 @@ func TestFunctionTool_Simple(t *testing.T) {
 
 	for _, tc := range []struct {
 		name    string
-		prompt  string
+		city    string
 		want    Result
 		isError bool
 	}{
 		{
 			name:    "london",
-			prompt:  "Report the current weather of the capital city of U.K.",
+			city:    "london",
 			want:    resultSet["london"],
 			isError: false,
 		},
 		{
 			name:    "paris",
-			prompt:  "How is the weather of Paris now?",
+			city:    "paris",
 			want:    resultSet["paris"],
 			isError: false,
 		},
 		{
 			name:    "new york",
-			prompt:  "Tell me about the current weather in New York",
+			city:    "New York",
 			want:    Result{},
 			isError: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// TODO: replace with testing using LLMAgent, instead of directly calling the model.
-			var req model.LLMRequest
-			requestProcessor, ok := weatherReportTool.(toolinternal.RequestProcessor)
-			if !ok {
-				t.Fatal("weatherReportTool does not implement itype.RequestProcessor")
+			mockModel := &testutil.MockModel{
+				Responses: []*genai.Content{
+					genai.NewContentFromFunctionCall("get_weather_report", map[string]any{"city": tc.city}, genai.RoleModel),
+				},
 			}
-			if err := requestProcessor.ProcessRequest(nil, &req); err != nil {
-				t.Fatalf("weatherReportTool.ProcessRequest failed: %v", err)
-			}
-			if req.Config == nil || len(req.Config.Tools) != 1 {
-				t.Fatalf("weatherReportTool.ProcessRequest did not configure tool info in LLMRequest: %v", req)
-			}
-			req.Contents = genai.Text(tc.prompt)
-			resp, err := readFirstResponse[*genai.FunctionCall](
-				m.GenerateContent(ctx, &req, false),
-			)
+
+			a, err := llmagent.New(llmagent.Config{
+				Name:  "weather_agent",
+				Model: mockModel,
+				Tools: []tool.Tool{weatherReportTool},
+			})
 			if err != nil {
-				t.Fatalf("GenerateContent(%v) failed: %v", req, err)
+				t.Fatalf("llmagent.New failed: %v", err)
 			}
-			if resp.Name != "get_weather_report" || len(resp.Args) == 0 {
-				t.Fatalf("unexpected function call %v", resp)
+
+			runner := testutil.NewTestAgentRunner(t, a)
+
+			var gotFnCall *genai.FunctionCall
+			var gotFnResp *genai.FunctionResponse
+
+			for ev, err := range runner.Run(t, tc.name, "Report weather") {
+				if err != nil {
+					break
+				}
+				for _, p := range ev.Content.Parts {
+					if p.FunctionCall != nil {
+						gotFnCall = p.FunctionCall
+					}
+					if p.FunctionResponse != nil {
+						gotFnResp = p.FunctionResponse
+					}
+				}
 			}
-			// Call the function.
-			funcTool, ok := weatherReportTool.(toolinternal.FunctionTool)
-			if !ok {
-				t.Fatal("weatherReportTool does not implement itype.RequestProcessor")
+
+			if gotFnCall == nil {
+				t.Fatalf("expected function call, got none")
 			}
-			callResult, err := funcTool.Run(createToolContext(t), resp.Args)
+			if gotFnCall.Name != "get_weather_report" {
+				t.Fatalf("got function call name %q, want get_weather_report", gotFnCall.Name)
+			}
+			if gotFnResp == nil {
+				t.Fatalf("expected function response, got none")
+			}
 			if tc.isError {
-				if err == nil {
-					t.Fatalf("weatherReportTool.Run(%v) expected to fail but got success with result %v", resp.Args, callResult)
+				errStr, _ := gotFnResp.Response["error"].(string)
+				if errStr == "" {
+					t.Fatalf("expected error in function response, got %v", gotFnResp.Response)
 				}
 				return
 			}
+			got, err := typeutil.ConvertToWithJSONSchema[map[string]any, Result](gotFnResp.Response, nil)
 			if err != nil {
-				t.Fatalf("weatherReportTool.Run failed: %v", err)
-			}
-			got, err := typeutil.ConvertToWithJSONSchema[map[string]any, Result](callResult, nil)
-			if err != nil {
-				t.Fatalf("weatherReportTool.Run returned unexpected result of type %[1]T: %[1]v", callResult)
+				t.Fatalf("typeutil.ConvertToWithJSONSchema failed: %v", err)
 			}
 			want := tc.want
 			if diff := cmp.Diff(want, got); diff != "" {
-				t.Errorf("weatherReportTool.Run returned unexpected result (-want +got):\n%s", diff)
+				t.Errorf("function tool returned unexpected result (-want +got):\n%s", diff)
 			}
 		})
 	}
