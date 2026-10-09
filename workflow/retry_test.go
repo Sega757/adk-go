@@ -16,6 +16,7 @@ package workflow
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -109,6 +110,33 @@ func TestCalculateDelayWithExtremeJitter(t *testing.T) {
 			t.Fatalf("CalculateDelay returned negative delay %v with extreme jitter", got)
 		}
 	}
+}
+
+func TestCalculateDelayConcurrent(t *testing.T) {
+	cfg := &RetryConfig{
+		InitialDelay:  time.Second,
+		BackoffFactor: 2.0,
+		MaxDelay:      10 * time.Second,
+		Jitter:        0.2,
+	}
+
+	var wg sync.WaitGroup
+	const goroutines = 20
+	const iterationsPerGoroutine = 50
+
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterationsPerGoroutine; i++ {
+				delay := CalculateDelay(cfg, 2)
+				if delay < 0 {
+					t.Errorf("CalculateDelay returned negative delay: %v", delay)
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestSecureFloat64(t *testing.T) {
