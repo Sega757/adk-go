@@ -45,6 +45,8 @@ import (
 	"google.golang.org/adk/v2/tool/toolconfirmation"
 )
 
+const _ADK_AGENT_NAME_LABEL_KEY = "adk_agent_name"
+
 // ErrModelNotConfigured is returned when the model is not configured.
 var ErrModelNotConfigured = errors.New("model not configured; ensure Model is set in llmagent.Config")
 
@@ -784,8 +786,15 @@ func (f *Flow) callLLM(ctx agent.InvocationContext, req *model.LLMRequest, state
 			}
 		}
 
-		// TODO: Set _ADK_AGENT_NAME_LABEL_KEY in req.GenerateConfig.Labels
-		// to help with slicing the billing reports on a per-agent basis.
+		if ctx != nil && ctx.Agent() != nil && ctx.Agent().Name() != "" && googlellm.GetGoogleLLMVariant(f.Model) != genai.BackendGeminiAPI {
+			if req.Config == nil {
+				req.Config = &genai.GenerateContentConfig{}
+			}
+			if req.Config.Labels == nil {
+				req.Config.Labels = make(map[string]string)
+			}
+			req.Config.Labels[_ADK_AGENT_NAME_LABEL_KEY] = ctx.Agent().Name()
+		}
 
 		// TODO: RunLive mode when invocation_context.run_config.support_cfc is true.
 		useStream := false
