@@ -278,8 +278,12 @@ func buildResumeResponses(msg *genai.Content, state *workflow.RunState, sess ses
 	}
 
 	var out map[string]any
-	for _, fr := range utils.FunctionResponses(msg) {
-		if fr == nil || fr.ID == "" {
+	for _, part := range msg.Parts {
+		if part == nil || part.FunctionResponse == nil {
+			continue
+		}
+		fr := part.FunctionResponse
+		if fr.ID == "" {
 			continue
 		}
 		if _, ok := pending[fr.ID]; !ok {
@@ -306,12 +310,18 @@ func openLongRunningCallIDs(sess session.Session) map[string]struct{} {
 	events := sess.Events()
 	for i := 0; i < events.Len(); i++ {
 		ev := events.At(i)
+		if ev == nil {
+			continue
+		}
 		for _, id := range ev.LongRunningToolIDs {
 			open[id] = struct{}{}
 		}
-		for _, fr := range utils.FunctionResponses(ev.Content) {
-			if fr != nil && fr.ID != "" {
-				answered[fr.ID] = struct{}{}
+		c := utils.Content(ev)
+		if c != nil {
+			for _, part := range c.Parts {
+				if part != nil && part.FunctionResponse != nil && part.FunctionResponse.ID != "" {
+					answered[part.FunctionResponse.ID] = struct{}{}
+				}
 			}
 		}
 	}
@@ -371,8 +381,12 @@ func resolveInvocationID(sess session.Session, msg *genai.Content) string {
 	if sess == nil || msg == nil || !utils.HasFunctionResponses(msg) {
 		return ""
 	}
-	for _, fr := range utils.FunctionResponses(msg) {
-		if fr == nil || fr.ID == "" {
+	for _, part := range msg.Parts {
+		if part == nil || part.FunctionResponse == nil {
+			continue
+		}
+		fr := part.FunctionResponse
+		if fr.ID == "" {
 			continue
 		}
 		if ev := findEventByFunctionCallID(sess, fr.ID); ev != nil {
@@ -392,11 +406,12 @@ func findEventByFunctionCallID(sess session.Session, id string) *session.Event {
 	events := sess.Events()
 	for i := events.Len() - 1; i >= 0; i-- {
 		ev := events.At(i)
-		if ev == nil {
+		c := utils.Content(ev)
+		if c == nil {
 			continue
 		}
-		for _, fc := range utils.FunctionCalls(utils.Content(ev)) {
-			if fc != nil && fc.ID == id {
+		for _, part := range c.Parts {
+			if part != nil && part.FunctionCall != nil && part.FunctionCall.ID == id {
 				return ev
 			}
 		}

@@ -194,7 +194,15 @@ func getSubagentTasksToCancel(ctx context.Context, status a2a.TaskStatus, sessio
 	events := session.Events()
 	for i := events.Len() - 1; i >= 0; i-- {
 		event := events.At(i)
-		for _, call := range utils.FunctionCalls(event.Content) {
+		c := utils.Content(event)
+		if c == nil {
+			continue
+		}
+		for _, part := range c.Parts {
+			if part == nil || part.FunctionCall == nil {
+				continue
+			}
+			call := part.FunctionCall
 			if !slices.Contains(pendingCallIDs, call.ID) {
 				continue
 			}
