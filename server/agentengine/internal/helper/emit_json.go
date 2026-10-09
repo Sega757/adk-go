@@ -17,6 +17,7 @@ package helper
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -58,10 +59,12 @@ func EmitJSON(rw http.ResponseWriter, o any) error {
 	return nil
 }
 
-// EmitJSONError emits a line with json describing the error
+// EmitJSONError emits a line with json describing the error.
+// It logs the detailed error server-side and sends a sanitized error message to the client.
 func EmitJSONError(rw http.ResponseWriter, origError error) error {
+	log.Printf("Internal error in streaming response: %v", origError)
 	jsonErr := map[string]any{
-		"error": origError.Error(),
+		"error": "internal server error",
 	}
 	err := EmitJSON(rw, jsonErr)
 	if err != nil {
