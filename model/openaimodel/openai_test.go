@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -55,16 +56,16 @@ func TestModel_Generate(t *testing.T) {
 	req := &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText("World?", genai.RoleUser)},
 	}
-	var text string
+	var sb strings.Builder
 	for resp, err := range llm.GenerateContent(ctx, req, false) {
 		if err != nil {
 			t.Fatalf("GenerateContent() err = %v", err)
 		}
 		if resp.Content != nil && len(resp.Content.Parts) > 0 {
-			text += resp.Content.Parts[0].Text
+			sb.WriteString(resp.Content.Parts[0].Text)
 		}
 	}
-	if diff := cmp.Diff("hello", text); diff != "" {
+	if diff := cmp.Diff("hello", sb.String()); diff != "" {
 		t.Fatalf("response text mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -153,4 +154,41 @@ func TestModel_ValidateModelNameInput(t *testing.T) {
 	if !errors.Is(err, ErrModelNameRequired) {
 		t.Fatalf("NewModel() err = %v, want %v", err, ErrModelNameRequired)
 	}
+}
+
+func BenchmarkGenerateContent_PartsAccumulation(b *testing.B) {
+	chunks := make([]*model.LLMResponse, 100)
+	for i := 0; i < 100; i++ {
+		chunks[i] = &model.LLMResponse{
+			Content: &genai.Content{
+				Parts: []*genai.Part{{Text: "some chunk text "}},
+			},
+		}
+	}
+
+	b.Run("StringConcat", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			var text string
+			for _, resp := range chunks {
+				if resp.Content != nil && len(resp.Content.Parts) > 0 {
+					text += resp.Content.Parts[0].Text
+				}
+			}
+			_ = text
+		}
+	})
+
+	b.Run("StringBuilder", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			var sb strings.Builder
+			for _, resp := range chunks {
+				if resp.Content != nil && len(resp.Content.Parts) > 0 {
+					sb.WriteString(resp.Content.Parts[0].Text)
+				}
+			}
+			_ = sb.String()
+		}
+	})
 }
