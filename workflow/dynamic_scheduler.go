@@ -307,15 +307,17 @@ func (s *dynamicSubScheduler) runNode(child Node, input any, opts runNodeOptions
 		// lookup per FC / FR and the maps stay empty when there
 		// are no long-running tools at play.
 		if opts.raiseOnWait {
-			if len(ev.LongRunningToolIDs) > 0 {
+			c := utils.Content(ev)
+			if len(ev.LongRunningToolIDs) > 0 && c != nil {
 				lrtSet := make(map[string]struct{}, len(ev.LongRunningToolIDs))
 				for _, id := range ev.LongRunningToolIDs {
 					lrtSet[id] = struct{}{}
 				}
-				for _, fc := range utils.FunctionCalls(ev.Content) {
-					if fc == nil || fc.ID == "" {
+				for _, part := range c.Parts {
+					if part == nil || part.FunctionCall == nil || part.FunctionCall.ID == "" {
 						continue
 					}
+					fc := part.FunctionCall
 					if _, isLR := lrtSet[fc.ID]; !isLR {
 						continue
 					}
@@ -325,12 +327,12 @@ func (s *dynamicSubScheduler) runNode(child Node, input any, opts runNodeOptions
 					pendingLongRunningIDs[fc.ID] = struct{}{}
 				}
 			}
-			if len(pendingLongRunningIDs) > 0 {
-				for _, fr := range utils.FunctionResponses(ev.Content) {
-					if fr == nil {
+			if len(pendingLongRunningIDs) > 0 && c != nil {
+				for _, part := range c.Parts {
+					if part == nil || part.FunctionResponse == nil {
 						continue
 					}
-					delete(pendingLongRunningIDs, fr.ID)
+					delete(pendingLongRunningIDs, part.FunctionResponse.ID)
 				}
 			}
 		}

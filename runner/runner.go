@@ -668,9 +668,14 @@ func findActiveTaskIsolationScope(sess session.Session) string {
 			continue
 		}
 		scope := ev.IsolationScope
-		if utils.HasFunctionResponses(ev.Content) {
-			for _, fr := range utils.FunctionResponses(ev.Content) {
-				if fr == nil || fr.Name != workflowinternal.FinishTaskToolName {
+		c := utils.Content(ev)
+		if c != nil {
+			for _, part := range c.Parts {
+				if part == nil || part.FunctionResponse == nil {
+					continue
+				}
+				fr := part.FunctionResponse
+				if fr.Name != workflowinternal.FinishTaskToolName {
 					continue
 				}
 				if result, ok := fr.Response["result"]; ok {
@@ -727,23 +732,32 @@ func (r *Runner) findAgentToRun(session session.Session, msg *genai.Content) (ag
 // handleUserFunctionCallResponse finds the function call event that matches the function response id
 // delivered by the user in the latest event.
 func handleUserFunctionCallResponse(events session.Events, msg *genai.Content) *session.Event {
-	if events.Len() == 0 || !utils.HasFunctionResponses(msg) {
+	if events.Len() == 0 || msg == nil {
 		return nil
 	}
 
-	functionResponses := utils.FunctionResponses(msg)
-	if len(functionResponses) == 0 {
+	callID := ""
+	for _, part := range msg.Parts {
+		if part != nil && part.FunctionResponse != nil && part.FunctionResponse.ID != "" {
+			callID = part.FunctionResponse.ID
+			break
+		}
+	}
+	if callID == "" {
 		return nil
 	}
 
 	// This assumes that even if user provides multiple function responses, all the function calls
 	// were made by the same agent. Otherwise it would be impossible to rearrange session events
 	// such that every function response has a corresponding call filtering by author.
-	callID := functionResponses[0].ID
 	for i := events.Len() - 1; i >= 0; i-- {
 		event := events.At(i)
-		for _, part := range utils.FunctionCalls(event.Content) {
-			if part.ID == callID {
+		c := utils.Content(event)
+		if c == nil {
+			continue
+		}
+		for _, part := range c.Parts {
+			if part != nil && part.FunctionCall != nil && part.FunctionCall.ID == callID {
 				return event
 			}
 		}
