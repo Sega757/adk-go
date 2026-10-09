@@ -16,6 +16,7 @@ package configurable
 
 import (
 	"context"
+	"strings"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -239,6 +240,104 @@ func TestRegisterCallback(t *testing.T) {
 			t.Fatalf("expected original callback to remain registered")
 		}
 	})
+}
+
+func TestResolveToolReference(t *testing.T) {
+	resetRegistries(t)
+
+	// Register an invalid type directly into toolRegistry for testing line 410 error path
+	registryMu.Lock()
+	toolRegistry["invalid_factory_type"] = "not_a_factory"
+	registryMu.Unlock()
+
+	// Register dummy tool and toolset factories
+	_ = RegisterToolFactory("valid_tool", func(ctx context.Context, args map[string]any) (tool.Tool, error) {
+		return nil, nil
+	})
+	_ = RegisterToolFactory("error_tool", func(ctx context.Context, args map[string]any) (tool.Tool, error) {
+		return nil, fmt.Errorf("tool creation failed")
+	})
+	_ = RegisterToolsetFactory("valid_toolset", func(ctx context.Context, args map[string]any) (tool.Toolset, error) {
+		return nil, nil
+	})
+	_ = RegisterToolsetFactory("error_toolset", func(ctx context.Context, args map[string]any) (tool.Toolset, error) {
+		return nil, fmt.Errorf("toolset creation failed")
+	})
+
+	tests := []struct {
+		name          string
+		toolName      string
+		args          map[string]any
+		wantErr       bool
+		errSubstring  string
+		wantTool      bool
+		wantToolset   bool
+	}{
+		{
+			name:         "EmptyToolName",
+			toolName:     "",
+			wantErr:      true,
+			errSubstring: "tool name cannot be empty",
+		},
+		{
+			name:         "ToolNotFound",
+			toolName:     "unregistered_tool_name",
+			wantErr:      true,
+			errSubstring: "not found",
+		},
+		{
+			name:         "InvalidFactoryTypeInRegistry",
+			toolName:     "invalid_factory_type",
+			wantErr:      true,
+			errSubstring: "is not a tool or toolset factory",
+		},
+		{
+			name:         "ToolFactoryError",
+			toolName:     "error_tool",
+			wantErr:      true,
+			errSubstring: "tool creation failed",
+		},
+		{
+			name:         "ToolsetFactoryError",
+			toolName:     "error_toolset",
+			wantErr:      true,
+			errSubstring: "toolset creation failed",
+		},
+		{
+			name:        "ValidToolFactoryResolution",
+			toolName:    "valid_tool",
+			wantErr:     false,
+			wantTool:    false, // factory returns nil, nil
+			wantToolset: false,
+		},
+		{
+			name:        "ValidToolsetFactoryResolution",
+			toolName:    "valid_toolset",
+			wantErr:     false,
+			wantTool:    false,
+			wantToolset: false, // factory returns nil, nil
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tl, toolset, err := ResolveToolReference(context.Background(), tc.toolName, tc.args)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tc.errSubstring)
+				}
+				if !strings.Contains(err.Error(), tc.errSubstring) {
+					t.Errorf("got error %q, want substring %q", err.Error(), tc.errSubstring)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error resolving tool reference: %v", err)
+				}
+			}
+			_ = tl
+			_ = toolset
+		})
+	}
 }
 
 func TestRegisterToolFactory(t *testing.T) {
