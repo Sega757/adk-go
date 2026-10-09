@@ -1094,3 +1094,87 @@ func TestCallLLM_StreamErrorHandling(t *testing.T) {
 		}
 	})
 }
+
+
+func TestCallLLM_AgentNameLabel(t *testing.T) {
+	t.Run("PopulatesLabelWhenConfigNil", func(t *testing.T) {
+		mockM := &mockStreamingModel{
+			responses: []*model.LLMResponse{{Content: genai.NewContentFromText("hi", "model")}},
+			errors:    []error{nil},
+		}
+		f := &Flow{Model: mockM}
+		testAgent, _ := agent.New(agent.Config{Name: "billing-agent"})
+		ctx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{Agent: testAgent})
+		req := &model.LLMRequest{}
+
+		for range f.callLLM(ctx, req, make(map[string]any), make(map[string]int64)) {
+		}
+
+		if req.Config == nil || req.Config.Labels == nil {
+			t.Fatalf("expected req.Config and Labels to be allocated")
+		}
+		if got, want := req.Config.Labels[_ADK_AGENT_NAME_LABEL_KEY], "billing-agent"; got != want {
+			t.Errorf("Labels[%q] = %q, want %q", _ADK_AGENT_NAME_LABEL_KEY, got, want)
+		}
+	})
+
+	t.Run("PreservesExistingLabels", func(t *testing.T) {
+		mockM := &mockStreamingModel{
+			responses: []*model.LLMResponse{{Content: genai.NewContentFromText("hi", "model")}},
+			errors:    []error{nil},
+		}
+		f := &Flow{Model: mockM}
+		testAgent, _ := agent.New(agent.Config{Name: "support-agent"})
+		ctx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{Agent: testAgent})
+		req := &model.LLMRequest{
+			Config: &genai.GenerateContentConfig{
+				Labels: map[string]string{"env": "prod"},
+			},
+		}
+
+		for range f.callLLM(ctx, req, make(map[string]any), make(map[string]int64)) {
+		}
+
+		if got, want := req.Config.Labels["env"], "prod"; got != want {
+			t.Errorf("Labels[\"env\"] = %q, want %q", got, want)
+		}
+		if got, want := req.Config.Labels[_ADK_AGENT_NAME_LABEL_KEY], "support-agent"; got != want {
+			t.Errorf("Labels[%q] = %q, want %q", _ADK_AGENT_NAME_LABEL_KEY, got, want)
+		}
+	})
+
+	t.Run("NoOpWhenAgentNilOrEmptyName", func(t *testing.T) {
+		mockM := &mockStreamingModel{
+			responses: []*model.LLMResponse{{Content: genai.NewContentFromText("hi", "model")}},
+			errors:    []error{nil},
+		}
+		f := &Flow{Model: mockM}
+
+		// Agent with empty name
+		emptyAgent, _ := agent.New(agent.Config{Name: ""})
+		ctxEmpty := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{Agent: emptyAgent})
+		reqEmpty := &model.LLMRequest{}
+
+		for range f.callLLM(ctxEmpty, reqEmpty, make(map[string]any), make(map[string]int64)) {
+		}
+
+		if reqEmpty.Config != nil && reqEmpty.Config.Labels != nil {
+			if _, ok := reqEmpty.Config.Labels[_ADK_AGENT_NAME_LABEL_KEY]; ok {
+				t.Errorf("unexpected label set for empty agent name")
+			}
+		}
+
+		// Nil agent
+		ctxNil := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{Agent: nil})
+		reqNil := &model.LLMRequest{}
+
+		for range f.callLLM(ctxNil, reqNil, make(map[string]any), make(map[string]int64)) {
+		}
+
+		if reqNil.Config != nil && reqNil.Config.Labels != nil {
+			if _, ok := reqNil.Config.Labels[_ADK_AGENT_NAME_LABEL_KEY]; ok {
+				t.Errorf("unexpected label set for nil agent")
+			}
+		}
+	})
+}

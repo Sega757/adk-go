@@ -707,6 +707,7 @@ func TestInstructionProvider(t *testing.T) {
 						genai.NewContentFromText("user input", genai.RoleUser),
 					},
 					Config: &genai.GenerateContentConfig{
+						Labels: map[string]string{"adk_agent_name": "test_agent"},
 						SystemInstruction: &genai.Content{
 							Parts: []*genai.Part{
 								genai.NewPartFromText("instruction custom_value test\n\nYou are an agent. Your internal name is \"test_agent\"."),
@@ -739,6 +740,7 @@ func TestInstructionProvider(t *testing.T) {
 						genai.NewContentFromText("user input", genai.RoleUser),
 					},
 					Config: &genai.GenerateContentConfig{
+						Labels: map[string]string{"adk_agent_name": "test_agent"},
 						SystemInstruction: &genai.Content{
 							Parts: []*genai.Part{
 								genai.NewPartFromText("instruction provider template {var} not evaluated\n\nYou are an agent. Your internal name is \"test_agent\"."),
@@ -771,6 +773,7 @@ func TestInstructionProvider(t *testing.T) {
 						genai.NewContentFromText("user input", genai.RoleUser),
 					},
 					Config: &genai.GenerateContentConfig{
+						Labels: map[string]string{"adk_agent_name": "test_agent"},
 						SystemInstruction: &genai.Content{
 							Parts: []*genai.Part{
 								genai.NewPartFromText("global instruction provider template {var} not evaluated\n\nYou are an agent. Your internal name is \"test_agent\"."),
@@ -805,6 +808,7 @@ func TestInstructionProvider(t *testing.T) {
 						genai.NewContentFromText("user input", genai.RoleUser),
 					},
 					Config: &genai.GenerateContentConfig{
+						Labels: map[string]string{"adk_agent_name": "test_agent"},
 						SystemInstruction: &genai.Content{
 							Parts: []*genai.Part{
 								genai.NewPartFromText("global instruction provider {var}\n\ninstruction provider {var}\n\nYou are an agent. Your internal name is \"test_agent\"."),
