@@ -449,7 +449,11 @@ button {
   white-space: nowrap;
 }
 
-button:focus-visible {
+button:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.close-btn:focus-visible,
+input[type="checkbox"]:focus-visible {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
 }
