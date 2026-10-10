@@ -318,6 +318,9 @@ func extractTaskDelegationFCs(ev *session.Event, toolsDict map[string]tool.Tool)
 // hide the coordinator's own FC from a prior turn. Author + tool-name
 // filtering is sufficient.
 func hasTaskDelegationTools(toolsDict map[string]tool.Tool) bool {
+	if len(toolsDict) == 0 {
+		return false
+	}
 	for _, t := range toolsDict {
 		if _, ok := t.(*workflowinternal.TaskAgentTool); ok {
 			return true
@@ -415,6 +418,23 @@ func safeCanonicalToolsDict(a agent.Agent) map[string]tool.Tool {
 	if len(tools) == 0 {
 		return nil
 	}
+
+	// Short-circuit: only construct the tools map if at least one tool
+	// is a TaskAgentTool. Standard chat agents carry non-delegation tools;
+	// skipping map instantiation for them avoids heap allocations on every turn.
+	hasTaskTool := false
+	for _, t := range tools {
+		if t != nil {
+			if _, ok := t.(*workflowinternal.TaskAgentTool); ok {
+				hasTaskTool = true
+				break
+			}
+		}
+	}
+	if !hasTaskTool {
+		return nil
+	}
+
 	out := make(map[string]tool.Tool, len(tools))
 	for _, t := range tools {
 		if t == nil {
