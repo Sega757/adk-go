@@ -17,6 +17,8 @@ package controllers_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -105,6 +107,50 @@ func TestArtifactsAPIController_InternalServerErrorSanitized(t *testing.T) {
 			}
 			if strings.Contains(body, "secret db connection string failed") {
 				t.Errorf("response body leaked sensitive internal error details: %s", body)
+			}
+		})
+	}
+}
+
+func TestArtifactsAPIController_NotFound(t *testing.T) {
+	svc := &fakeArtifactService{err: fmt.Errorf("artifact not found: %w", fs.ErrNotExist)}
+	controller := controllers.NewArtifactsAPIController(svc)
+
+	tests := []struct {
+		name    string
+		handler func(w http.ResponseWriter, r *http.Request)
+		vars    map[string]string
+		path    string
+	}{
+		{
+			name:    "LoadArtifactHandler",
+			handler: controller.LoadArtifactHandler,
+			vars:    map[string]string{"app_name": "app", "user_id": "user", "session_id": "session", "artifact_name": "missing.txt"},
+			path:    "/apps/app/users/user/sessions/session/artifacts/missing.txt",
+		},
+		{
+			name:    "LoadArtifactVersionHandler",
+			handler: controller.LoadArtifactVersionHandler,
+			vars:    map[string]string{"app_name": "app", "user_id": "user", "session_id": "session", "artifact_name": "missing.txt", "version": "1"},
+			path:    "/apps/app/users/user/sessions/session/artifacts/missing.txt/versions/1",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req = mux.SetURLVars(req, tc.vars)
+			rec := httptest.NewRecorder()
+
+			tc.handler(rec, req)
+
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("got status code %d, want %d", rec.Code, http.StatusNotFound)
+			}
+
+			body := strings.TrimSpace(rec.Body.String())
+			if body != "not found" {
+				t.Errorf("got body %q, want %q", body, "not found")
 			}
 		})
 	}
