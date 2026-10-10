@@ -25,6 +25,7 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/tool"
+	"google.golang.org/adk/v2/tool/functiontool"
 )
 
 func BenchmarkFindUnresolvedTaskDelegations_NoDelegations(b *testing.B) {
@@ -72,6 +73,30 @@ func BenchmarkFindUnresolvedTaskDelegations_NoDelegations(b *testing.B) {
 
 	for b.Loop() {
 		_ = findUnresolvedTaskDelegations(sess, "chat_coordinator", toolsDict)
+	}
+}
+
+func BenchmarkSafeCanonicalToolsDict_NoTaskTools(b *testing.B) {
+	dummyTool, err := functiontool.New(functiontool.Config{
+		Name:        "example_tool",
+		Description: "Example description",
+	}, func(_ agent.Context, _ struct{}) (struct{}, error) {
+		return struct{}{}, nil
+	})
+	if err != nil {
+		b.Fatalf("functiontool.New: %v", err)
+	}
+	dummyAgent, err := New(Config{
+		Name:  "test_agent",
+		Tools: []tool.Tool{dummyTool},
+	})
+	if err != nil {
+		b.Fatalf("llmagent.New: %v", err)
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = safeCanonicalToolsDict(dummyAgent)
 	}
 }
 
