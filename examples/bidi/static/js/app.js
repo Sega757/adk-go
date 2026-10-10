@@ -529,6 +529,25 @@ const imageModal = document.getElementById("imageModal");
 const imageModalImg = document.getElementById("imageModalImg");
 const imageModalTitle = document.getElementById("imageModalTitle");
 const closeImageModalBtn = document.getElementById("closeImageModal");
+const downloadImageBtn = document.getElementById("downloadImageBtn");
+
+if (downloadImageBtn) {
+  downloadImageBtn.addEventListener("click", () => {
+    const originalText = downloadImageBtn.textContent;
+    const originalLabel = downloadImageBtn.getAttribute("aria-label");
+    const originalTitle = downloadImageBtn.getAttribute("title");
+
+    downloadImageBtn.textContent = "✓ Download Started";
+    downloadImageBtn.setAttribute("aria-label", "Image download started");
+    downloadImageBtn.setAttribute("title", "Image download started");
+
+    setTimeout(() => {
+      downloadImageBtn.textContent = originalText;
+      if (originalLabel) downloadImageBtn.setAttribute("aria-label", originalLabel);
+      if (originalTitle) downloadImageBtn.setAttribute("title", originalTitle);
+    }, 2000);
+  });
+}
 
 function openImageModal(src, altText = "Image preview") {
   if (!imageModal || !imageModalImg) return;
@@ -536,7 +555,6 @@ function openImageModal(src, altText = "Image preview") {
   imageModalImg.src = src;
   imageModalImg.alt = altText;
   if (imageModalTitle) imageModalTitle.textContent = altText;
-  const downloadImageBtn = document.getElementById("downloadImageBtn");
   if (downloadImageBtn) {
     downloadImageBtn.href = src;
     const cleanFilename = (altText || "chat-image").toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
