@@ -15,9 +15,8 @@
 package llminternal
 
 import (
-	"fmt"
 	"iter"
-	"strings"
+	"strconv"
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/internal/utils"
@@ -36,11 +35,17 @@ func identityRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest
 			return
 		}
 
-		parts := []string{fmt.Sprintf("You are an agent. Your internal name is %q.", ctx.Agent().Name())}
-		if description := ctx.Agent().Description(); description != "" {
-			parts = append(parts, fmt.Sprintf("The description about you is %q.", description))
+		// Performance-optimized by Bolt: uses direct string concatenation and strconv.Quote
+		// instead of slice allocations ([]string), fmt.Sprintf reflection, and strings.Join.
+		name := ctx.Agent().Name()
+		desc := ctx.Agent().Description()
+
+		var si string
+		if desc == "" {
+			si = "You are an agent. Your internal name is " + strconv.Quote(name) + "."
+		} else {
+			si = "You are an agent. Your internal name is " + strconv.Quote(name) + ". The description about you is " + strconv.Quote(desc) + "."
 		}
-		si := strings.Join(parts, " ")
 
 		utils.AppendInstructions(req, si)
 	}

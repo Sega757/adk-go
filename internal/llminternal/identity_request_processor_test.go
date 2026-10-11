@@ -198,3 +198,44 @@ func TestIdentityRequestProcessor(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkIdentityRequestProcessor_NameOnly(b *testing.B) {
+	ag := &mockLLMAgent{
+		Agent: utils.Must(agent.New(agent.Config{Name: "test_agent"})),
+		s:     &State{},
+	}
+	ctx := icontext.NewInvocationContext(b.Context(), icontext.InvocationContextParams{
+		Agent: ag,
+	})
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		req := &model.LLMRequest{}
+		for range identityRequestProcessor(ctx, req, &Flow{}) {
+		}
+	}
+}
+
+func BenchmarkIdentityRequestProcessor_NameAndDescription(b *testing.B) {
+	ag := &mockLLMAgent{
+		Agent: utils.Must(agent.New(agent.Config{
+			Name:        "helper_agent",
+			Description: "A helpful assistant that answers questions",
+		})),
+		s: &State{},
+	}
+	ctx := icontext.NewInvocationContext(b.Context(), icontext.InvocationContextParams{
+		Agent: ag,
+	})
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		req := &model.LLMRequest{}
+		for range identityRequestProcessor(ctx, req, &Flow{}) {
+		}
+	}
+}
