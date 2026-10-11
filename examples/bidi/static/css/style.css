@@ -1170,6 +1170,13 @@ button.active {
   border-color: #bdc1c6;
 }
 
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.close-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
 /* Image Modal Specific Styles */
 .image-modal-content {
   width: auto;

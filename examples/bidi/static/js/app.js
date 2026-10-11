@@ -529,6 +529,21 @@ const imageModal = document.getElementById("imageModal");
 const imageModalImg = document.getElementById("imageModalImg");
 const imageModalTitle = document.getElementById("imageModalTitle");
 const closeImageModalBtn = document.getElementById("closeImageModal");
+const downloadImageBtn = document.getElementById("downloadImageBtn");
+
+if (downloadImageBtn) {
+  downloadImageBtn.addEventListener("click", () => {
+    const originalText = downloadImageBtn.textContent;
+    downloadImageBtn.textContent = "✓ Download Started";
+    downloadImageBtn.setAttribute("aria-label", "Download started");
+    downloadImageBtn.setAttribute("title", "Image download started");
+    setTimeout(() => {
+      downloadImageBtn.textContent = originalText;
+      downloadImageBtn.setAttribute("aria-label", "Download full-size image");
+      downloadImageBtn.setAttribute("title", "Download image to your computer");
+    }, 2000);
+  });
+}
 
 function openImageModal(src, altText = "Image preview") {
   if (!imageModal || !imageModalImg) return;
