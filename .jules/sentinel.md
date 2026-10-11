@@ -66,3 +66,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** In `RunSSEHandler` (`server/adkrest/controllers/runtime.go`), `flashErrorEvent` sent `origError.Error()` directly in SSE stream JSON payloads (`{"error":"..."}`), leaking internal error details without server-side logging.
 **Learning:** SSE streaming error helpers must sanitize client error messages to generic strings like `"internal server error"` and log detailed error context server-side with `log.Printf`.
 **Prevention:** Always log internal errors server-side before serializing SSE event payloads, and send sanitized generic error messages in client-facing event JSON.
+
+## 2026-10-20 - [Avoid Security Theater with Non-Security Randomness]
+**Vulnerability:** Replacing `math/rand` / `math/rand/v2` with `crypto/rand` for non-security operations (such as exponential backoff jitter in retry loops).
+**Learning:** Exponential backoff jitter is used solely to stagger network request retries and prevent thundering herd conditions. Using `crypto/rand` for jitter adds unnecessary I/O overhead and code complexity without providing any security benefit.
+**Prevention:** Reserve `crypto/rand` for security-sensitive random generation (tokens, keys, nonces, secrets) and avoid security theater.
