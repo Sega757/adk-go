@@ -226,7 +226,15 @@ func (w *Workflow) Resume(
 		}
 
 		s.run(yield)
-		s.wg.Wait()
+		waitCh := make(chan struct{})
+		go func() {
+			s.wg.Wait()
+			close(waitCh)
+		}()
+		select {
+		case <-waitCh:
+		case <-ctx.Done():
+		}
 	}
 }
 
