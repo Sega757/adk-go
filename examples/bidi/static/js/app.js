@@ -1355,6 +1355,11 @@ let previouslyFocusedElement = null;
 
 // Open camera modal and start preview
 async function openCameraPreview() {
+  if (cameraButton) {
+    cameraButton.disabled = true;
+    cameraButton.textContent = "⌛ Opening...";
+    cameraButton.setAttribute("title", "Opening camera preview...");
+  }
   try {
     previouslyFocusedElement = document.activeElement;
 
@@ -1383,6 +1388,17 @@ async function openCameraPreview() {
       error: error.message,
       name: error.name
     }, '⚠️', 'system');
+  } finally {
+    if (cameraButton) {
+      cameraButton.textContent = "📷 Camera";
+      const isDisconnected = !websocket || websocket.readyState !== WebSocket.OPEN;
+      cameraButton.disabled = isDisconnected;
+      if (isDisconnected) {
+        cameraButton.setAttribute("title", "Connect to server to enable control");
+      } else {
+        cameraButton.setAttribute("title", "Open live camera preview to capture image");
+      }
+    }
   }
 }
 
@@ -1826,6 +1842,9 @@ async function toggleAudioStreaming() {
     addConsoleEntry('outgoing', 'Audio Mode Disabled', { status: 'Audio stopped' }, '🎤', 'system');
   } else {
     // Start audio
+    startAudioButton.disabled = true;
+    startAudioButton.textContent = "⌛ Starting...";
+    startAudioButton.setAttribute("title", "Requesting microphone permission...");
     try {
       await startAudio();
       is_audio = true;
@@ -1849,6 +1868,17 @@ async function toggleAudioStreaming() {
       startAudioButton.classList.remove("active");
       startAudioButton.setAttribute("aria-pressed", "false");
       addConsoleEntry('error', 'Failed to enable audio mode', { error: error.message }, '⚠️', 'system');
+    } finally {
+      const isDisconnected = !websocket || websocket.readyState !== WebSocket.OPEN;
+      startAudioButton.disabled = isDisconnected;
+      if (!is_audio) {
+        startAudioButton.textContent = "🎤 Start Voice";
+      }
+      if (isDisconnected) {
+        startAudioButton.setAttribute("title", "Connect to server to enable control");
+      } else if (!is_audio) {
+        startAudioButton.setAttribute("title", "Start microphone audio streaming");
+      }
     }
   }
 }
