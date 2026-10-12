@@ -88,6 +88,104 @@ func TestExtractStateDeltas(t *testing.T) {
 	}
 }
 
+func TestMergeStates(t *testing.T) {
+	tests := []struct {
+		name                         string
+		appState, userState, sessMap map[string]any
+		want                         map[string]any
+	}{
+		{
+			name:      "all nil/empty",
+			appState:  nil,
+			userState: nil,
+			sessMap:   nil,
+			want:      nil,
+		},
+		{
+			name:      "session state only",
+			appState:  nil,
+			userState: nil,
+			sessMap:   map[string]any{"key1": "val1"},
+			want:      map[string]any{"key1": "val1"},
+		},
+		{
+			name:      "app state only",
+			appState:  map[string]any{"app_key": "app_val"},
+			userState: nil,
+			sessMap:   nil,
+			want:      map[string]any{"app:app_key": "app_val"},
+		},
+		{
+			name:      "user state only",
+			appState:  nil,
+			userState: map[string]any{"user_key": "user_val"},
+			sessMap:   nil,
+			want:      map[string]any{"user:user_key": "user_val"},
+		},
+		{
+			name:      "all states merged",
+			appState:  map[string]any{"app_key": "app_val"},
+			userState: map[string]any{"user_key": "user_val"},
+			sessMap:   map[string]any{"sess_key": "sess_val"},
+			want:      map[string]any{"app:app_key": "app_val", "user:user_key": "user_val", "sess_key": "sess_val"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MergeStates(tt.appState, tt.userState, tt.sessMap)
+			if len(got) == 0 && len(tt.want) == 0 {
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("MergeStates() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func BenchmarkMergeStates_Empty(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = MergeStates(nil, nil, nil)
+	}
+}
+
+func BenchmarkMergeStates_SessionOnly(b *testing.B) {
+	sessMap := map[string]any{
+		"key1": "val1",
+		"key2": 100,
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = MergeStates(nil, nil, sessMap)
+	}
+}
+
+func BenchmarkMergeStates_AppOnly(b *testing.B) {
+	appMap := map[string]any{
+		"key1": "val1",
+		"key2": 100,
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = MergeStates(appMap, nil, nil)
+	}
+}
+
+func BenchmarkMergeStates_Mixed(b *testing.B) {
+	appMap := map[string]any{"app_k": "app_v"}
+	userMap := map[string]any{"user_k": "user_v"}
+	sessMap := map[string]any{"sess_k": "sess_v"}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = MergeStates(appMap, userMap, sessMap)
+	}
+}
+
 func BenchmarkExtractStateDeltas_Nil(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
