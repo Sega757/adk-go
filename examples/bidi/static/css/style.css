@@ -71,7 +71,8 @@ h1 {
   transition: opacity 0.2s ease;
 }
 
-.header-checkbox:hover {
+.header-checkbox:hover,
+.header-checkbox:focus-within {
   opacity: 1;
 }
 
@@ -80,6 +81,12 @@ h1 {
   height: 16px;
   cursor: pointer;
   accent-color: #ffffff;
+}
+
+.header-checkbox input[type="checkbox"]:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .header-checkbox span {
