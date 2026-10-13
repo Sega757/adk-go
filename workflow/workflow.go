@@ -317,7 +317,15 @@ func (w *Workflow) RunNode(ctx agent.Context, input any) iter.Seq2[*session.Even
 		s.run(yield)
 
 		// All goroutines have returned; ensure no leak.
-		s.wg.Wait()
+		waitCh := make(chan struct{})
+		go func() {
+			s.wg.Wait()
+			close(waitCh)
+		}()
+		select {
+		case <-waitCh:
+		case <-ctx.Done():
+		}
 	}
 }
 
