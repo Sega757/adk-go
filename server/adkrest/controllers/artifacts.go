@@ -15,6 +15,8 @@
 package controllers
 
 import (
+	"errors"
+	"io/fs"
 	"log"
 	"net/http"
 	"strconv"
@@ -102,6 +104,11 @@ func (c *ArtifactsAPIController) LoadArtifactHandler(rw http.ResponseWriter, req
 
 	resp, err := c.artifactService.Load(req.Context(), loadReq)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			log.Printf("Artifact not found: %v", err)
+			http.Error(rw, "not found", http.StatusNotFound)
+			return
+		}
 		log.Printf("Internal error: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
@@ -150,6 +157,11 @@ func (c *ArtifactsAPIController) LoadArtifactVersionHandler(rw http.ResponseWrit
 
 	resp, err := c.artifactService.Load(req.Context(), loadReq)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			log.Printf("Artifact version not found: %v", err)
+			http.Error(rw, "not found", http.StatusNotFound)
+			return
+		}
 		log.Printf("Internal error: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
