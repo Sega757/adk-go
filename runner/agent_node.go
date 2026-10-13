@@ -168,20 +168,47 @@ func answeredOpenInterrupts(sess session.Session) map[string]bool {
 	if sess == nil {
 		return nil
 	}
-	longRunning := map[string]struct{}{}
-	answered := map[string]bool{}
 	events := sess.Events()
+	if events == nil || events.Len() == 0 {
+		return nil
+	}
+	var longRunning map[string]struct{}
 	for i := 0; i < events.Len(); i++ {
 		ev := events.At(i)
-		for _, id := range ev.LongRunningToolIDs {
-			longRunning[id] = struct{}{}
+		if ev == nil {
+			continue
 		}
-		for _, fr := range utils.FunctionResponses(ev.Content) {
-			if fr == nil || fr.ID == "" {
+		for _, id := range ev.LongRunningToolIDs {
+			if id == "" {
 				continue
 			}
-			if _, ok := longRunning[fr.ID]; ok {
-				answered[fr.ID] = true
+			if longRunning == nil {
+				longRunning = make(map[string]struct{})
+			}
+			longRunning[id] = struct{}{}
+		}
+	}
+	if len(longRunning) == 0 {
+		return nil
+	}
+
+	var answered map[string]bool
+	for i := 0; i < events.Len(); i++ {
+		ev := events.At(i)
+		c := utils.Content(ev)
+		if c == nil {
+			continue
+		}
+		for _, part := range c.Parts {
+			if part == nil || part.FunctionResponse == nil || part.FunctionResponse.ID == "" {
+				continue
+			}
+			id := part.FunctionResponse.ID
+			if _, ok := longRunning[id]; ok {
+				if answered == nil {
+					answered = make(map[string]bool)
+				}
+				answered[id] = true
 			}
 		}
 	}
