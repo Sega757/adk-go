@@ -15,9 +15,12 @@
 package llminternal_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"iter"
+	"log"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -1626,4 +1629,93 @@ func wantWithContinuation(want []*genai.Content) []*genai.Content {
 		}
 	}
 	return want
+}
+
+func TestContentsRequestProcessor_SkippedNoRoleLogging(t *testing.T) {
+	testAgent := utils.Must(llmagent.New(llmagent.Config{
+		Name:  "testAgent",
+		Model: &testModel{},
+	}))
+
+	t.Run("logs warning when skipping event with content but missing role", func(t *testing.T) {
+		var buf bytes.Buffer
+		log.SetOutput(&buf)
+		t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+		badEvent := &session.Event{
+			ID:     "event-bad-1",
+			Author: "user",
+			LLMResponse: model.LLMResponse{
+				Content: &genai.Content{
+					Role:  "",
+					Parts: []*genai.Part{{Text: "some content without a role"}},
+				},
+			},
+		}
+		goodEvent := &session.Event{
+			ID:     "event-good-2",
+			Author: "user",
+			LLMResponse: model.LLMResponse{
+				Content: genai.NewContentFromText("hello", "user"),
+			},
+		}
+
+		ctx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{
+			Agent:   testAgent,
+			Session: &fakeSession{events: []*session.Event{badEvent, goodEvent}},
+		})
+
+		req := &model.LLMRequest{}
+		for _, err := range llminternal.ContentsRequestProcessor(ctx, req, &llminternal.Flow{}) {
+			if err != nil {
+				t.Fatalf("ContentsRequestProcessor failed: %v", err)
+			}
+		}
+
+		logOutput := buf.String()
+		expectedLog := "skipping event event-bad-1 (author: user): content present but missing role"
+		if !strings.Contains(logOutput, expectedLog) {
+			t.Errorf("expected log output to contain %q, got: %q", expectedLog, logOutput)
+		}
+
+		if len(req.Contents) != 1 {
+			t.Fatalf("expected 1 content in request, got %d", len(req.Contents))
+		}
+		if req.Contents[0].Parts[0].Text != "hello" {
+			t.Errorf("expected content %q, got %v", "hello", req.Contents[0].Parts[0].Text)
+		}
+	})
+
+	t.Run("does not log warning when event has empty content parts", func(t *testing.T) {
+		var buf bytes.Buffer
+		log.SetOutput(&buf)
+		t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+		emptyContentEvent := &session.Event{
+			ID:     "event-empty-1",
+			Author: "user",
+			LLMResponse: model.LLMResponse{
+				Content: &genai.Content{
+					Role:  "",
+					Parts: []*genai.Part{},
+				},
+			},
+		}
+
+		ctx := icontext.NewInvocationContext(t.Context(), icontext.InvocationContextParams{
+			Agent:   testAgent,
+			Session: &fakeSession{events: []*session.Event{emptyContentEvent}},
+		})
+
+		req := &model.LLMRequest{}
+		for _, err := range llminternal.ContentsRequestProcessor(ctx, req, &llminternal.Flow{}) {
+			if err != nil {
+				t.Fatalf("ContentsRequestProcessor failed: %v", err)
+			}
+		}
+
+		if buf.Len() > 0 {
+			t.Errorf("expected no log output for empty content parts event, got: %q", buf.String())
+		}
+	})
 }

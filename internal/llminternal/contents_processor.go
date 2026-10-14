@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"log"
 	"sort"
 	"strings"
 
@@ -83,7 +84,9 @@ func buildContentsDefault(agentName, invocationBranch, isolationScope string, ev
 		// by model, UNLESS they have transcriptions.
 		if (content == nil || content.Role == "" || len(content.Parts) == 0) &&
 			ev.LLMResponse.InputTranscription == nil && ev.LLMResponse.OutputTranscription == nil {
-			// TODO: log a bad event with content but no Role is skipped
+			if content != nil && len(content.Parts) > 0 && content.Role == "" {
+				log.Printf("skipping event %s (author: %s): content present but missing role", ev.ID, ev.Author)
+			}
 			// Note: python checks here if content.Parts[0] is an empty string and skip if so.
 			// But unlike python that distinguishes None vs empty string, two cases are indistinguishable in Go.
 			continue
