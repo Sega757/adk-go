@@ -623,6 +623,12 @@ button.active {
   accent-color: #4285f4;
 }
 
+.console-checkbox input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .console-checkbox span {
   white-space: nowrap;
 }
