@@ -39,7 +39,7 @@ import (
 	"google.golang.org/adk/v2/internal/utils"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/runner"
-	"google.golang.org/adk/v2/server/adka2a"
+	adka2a "google.golang.org/adk/v2/server/adka2a/v2"
 	"google.golang.org/adk/v2/session"
 )
 
@@ -67,30 +67,33 @@ func TestCompat_OldExecutor_Direct(t *testing.T) {
 		RunConfig: agent.RunConfig{
 			StreamingMode: agent.StreamingModeSSE,
 		},
-		GenAIPartConverter: func(ctx context.Context, adkEvent *session.Event, part *genai.Part) (legacyA2A.Part, error) {
-			return a2av0.FromV1Part(v2a2a.NewTextPart(part.Text)), nil
+		GenAIPartConverter: func(ctx context.Context, adkEvent *session.Event, part *genai.Part) (*v2a2a.Part, error) {
+			return v2a2a.NewTextPart(part.Text), nil
 		},
-		AfterEventCallback: func(ctx adka2a.ExecutorContext, event *session.Event, processed *legacyA2A.TaskArtifactUpdateEvent) error {
+		AfterEventCallback: func(ctx adka2a.ExecutorContext, event *session.Event, processed *v2a2a.TaskArtifactUpdateEvent) error {
 			if processed.Artifact != nil && len(processed.Artifact.Parts) > 0 {
-				processed.Artifact.Parts[0] = a2av0.FromV1Part(v2a2a.NewTextPart("modified-by-executor"))
+				processed.Artifact.Parts[0] = v2a2a.NewTextPart("modified-by-executor")
 			}
 			return nil
 		},
 	})
 
-	reqCtx := &legacyASrv.RequestContext{
+	reqCtx := &v2asrv.ExecutorContext{
 		ContextID: "test-context",
-		TaskID:    legacyA2A.NewTaskID(),
-		Message:   legacyA2A.NewMessage(legacyA2A.MessageRoleUser, a2av0.FromV1Part(v2a2a.NewTextPart("hi"))),
+		TaskID:    v2a2a.TaskID(v2a2a.NewTaskID()),
+		Message:   v2a2a.NewMessage(v2a2a.MessageRoleUser, v2a2a.NewTextPart("hi")),
 	}
-	queue := &mockQueue{}
-	if err := executor.Execute(t.Context(), reqCtx, queue); err != nil {
-		t.Fatalf("executor.Execute() error = %v", err)
+	var events []v2a2a.Event
+	for ev, err := range executor.Execute(t.Context(), reqCtx) {
+		if err != nil {
+			t.Fatalf("executor.Execute() error = %v", err)
+		}
+		events = append(events, ev)
 	}
 
 	found := false
-	for _, ev := range queue.events {
-		if ae, ok := ev.(*legacyA2A.TaskArtifactUpdateEvent); ok {
+	for _, ev := range events {
+		if ae, ok := ev.(*v2a2a.TaskArtifactUpdateEvent); ok {
 			for _, p := range ae.Artifact.Parts {
 				gp, _ := adka2a.ToGenAIPart(p)
 				if gp != nil && gp.Text == "modified-by-executor" {
@@ -213,9 +216,9 @@ func TestCompat_RemoteAgent(t *testing.T) {
 				},
 			},
 			updateConfig: func(config *A2AConfig) {
-				config.GenAIPartConverter = func(ctx context.Context, adkEvent *session.Event, part *genai.Part) (legacyA2A.Part, error) {
+				config.GenAIPartConverter = func(ctx context.Context, adkEvent *session.Event, part *genai.Part) (*v2a2a.Part, error) {
 					if part.Text != "" {
-						return a2av0.FromV1Part(v2a2a.NewTextPart("custom:" + part.Text)), nil
+						return v2a2a.NewTextPart("custom:" + part.Text), nil
 					}
 					return adka2a.ToA2APart(part, nil)
 				}
@@ -230,10 +233,9 @@ func TestCompat_RemoteAgent(t *testing.T) {
 				},
 			},
 			updateConfig: func(config *A2AConfig) {
-				config.A2APartConverter = func(ctx context.Context, a2aEvent legacyA2A.Event, part legacyA2A.Part) (*genai.Part, error) {
-					tp, ok := part.(legacyA2A.TextPart)
-					if ok {
-						return genai.NewPartFromText("custom:" + tp.Text), nil
+				config.A2APartConverter = func(ctx context.Context, a2aEvent v2a2a.Event, part *v2a2a.Part) (*genai.Part, error) {
+					if part.Text() != "" {
+						return genai.NewPartFromText("custom:" + part.Text()), nil
 					}
 					return adka2a.ToGenAIPart(part)
 				}
@@ -397,18 +399,18 @@ func TestCompat_ContextPropagation(t *testing.T) {
 		},
 	})
 
-	handler := legacyASrv.NewHandler(
+	handler := v2asrv.NewHandler(
 		executor,
-		legacyASrv.WithCallInterceptor(&testSrvAuthInterceptor{
-			BeforeFunc: func(ctx context.Context, callCtx *legacyASrv.CallContext, req *legacyASrv.Request) (context.Context, error) {
-				if headers, _ := callCtx.RequestMeta().Get("authorization"); len(headers) > 0 {
-					callCtx.User = &legacyASrv.AuthenticatedUser{UserName: headers[0]}
+		v2asrv.WithCallInterceptors(&testSrvAuthInterceptor{
+			BeforeFunc: func(ctx context.Context, callCtx *v2asrv.CallContext, req *v2asrv.Request) (context.Context, any, error) {
+				if headers, ok := callCtx.ServiceParams().Get("authorization"); ok && len(headers) > 0 {
+					callCtx.User = v2asrv.NewAuthenticatedUser(headers[0], nil)
 				}
-				return ctx, nil
+				return ctx, nil, nil
 			},
 		}),
 	)
-	server := httptest.NewServer(legacyASrv.NewJSONRPCHandler(handler))
+	server := httptest.NewServer(a2av0.NewJSONRPCHandler(handler))
 	t.Cleanup(server.Close)
 
 	userID := "user123"
@@ -445,15 +447,15 @@ func TestCompat_ContextPropagation(t *testing.T) {
 }
 
 type testSrvAuthInterceptor struct {
-	legacyASrv.PassthroughCallInterceptor
-	BeforeFunc func(ctx context.Context, callCtx *legacyASrv.CallContext, req *legacyASrv.Request) (context.Context, error)
+	v2asrv.PassthroughCallInterceptor
+	BeforeFunc func(ctx context.Context, callCtx *v2asrv.CallContext, req *v2asrv.Request) (context.Context, any, error)
 }
 
-func (i *testSrvAuthInterceptor) Before(ctx context.Context, callCtx *legacyASrv.CallContext, req *legacyASrv.Request) (context.Context, error) {
+func (i *testSrvAuthInterceptor) Before(ctx context.Context, callCtx *v2asrv.CallContext, req *v2asrv.Request) (context.Context, any, error) {
 	if i.BeforeFunc != nil {
 		return i.BeforeFunc(ctx, callCtx, req)
 	}
-	return ctx, nil
+	return ctx, nil, nil
 }
 
 type testClientAuthInterceptor struct {
@@ -624,6 +626,13 @@ func (e *mockLegacyExecutor) Cleanup(ctx context.Context, reqCtx *legacyASrv.Req
 	}
 }
 
+func startV2A2AServer(t *testing.T, executor v2asrv.AgentExecutor) *testA2AServer {
+	t.Helper()
+	handler := v2asrv.NewHandler(executor)
+	server := httptest.NewServer(a2av0.NewJSONRPCHandler(handler))
+	return &testA2AServer{Server: server, handler: nil}
+}
+
 func startLegacyA2AServer(t *testing.T, executor legacyASrv.AgentExecutor) *testA2AServer {
 	t.Helper()
 	handler := legacyASrv.NewHandler(executor)
@@ -725,13 +734,13 @@ func TestCompat_A2ACleanupPropagation(t *testing.T) {
 			SessionService: session.InMemoryService(),
 			Agent:          rootA,
 		},
-		A2AExecutionCleanupCallback: func(ctx context.Context, reqCtx *legacyASrv.RequestContext, subAgentCards []*legacyA2A.AgentCard, result legacyA2A.SendMessageResult, cause error) {
+		A2AExecutionCleanupCallback: func(ctx context.Context, reqCtx *v2asrv.ExecutorContext, subAgentCards []*v2a2a.AgentCard, result v2a2a.SendMessageResult, cause error) {
 			executorCleanupCalledChan <- struct{}{}
 		},
 		RunConfig: agent.RunConfig{StreamingMode: agent.StreamingModeSSE},
 	})
 
-	serverA := startLegacyA2AServer(t, executorA)
+	serverA := startV2A2AServer(t, executorA)
 	defer serverA.Close()
 
 	client := newLegacyA2AClient(t, serverA)
