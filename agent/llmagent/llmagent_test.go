@@ -50,36 +50,62 @@ const (
 func TestLLMAgent(t *testing.T) {
 	errNoNetwork := errors.New("no network")
 
+	dummyTool, err := functiontool.New(functiontool.Config{
+		Name:        "dummy_tool",
+		Description: "dummy tool description",
+	}, func(_ agent.Context, _ struct{}) (struct{}, error) {
+		return struct{}{}, nil
+	})
+	if err != nil {
+		t.Fatalf("failed to create dummy_tool: %v", err)
+	}
+
 	for _, tc := range []struct {
 		name      string
-		transport http.RoundTripper
+		modelFunc func(t *testing.T) model.LLM
+		tools     []tool.Tool
 		wantErr   error
 	}{
 		{
-			name:      "healthy_backend",
-			transport: nil, // httprr + http.DefaultTransport
+			name: "healthy_backend",
+			modelFunc: func(t *testing.T) model.LLM {
+				return newGeminiModel(t, modelName, nil)
+			},
 		},
 		{
-			name:      "broken_backend",
-			transport: roundTripperFunc(func(*http.Request) (*http.Response, error) { return nil, errNoNetwork }),
-			wantErr:   errNoNetwork,
+			name: "broken_backend",
+			modelFunc: func(t *testing.T) model.LLM {
+				return newGeminiModel(t, modelName, roundTripperFunc(func(*http.Request) (*http.Response, error) { return nil, errNoNetwork }))
+			},
+			wantErr: errNoNetwork,
+		},
+		{
+			name: "with_tools",
+			modelFunc: func(t *testing.T) model.LLM {
+				return &testutil.MockModel{
+					Responses: []*genai.Content{
+						genai.NewContentFromText("hello from model", genai.RoleModel),
+					},
+				}
+			},
+			tools: []tool.Tool{dummyTool},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			model := newGeminiModel(t, modelName, tc.transport)
+			m := tc.modelFunc(t)
 			a, err := llmagent.New(llmagent.Config{
 				Name:                     "hello_world_agent",
 				Description:              "hello world agent",
-				Model:                    model,
+				Model:                    m,
 				Instruction:              "Roll the dice and report only the result.",
 				GlobalInstruction:        "Answer as precisely as possible.",
 				DisallowTransferToParent: true,
 				DisallowTransferToPeers:  true,
+				Tools:                    tc.tools,
 			})
 			if err != nil {
 				t.Fatalf("NewLLMAgent failed: %v", err)
 			}
-			// TODO: set tools, planner.
 			runner := testutil.NewTestAgentRunner(t, a)
 			stream := runner.Run(t, "test_session", message)
 			texts, err := testutil.CollectTextParts(stream)
@@ -88,6 +114,14 @@ func TestLLMAgent(t *testing.T) {
 			}
 			if tc.wantErr == nil && (err != nil || len(texts) != 1) {
 				t.Fatalf("stream = (%q, %v), want exactly one text response", texts, err)
+			}
+			if len(tc.tools) > 0 {
+				mockM, ok := m.(*testutil.MockModel)
+				if ok && len(mockM.Requests) > 0 {
+					if len(mockM.Requests[0].Tools) != len(tc.tools) {
+						t.Errorf("got %d tools in LLMRequest, want %d", len(mockM.Requests[0].Tools), len(tc.tools))
+					}
+				}
 			}
 		})
 	}
