@@ -705,6 +705,31 @@ func TestContentsRequestProcessor(t *testing.T) {
 			want: nil,
 		},
 		{
+			name: "EventWithContentButNoRole",
+			events: []*session.Event{
+				{
+					ID:     "bad_ev_1",
+					Author: "user",
+					LLMResponse: model.LLMResponse{
+						Content: &genai.Content{
+							Role:  "",
+							Parts: []*genai.Part{{Text: "some content without role"}},
+						},
+					},
+				},
+				{
+					ID:     "good_ev_1",
+					Author: "user",
+					LLMResponse: model.LLMResponse{
+						Content: genai.NewContentFromText("Hello", "user"),
+					},
+				},
+			},
+			want: []*genai.Content{
+				genai.NewContentFromText("Hello", "user"),
+			},
+		},
+		{
 			name: "TranscriptionAggregation",
 			events: []*session.Event{
 				{
