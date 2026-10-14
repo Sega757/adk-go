@@ -312,34 +312,57 @@ func TestFunctionTool_ReturnsBasicType(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// TODO: replace with testing using LLMAgent, instead of directly calling the model.
-			var req model.LLMRequest
-			requestProcessor, ok := weatherReportTool.(toolinternal.RequestProcessor)
-			if !ok {
-				t.Fatal("weatherReportTool does not implement itype.RequestProcessor")
+			mockModel := &testutil.MockModel{
+				Responses: []*genai.Content{
+					genai.NewContentFromFunctionCall("get_weather_report", tc.args, genai.RoleModel),
+				},
 			}
-			if err := requestProcessor.ProcessRequest(nil, &req); err != nil {
-				t.Fatalf("weatherReportTool.ProcessRequest failed: %v", err)
-			}
-			if req.Config == nil || len(req.Config.Tools) != 1 {
-				t.Fatalf("weatherReportTool.ProcessRequest did not configure tool info in LLMRequest: %v", req)
-			}
-			// Call the function.
-			funcTool, ok := weatherReportTool.(toolinternal.FunctionTool)
-			if !ok {
-				t.Fatal("weatherReportTool does not implement itype.RequestProcessor")
-			}
-			callResult, err := funcTool.Run(createToolContext(t), tc.args)
+
+			a, err := llmagent.New(llmagent.Config{
+				Name:  "weather_agent",
+				Model: mockModel,
+				Tools: []tool.Tool{weatherReportTool},
+			})
 			if err != nil {
-				t.Fatalf("weatherReportTool.Run failed: %v", err)
+				t.Fatalf("llmagent.New failed: %v", err)
 			}
-			got, err := typeutil.ConvertToWithJSONSchema[map[string]any, map[string]string](callResult, nil)
+
+			runner := testutil.NewTestAgentRunner(t, a)
+
+			var gotFnCall *genai.FunctionCall
+			var gotFnResp *genai.FunctionResponse
+
+			for ev, err := range runner.Run(t, tc.name, tc.prompt) {
+				if err != nil {
+					break
+				}
+				for _, p := range ev.Content.Parts {
+					if p.FunctionCall != nil {
+						gotFnCall = p.FunctionCall
+					}
+					if p.FunctionResponse != nil {
+						gotFnResp = p.FunctionResponse
+					}
+				}
+			}
+
+			if gotFnCall == nil {
+				t.Fatalf("expected function call, got none")
+			}
+			if gotFnCall.Name != "get_weather_report" {
+				t.Fatalf("got function call name %q, want get_weather_report", gotFnCall.Name)
+			}
+			if gotFnResp == nil {
+				t.Fatalf("expected function response, got none")
+			}
+
+			got, err := typeutil.ConvertToWithJSONSchema[map[string]any, map[string]string](gotFnResp.Response, nil)
 			if err != nil {
-				t.Fatalf("weatherReportTool.Run returned unexpected result of type %[1]T: %[1]v", callResult)
+				t.Fatalf("typeutil.ConvertToWithJSONSchema failed: %v", err)
 			}
 			gotVal, ok := got["result"]
 			if !ok {
-				t.Fatalf("function response, incorrect %q value", got["result"])
+				t.Fatalf("function response missing result field: %v", got)
 			}
 			want := tc.want
 			if diff := cmp.Diff(want, gotVal); diff != "" {
