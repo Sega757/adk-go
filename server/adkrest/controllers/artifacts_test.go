@@ -134,6 +134,12 @@ func TestArtifactsAPIController_NotFound(t *testing.T) {
 			vars:    map[string]string{"app_name": "app", "user_id": "user", "session_id": "session", "artifact_name": "missing.txt", "version": "1"},
 			path:    "/apps/app/users/user/sessions/session/artifacts/missing.txt/versions/1",
 		},
+		{
+			name:    "DeleteArtifactHandler",
+			handler: controller.DeleteArtifactHandler,
+			vars:    map[string]string{"app_name": "app", "user_id": "user", "session_id": "session", "artifact_name": "missing.txt"},
+			path:    "/apps/app/users/user/sessions/session/artifacts/missing.txt",
+		},
 	}
 
 	for _, tc := range tests {

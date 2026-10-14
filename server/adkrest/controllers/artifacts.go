@@ -194,6 +194,11 @@ func (c *ArtifactsAPIController) DeleteArtifactHandler(rw http.ResponseWriter, r
 		FileName:  artifactName,
 	})
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			log.Printf("Artifact not found: %v", err)
+			http.Error(rw, "not found", http.StatusNotFound)
+			return
+		}
 		log.Printf("Internal error: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
