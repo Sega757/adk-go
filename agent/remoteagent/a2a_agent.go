@@ -31,11 +31,9 @@ import (
 	a2aclientv2 "github.com/a2aproject/a2a-go/v2/a2aclient"
 	"github.com/a2aproject/a2a-go/v2/a2acompat/a2av0"
 
-	"google.golang.org/genai"
-
 	"google.golang.org/adk/v2/agent"
 	v2 "google.golang.org/adk/v2/agent/remoteagent/v2"
-	"google.golang.org/adk/v2/server/adka2a"
+	adka2a "google.golang.org/adk/v2/server/adka2a/v2"
 	"google.golang.org/adk/v2/session"
 )
 
@@ -236,25 +234,8 @@ func NewA2A(cfg A2AConfig) (agent.Agent, error) {
 		}
 	}
 
-	if cfg.A2APartConverter != nil {
-		v1Cfg.A2APartConverter = func(ctx context.Context, a2aEvent a2av2.Event, part *a2av2.Part) (*genai.Part, error) {
-			legacyEvent, convErr := a2av0.FromV1Event(a2aEvent)
-			if convErr != nil {
-				return nil, convErr
-			}
-			return cfg.A2APartConverter(ctx, legacyEvent, a2av0.FromV1Part(part))
-		}
-	}
-
-	if cfg.GenAIPartConverter != nil {
-		v1Cfg.GenAIPartConverter = func(ctx context.Context, adkEvent *session.Event, part *genai.Part) (*a2av2.Part, error) {
-			legacyPart, err := cfg.GenAIPartConverter(ctx, adkEvent, part)
-			if err != nil {
-				return nil, err
-			}
-			return a2av0.ToV1Part(legacyPart), nil
-		}
-	}
+	v1Cfg.A2APartConverter = cfg.A2APartConverter
+	v1Cfg.GenAIPartConverter = cfg.GenAIPartConverter
 
 	if cfg.RemoteTaskCleanupCallback != nil {
 		v1Cfg.RemoteTaskCleanupCallback = func(ctx context.Context, card *a2av2.AgentCard, client v2.A2AClient, taskInfo a2av2.TaskInfo, cause error) {
