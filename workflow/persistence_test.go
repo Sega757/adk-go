@@ -249,6 +249,27 @@ func TestReconstructRunState_InvocationScope(t *testing.T) {
 	}
 }
 
+func BenchmarkEventNodeName(b *testing.B) {
+	nodes := map[string]Node{
+		"nodeA":  newDummyNode("nodeA"),
+		"parent": newDummyNode("parent"),
+		"child":  newDummyNode("child"),
+	}
+
+	ev := &session.Event{
+		Author: "authorNode",
+		NodeInfo: &session.NodeInfo{
+			Path: "parent/child@1",
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = eventNodeName(ev, nodes)
+	}
+}
+
 func nodeState(t *testing.T, state *RunState, name string) *NodeState {
 	t.Helper()
 	if state == nil {

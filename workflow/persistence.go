@@ -443,7 +443,16 @@ func firstUserInput(events session.Events, invocationID string) any {
 // LlmAgent node path, where Author == node name and no path is set.
 func eventNodeName(ev *session.Event, nodesByName map[string]Node) string {
 	if ev.NodeInfo != nil && ev.NodeInfo.Path != "" {
-		for _, seg := range strings.Split(ev.NodeInfo.Path, "/") {
+		path := ev.NodeInfo.Path
+		for path != "" {
+			var seg string
+			if idx := strings.IndexByte(path, '/'); idx >= 0 {
+				seg = path[:idx]
+				path = path[idx+1:]
+			} else {
+				seg = path
+				path = ""
+			}
 			name := seg
 			if idx := strings.IndexByte(name, '@'); idx >= 0 {
 				name = name[:idx]
