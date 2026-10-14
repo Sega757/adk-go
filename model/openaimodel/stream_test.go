@@ -17,6 +17,7 @@ package openaimodel
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/openai/openai-go/v3/responses"
@@ -84,7 +85,7 @@ func TestStreamTranslator_WithAggregator(t *testing.T) {
 		decodeEvent(t, `{"type":"response.output_text.delta","delta":"hel"}`),
 		decodeEvent(t, `{"type":"response.output_text.delta","delta":"lo"}`),
 	}
-	var finalText string
+	var finalText strings.Builder
 	for _, evt := range events {
 		resp, err := tr.process(evt)
 		if err != nil || resp == nil {
@@ -95,15 +96,15 @@ func TestStreamTranslator_WithAggregator(t *testing.T) {
 				t.Fatalf("aggregator err = %v", err)
 			}
 			if !llmResp.Partial && llmResp.Content != nil && len(llmResp.Content.Parts) > 0 {
-				finalText += llmResp.Content.Parts[0].Text
+				finalText.WriteString(llmResp.Content.Parts[0].Text)
 			}
 		}
 	}
 	if final := aggregator.Close(); final != nil && final.Content != nil && len(final.Content.Parts) > 0 {
-		finalText += final.Content.Parts[0].Text
+		finalText.WriteString(final.Content.Parts[0].Text)
 	}
-	if finalText != "hello" {
-		t.Fatalf("aggregated text mismatch got=%q", finalText)
+	if got := finalText.String(); got != "hello" {
+		t.Fatalf("aggregated text mismatch got=%q", got)
 	}
 }
 
