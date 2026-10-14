@@ -623,8 +623,8 @@ func TestRunLiveHandler_BadRequestErrors(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 		}
-		if got := rec.Body.String(); !strings.Contains(got, "failed to upgrade to websocket") {
-			t.Errorf("expected body to contain websocket upgrade error, got %q", got)
+		if got := strings.ToLower(rec.Body.String()); !strings.Contains(got, "bad request") {
+			t.Errorf("expected body to contain 'bad request' (from gorilla/websocket), got %q", rec.Body.String())
 		}
 	})
 }

@@ -282,7 +282,8 @@ func (c *RuntimeAPIController) RunLiveHandler(rw http.ResponseWriter, req *http.
 
 	ws, err := upgrader.Upgrade(rw, req, nil)
 	if err != nil {
-		return newStatusError(fmt.Errorf("failed to upgrade to websocket: %w", err), http.StatusBadRequest)
+		log.Printf("Failed to upgrade to websocket: %v", err)
+		return nil
 	}
 	// Limit WebSocket read size to 10MB to prevent memory exhaustion DoS attacks
 	ws.SetReadLimit(10 * 1024 * 1024)

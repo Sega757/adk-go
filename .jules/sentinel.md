@@ -71,3 +71,8 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** Replacing `math/rand` / `math/rand/v2` with `crypto/rand` for non-security operations (such as exponential backoff jitter in retry loops).
 **Learning:** Exponential backoff jitter is used solely to stagger network request retries and prevent thundering herd conditions. Using `crypto/rand` for jitter adds unnecessary I/O overhead and code complexity without providing any security benefit.
 **Prevention:** Reserve `crypto/rand` for security-sensitive random generation (tokens, keys, nonces, secrets) and avoid security theater.
+
+## 2026-10-25 - [Prevent Double Write and Information Leakage on WebSocket Upgrade Failure]
+**Vulnerability:** In `RunLiveHandler` (`server/adkrest/controllers/runtime.go`), returning a custom error when `upgrader.Upgrade(w, r, nil)` fails causes Go's HTTP server to log a `superfluous response.WriteHeader call` warning and append garbage to the body. More importantly, returning the original error wrapped in `newStatusError(fmt.Errorf("failed to upgrade to websocket: %w", err), ...)` exposes internal upgrade error details.
+**Learning:** `gorilla/websocket`'s `upgrader.Upgrade` already writes an HTTP error status code and body to the `http.ResponseWriter` when it fails. Returning a custom error after this point causes double-header writes and can leak internal details if the framework attempts to serialize the error.
+**Prevention:** Always log the detailed `upgrader.Upgrade` failure server-side using `log.Printf` and return `nil` to prevent double-header writes and information leakage, as `gorilla/websocket` has already safely rejected the HTTP request.
