@@ -23,19 +23,29 @@ import (
 
 // TODO: Move to an internal package, controllers doesn't have to be public API.
 
-// EncodeJSONResponse uses the json encoder to write an interface to the http response with an optional status code
+// EncodeJSONResponse uses json.Marshal to serialize an interface to JSON before writing headers and body.
+// Performing JSON serialization prior to calling WriteHeader prevents returning HTTP 200 OK or writing
+// partial responses when serialization fails.
 func EncodeJSONResponse(i any, status int, w http.ResponseWriter) {
 	wHeader := w.Header()
+
+	if i == nil {
+		wHeader.Set("Content-Type", "application/json; charset=UTF-8")
+		w.WriteHeader(status)
+		return
+	}
+
+	data, err := json.Marshal(i)
+	if err != nil {
+		log.Printf("EncodeJSONResponse failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	wHeader.Set("Content-Type", "application/json; charset=UTF-8")
-
 	w.WriteHeader(status)
-
-	if i != nil {
-		err := json.NewEncoder(w).Encode(i)
-		if err != nil {
-			log.Printf("EncodeJSONResponse failed: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-		}
+	if _, err := w.Write(data); err != nil {
+		log.Printf("EncodeJSONResponse write failed: %v", err)
 	}
 }
 

@@ -98,9 +98,24 @@ func TestEncodeJSONResponse(t *testing.T) {
 		rec := httptest.NewRecorder()
 		EncodeJSONResponse(unsupportedType, http.StatusOK, rec)
 
-		// When JSON encoding fails after WriteHeader, http.Error writes sanitized error text
-		if gotBody := rec.Body.String(); !strings.Contains(gotBody, "internal server error") {
-			t.Errorf("got body %q, expected to contain 'internal server error'", gotBody)
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("got status %d, want %d", rec.Code, http.StatusInternalServerError)
+		}
+
+		if gotBody := strings.TrimSpace(rec.Body.String()); gotBody != "internal server error" {
+			t.Errorf("got body %q, want %q", gotBody, "internal server error")
+		}
+	})
+
+	t.Run("nil payload encoding", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		EncodeJSONResponse(nil, http.StatusOK, rec)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("got status %d, want %d", rec.Code, http.StatusOK)
+		}
+		if gotBody := rec.Body.String(); gotBody != "" {
+			t.Errorf("got body %q, want empty", gotBody)
 		}
 	})
 }
