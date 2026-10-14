@@ -1095,7 +1095,6 @@ func TestCallLLM_StreamErrorHandling(t *testing.T) {
 	})
 }
 
-
 func TestCallLLM_AgentNameLabel(t *testing.T) {
 	t.Run("PopulatesLabelWhenConfigNil", func(t *testing.T) {
 		mockM := &mockStreamingModel{
