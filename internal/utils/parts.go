@@ -15,64 +15,10 @@
 package utils
 
 import (
-	"context"
-	"strings"
-
 	"google.golang.org/genai"
 
-	"google.golang.org/adk/v2/agent"
-	"google.golang.org/adk/v2/model"
-	"google.golang.org/adk/v2/platform"
 	"google.golang.org/adk/v2/session"
 )
-
-// TODO: split in proper files/packages.
-
-const afFunctionCallIDPrefix = "adk-"
-
-// PopulateClientFunctionCallID sets the function call ID field if it is empty.
-// Since the ID field is optional, some models don't fill the field, but
-// the LLMAgent depends on the IDs to map FunctionCall and FunctionResponse events
-// in the event stream.
-func PopulateClientFunctionCallID(ctx context.Context, c *genai.Content) {
-	if c == nil {
-		return
-	}
-	// Direct iteration over Parts avoids allocating intermediate slices via FunctionCalls.
-	for _, p := range c.Parts {
-		if p != nil && p.FunctionCall != nil && p.FunctionCall.ID == "" {
-			p.FunctionCall.ID = GenerateFunctionCallID(ctx)
-		}
-	}
-}
-
-// GenerateFunctionCallID generates a new function call ID. The ID is obtained
-// through the platform package, so a UUID provider installed on ctx (see
-// platform.WithUUIDProvider) controls it.
-func GenerateFunctionCallID(ctx context.Context) string {
-	return afFunctionCallIDPrefix + platform.NewUUID(ctx)
-}
-
-// RemoveClientFunctionCallID removes the function call ID field that was set
-// by populateClientFunctionCallID. This is necessary when FunctionCall or
-// FunctionResponse are sent back to the model.
-func RemoveClientFunctionCallID(c *genai.Content) {
-	if c == nil || (!HasFunctionCalls(c) && !HasFunctionResponses(c)) {
-		return
-	}
-	// Direct single-pass iteration avoids intermediate slice allocations from FunctionCalls/FunctionResponses.
-	for _, p := range c.Parts {
-		if p == nil {
-			continue
-		}
-		if p.FunctionCall != nil && strings.HasPrefix(p.FunctionCall.ID, afFunctionCallIDPrefix) {
-			p.FunctionCall.ID = ""
-		}
-		if p.FunctionResponse != nil && strings.HasPrefix(p.FunctionResponse.ID, afFunctionCallIDPrefix) {
-			p.FunctionResponse.ID = ""
-		}
-	}
-}
 
 // Content is a convenience function that returns the genai.Content
 // in the event.
@@ -218,34 +164,4 @@ func FunctionDecls(c *genai.GenerateContentConfig) (ret []*genai.FunctionDeclara
 		}
 	}
 	return ret
-}
-
-func Must[T agent.Agent](a T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return a
-}
-
-// AppendInstructions appends instructions to the [genai.GenerateContentConfig.SystemInstruction] system instruction.
-func AppendInstructions(r *model.LLMRequest, instructions ...string) {
-	if len(instructions) == 0 {
-		return
-	}
-
-	inst := strings.Join(instructions, "\n\n")
-
-	if r.Config == nil {
-		r.Config = &genai.GenerateContentConfig{}
-	}
-
-	if r.Config.SystemInstruction == nil {
-		r.Config.SystemInstruction = genai.NewContentFromText(inst, genai.RoleUser)
-		return
-	}
-	if len(r.Config.SystemInstruction.Parts) > 0 && r.Config.SystemInstruction.Parts[len(r.Config.SystemInstruction.Parts)-1].Text != "" {
-		r.Config.SystemInstruction.Parts[len(r.Config.SystemInstruction.Parts)-1].Text += "\n\n" + inst
-		return
-	}
-	r.Config.SystemInstruction.Parts = append(r.Config.SystemInstruction.Parts, genai.NewPartFromText(inst))
 }
