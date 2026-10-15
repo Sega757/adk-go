@@ -1290,6 +1290,10 @@ function addSubmitHandler() {
       // Send message to server
       sendMessage(message);
       console.log("[CLIENT TO AGENT] " + message);
+
+      if (messageInput && !messageInput.disabled) {
+        messageInput.focus();
+      }
     }
     return false;
   };
