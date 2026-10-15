@@ -16,6 +16,7 @@ package controllers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -31,6 +32,7 @@ import (
 	"google.golang.org/adk/v2/server/adkrest/controllers"
 	"google.golang.org/adk/v2/server/adkrest/internal/fakes"
 	"google.golang.org/adk/v2/server/adkrest/internal/models"
+	"google.golang.org/adk/v2/session"
 )
 
 func TestGetSession(t *testing.T) {
@@ -429,6 +431,91 @@ func TestListSessions(t *testing.T) {
 				return a.ID < b.ID
 			})); diff != "" {
 				t.Errorf("ListSessions() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+type failingSessionService struct {
+	session.Service
+	err error
+}
+
+func (f *failingSessionService) Create(ctx context.Context, req *session.CreateRequest) (*session.CreateResponse, error) {
+	return nil, f.err
+}
+
+func (f *failingSessionService) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
+	return nil, f.err
+}
+
+func (f *failingSessionService) Delete(ctx context.Context, req *session.DeleteRequest) error {
+	return f.err
+}
+
+func (f *failingSessionService) List(ctx context.Context, req *session.ListRequest) (*session.ListResponse, error) {
+	return nil, f.err
+}
+
+func TestSessionsAPIController_InternalServerErrorSanitized(t *testing.T) {
+	svc := &failingSessionService{err: fmt.Errorf("secret db connection string failed")}
+	controller := controllers.NewSessionsAPIController(svc)
+
+	tests := []struct {
+		name    string
+		handler func(w http.ResponseWriter, r *http.Request)
+		vars    map[string]string
+		path    string
+		method  string
+	}{
+		{
+			name:    "CreateSessionHandler",
+			handler: controller.CreateSessionHandler,
+			vars:    map[string]string{"app_name": "app", "user_id": "user", "session_id": "session"},
+			path:    "/apps/app/users/user/sessions/session",
+			method:  http.MethodPost,
+		},
+		{
+			name:    "GetSessionHandler",
+			handler: controller.GetSessionHandler,
+			vars:    map[string]string{"app_name": "app", "user_id": "user", "session_id": "session"},
+			path:    "/apps/app/users/user/sessions/session",
+			method:  http.MethodGet,
+		},
+		{
+			name:    "DeleteSessionHandler",
+			handler: controller.DeleteSessionHandler,
+			vars:    map[string]string{"app_name": "app", "user_id": "user", "session_id": "session"},
+			path:    "/apps/app/users/user/sessions/session",
+			method:  http.MethodDelete,
+		},
+		{
+			name:    "ListSessionsHandler",
+			handler: controller.ListSessionsHandler,
+			vars:    map[string]string{"app_name": "app", "user_id": "user"},
+			path:    "/apps/app/users/user/sessions",
+			method:  http.MethodGet,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req = mux.SetURLVars(req, tc.vars)
+			rec := httptest.NewRecorder()
+
+			tc.handler(rec, req)
+
+			if rec.Code != http.StatusInternalServerError {
+				t.Errorf("got status code %d, want %d", rec.Code, http.StatusInternalServerError)
+			}
+
+			body := strings.TrimSpace(rec.Body.String())
+			if body != "internal server error" {
+				t.Errorf("got body %q, want %q", body, "internal server error")
+			}
+			if strings.Contains(body, "secret db connection string failed") {
+				t.Errorf("response body leaked sensitive internal error details: %s", body)
 			}
 		})
 	}

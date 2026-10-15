@@ -26,8 +26,6 @@ import (
 	"google.golang.org/adk/v2/session"
 )
 
-// TODO: Confirm error handling and target semantic for REST API.
-
 // SessionsAPIController is the controller for the Sessions API.
 type SessionsAPIController struct {
 	service session.Service
@@ -58,6 +56,7 @@ func (c *SessionsAPIController) CreateSessionHandler(rw http.ResponseWriter, req
 	}
 	respSession, err := c.createSession(req.Context(), sessionID, createSessionRequest)
 	if err != nil {
+		// Log detailed internal error server-side and return sanitized generic error to prevent information leakage
 		log.Printf("Internal server error in CreateSessionHandler: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
@@ -104,6 +103,7 @@ func (c *SessionsAPIController) DeleteSessionHandler(rw http.ResponseWriter, req
 		SessionID: sessionID.ID,
 	})
 	if err != nil {
+		// Log detailed internal error server-side and return sanitized generic error to prevent information leakage
 		log.Printf("Internal server error in DeleteSessionHandler: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
@@ -130,6 +130,7 @@ func (c *SessionsAPIController) GetSessionHandler(rw http.ResponseWriter, req *h
 		SessionID: sessionID.ID,
 	})
 	if err != nil {
+		// Log detailed internal error server-side and return sanitized generic error to prevent information leakage
 		log.Printf("Internal server error in GetSessionHandler: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
@@ -158,6 +159,7 @@ func (c *SessionsAPIController) ListSessionsHandler(rw http.ResponseWriter, req 
 		UserID:  sessionID.UserID,
 	})
 	if err != nil {
+		// Log detailed internal error server-side and return sanitized generic error to prevent information leakage
 		log.Printf("Internal server error in ListSessionsHandler: %v", err)
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
