@@ -397,6 +397,17 @@ h1 {
   outline-offset: 2px;
 }
 
+#sendButton:focus-visible,
+#startAudioButton:focus-visible,
+#cameraButton:focus-visible,
+#streamVideoButton:focus-visible,
+#sendFileButton:focus-visible,
+.btn-primary:focus-visible,
+.scroll-bottom-btn:focus-visible {
+  outline: 2px solid #202124;
+  outline-offset: 2px;
+}
+
 /* Input Form */
 .input-container {
   border-top: 1px solid var(--border-color);
