@@ -71,3 +71,7 @@ This journal tracks critical security learnings, vulnerability discoveries, and 
 **Vulnerability:** Replacing `math/rand` / `math/rand/v2` with `crypto/rand` for non-security operations (such as exponential backoff jitter in retry loops).
 **Learning:** Exponential backoff jitter is used solely to stagger network request retries and prevent thundering herd conditions. Using `crypto/rand` for jitter adds unnecessary I/O overhead and code complexity without providing any security benefit.
 **Prevention:** Reserve `crypto/rand` for security-sensitive random generation (tokens, keys, nonces, secrets) and avoid security theater.
+## 2024-05-18 - [SSRF bypass via 302 Redirects]
+**Vulnerability:** A custom DialContext meant to prevent Server-Side Request Forgery (SSRF) could be bypassed if the client follows a 302 redirect. Because the redirect instructs the underlying transport to connect to the new IP/host, the custom DialContext intercepts the new connection dial and resolves/rejects it appropriately before connecting.
+**Learning:** In Go, redirects trigger a new TCP connection and hit the configured transport's DialContext. So, explicit check/blocking of redirects via CheckRedirect is not strictly required if DialContext applies the IP checks. However, explicit CheckRedirect rejection is an optional defense in depth.
+**Prevention:** Rely on custom DialContext to catch SSRF, or implement CheckRedirect if strict redirect prevention is desired.
