@@ -17,6 +17,7 @@ package adkrest
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -47,6 +48,15 @@ func securityHeaders(inner http.Handler) http.Handler {
 	})
 }
 
+func normalizePrefix(prefix string) string {
+	prefix = strings.TrimSpace(prefix)
+	prefix = strings.Trim(prefix, "/")
+	if prefix == "" {
+		return ""
+	}
+	return "/" + prefix
+}
+
 // NewServer creates a new ADK REST API server which implements [http.Handler] interface.
 func NewServer(cfg ServerConfig) (*Server, error) {
 	debugTelemetry, err := services.NewDebugTelemetryWithConfig(&services.DebugTelemetryConfig{
@@ -58,9 +68,13 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 
 	router := mux.NewRouter().StrictSlash(true)
 	router.Use(securityHeaders)
-	// TODO: Allow taking a prefix to allow customizing the path
-	// where the ADK REST API will be served.
-	setupRouter(router,
+
+	targetRouter := router
+	if prefix := normalizePrefix(cfg.URLPrefix); prefix != "" {
+		targetRouter = router.PathPrefix(prefix).Subrouter()
+	}
+
+	setupRouter(targetRouter,
 		routers.NewSessionsAPIRouter(controllers.NewSessionsAPIController(cfg.SessionService)),
 		routers.NewRuntimeAPIRouter(controllers.NewRuntimeAPIController(cfg.SessionService, cfg.MemoryService, cfg.AgentLoader, cfg.ArtifactService, cfg.SSEWriteTimeout, cfg.PluginConfig, false)),
 		routers.NewAppsAPIRouter(controllers.NewAppsAPIController(cfg.AgentLoader)),
@@ -76,6 +90,8 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 
 // ServerConfig contains parameters for the ADK REST API server.
 type ServerConfig struct {
+	// URLPrefix is an optional path prefix under which all API routes will be mounted (e.g., "/api" or "api").
+	URLPrefix       string
 	SessionService  session.Service
 	MemoryService   memory.Service
 	AgentLoader     agent.Loader
