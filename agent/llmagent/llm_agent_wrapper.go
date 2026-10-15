@@ -330,9 +330,18 @@ func hasTaskDelegationTools(toolsDict map[string]tool.Tool) bool {
 }
 
 func findUnresolvedTaskDelegations(sess session.Session, owner string, toolsDict map[string]tool.Tool) []*genai.FunctionCall {
-	if sess == nil || sess.Events().Len() == 0 || !hasTaskDelegationTools(toolsDict) {
+	if sess == nil || !hasTaskDelegationTools(toolsDict) {
 		return nil
 	}
+	evs := sess.Events()
+	if evs == nil {
+		return nil
+	}
+	n := evs.Len()
+	if n == 0 {
+		return nil
+	}
+
 	// pendingFCs preserves discovery order (the order the LLM emitted
 	// the FCs). Tracking sets and maps are allocated lazily to prevent heap
 	// allocations when session history contains no task delegations.
@@ -340,7 +349,8 @@ func findUnresolvedTaskDelegations(sess session.Session, owner string, toolsDict
 	var seenFCs map[string]struct{}
 	var resolvedIDs map[string]struct{}
 
-	for ev := range sess.Events().All() {
+	for i := 0; i < n; i++ {
+		ev := evs.At(i)
 		if ev == nil || ev.Content == nil {
 			continue
 		}
@@ -361,10 +371,12 @@ func findUnresolvedTaskDelegations(sess session.Session, owner string, toolsDict
 				}
 			}
 			if fr := p.FunctionResponse; fr != nil && fr.ID != "" && seenFCs != nil {
-				if resolvedIDs == nil {
-					resolvedIDs = make(map[string]struct{})
+				if _, ok := seenFCs[fr.ID]; ok {
+					if resolvedIDs == nil {
+						resolvedIDs = make(map[string]struct{})
+					}
+					resolvedIDs[fr.ID] = struct{}{}
 				}
-				resolvedIDs[fr.ID] = struct{}{}
 			}
 		}
 	}
@@ -383,6 +395,9 @@ func findUnresolvedTaskDelegations(sess session.Session, owner string, toolsDict
 			continue
 		}
 		out = append(out, fc)
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }
