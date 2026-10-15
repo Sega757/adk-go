@@ -18,7 +18,23 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"google.golang.org/adk/v2/agent"
 )
+
+type dummyAgentLoader struct{}
+
+func (d dummyAgentLoader) ListAgents() []string {
+	return []string{"app1"}
+}
+
+func (d dummyAgentLoader) LoadAgent(name string) (agent.Agent, error) {
+	return nil, nil
+}
+
+func (d dummyAgentLoader) RootAgent() agent.Agent {
+	return nil
+}
 
 func TestSecurityHeaders_adkrest(t *testing.T) {
 	dummy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -55,5 +71,83 @@ func TestSecurityHeaders_adkrest(t *testing.T) {
 		if got != h.value {
 			t.Errorf("expected header %q to be %q, got %q", h.key, h.value, got)
 		}
+	}
+}
+
+func TestNormalizePrefix(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"/", ""},
+		{"//", ""},
+		{"api", "/api"},
+		{"/api", "/api"},
+		{"api/", "/api"},
+		{"/api/", "/api"},
+		{"  /v1/custom/  ", "/v1/custom"},
+	}
+
+	for _, tt := range tests {
+		got := normalizePrefix(tt.input)
+		if got != tt.expected {
+			t.Errorf("normalizePrefix(%q) = %q; want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestNewServer_URLPrefix(t *testing.T) {
+	tests := []struct {
+		name           string
+		prefix         string
+		reqPath        string
+		expectedStatus int
+	}{
+		{
+			name:           "no prefix configured, standard route",
+			prefix:         "",
+			reqPath:        "/list-apps",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "prefix configured, request with prefix",
+			prefix:         "/api",
+			reqPath:        "/api/list-apps",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "prefix configured, request without prefix",
+			prefix:         "/api",
+			reqPath:        "/list-apps",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:           "prefix without leading slash, request with prefix",
+			prefix:         "v1/api/",
+			reqPath:        "/v1/api/list-apps",
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server, err := NewServer(ServerConfig{
+				URLPrefix:   tt.prefix,
+				AgentLoader: dummyAgentLoader{},
+			})
+			if err != nil {
+				t.Fatalf("NewServer() error = %v", err)
+			}
+
+			req := httptest.NewRequest(http.MethodGet, tt.reqPath, nil)
+			rr := httptest.NewRecorder()
+
+			server.ServeHTTP(rr, req)
+
+			if rr.Code != tt.expectedStatus {
+				t.Errorf("ServeHTTP(%q) status = %d; want %d", tt.reqPath, rr.Code, tt.expectedStatus)
+			}
+		})
 	}
 }
