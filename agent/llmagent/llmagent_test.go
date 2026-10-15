@@ -15,6 +15,8 @@
 package llmagent_test
 
 import (
+	icontext "google.golang.org/adk/v2/internal/context"
+
 	"context"
 	"errors"
 	"fmt"
@@ -1455,5 +1457,52 @@ func TestThoughtOnlyTurnDoesNotEndInvocation(t *testing.T) {
 	}
 	if !strings.Contains(got.String(), "the answer") {
 		t.Errorf("surfaced text = %q, want it to contain %q", got.String(), "the answer")
+	}
+}
+
+func makeInvocationContext(ag agent.Agent, msg *genai.Content) agent.InvocationContext {
+	return icontext.NewInvocationContext(context.Background(), icontext.InvocationContextParams{
+		Agent:       ag,
+		UserContent: msg,
+		Session:     &mockSession{id: "test-session-id"},
+	})
+}
+
+func startInvocation(ctx context.Context, llmAgent agent.Agent) (agent.InvocationContext, error) {
+	invocationCtx := makeInvocationContext(llmAgent, genai.NewContentFromText("hello", genai.RoleUser))
+
+	var err error
+	for _, runErr := range llmAgent.Run(invocationCtx) {
+		if runErr != nil {
+			err = runErr
+			break
+		}
+	}
+	return invocationCtx, err
+}
+
+func TestStartInvocation(t *testing.T) {
+	testLLM := &testutil.MockModel{
+		Responses: []*genai.Content{
+			genai.NewContentFromText("hello response", genai.RoleModel),
+		},
+	}
+	a, err := llmagent.New(llmagent.Config{
+		Name:  "test_start_invocation",
+		Model: testLLM,
+	})
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	invCtx, err := startInvocation(t.Context(), a)
+	if err != nil {
+		t.Fatalf("startInvocation failed: %v", err)
+	}
+	if invCtx == nil {
+		t.Fatal("got nil InvocationContext")
+	}
+	if invCtx.Agent() != a {
+		t.Errorf("got agent %v, want %v", invCtx.Agent(), a)
 	}
 }
