@@ -92,7 +92,7 @@ func TestCalculateDelayWithJitter(t *testing.T) {
 		seenMap[got] = true
 	}
 
-	// Non-zero variance check: Ensure crypto/rand produces varying values.
+	// Non-zero variance check: Ensure math/rand/v2 produces varying values.
 	if len(seenMap) <= 1 {
 		t.Errorf("CalculateDelay with jitter produced non-varying results across 100 iterations: %v", seenMap)
 	}
@@ -137,18 +137,6 @@ func TestCalculateDelayConcurrent(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-}
-
-func TestSecureFloat64(t *testing.T) {
-	for i := 0; i < 100; i++ {
-		v, err := secureFloat64()
-		if err != nil {
-			t.Fatalf("secureFloat64 returned error: %v", err)
-		}
-		if v < 0.0 || v >= 1.0 {
-			t.Fatalf("secureFloat64 returned out-of-range value %f, expected [0.0, 1.0)", v)
-		}
-	}
 }
 
 func TestShouldRetry(t *testing.T) {
