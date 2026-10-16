@@ -284,6 +284,27 @@ h1 {
   line-height: 1.5;
 }
 
+.bubble-time {
+  display: block;
+  font-size: 0.6875rem;
+  margin-top: 0.25rem;
+  text-align: right;
+  opacity: 0.85;
+  user-select: none;
+}
+
+.message.user .bubble-time {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.message.agent .bubble-time {
+  color: #5f6368;
+}
+
+.bubble.image-bubble .bubble-time {
+  padding: 0 0.375rem 0.25rem 0;
+}
+
 /* Copy button styling for agent message bubbles */
 .bubble .copy-btn {
   position: absolute;

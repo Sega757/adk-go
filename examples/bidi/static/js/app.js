@@ -495,6 +495,13 @@ function addCopyButtonToBubble(messageElement) {
   bubble.appendChild(copyBtn);
 }
 
+// Helper function to format current time for message bubbles
+function formatMessageTime() {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return { iso: now.toISOString(), formatted: timeStr };
+}
+
 // Create a message bubble element
 function createMessageBubble(text, isUser, isPartial = false) {
   const messageDiv = document.createElement("div");
@@ -515,6 +522,16 @@ function createMessageBubble(text, isUser, isPartial = false) {
   }
 
   bubbleDiv.appendChild(textP);
+
+  // Add semantic timestamp element
+  const timeInfo = formatMessageTime();
+  const timeElem = document.createElement("time");
+  timeElem.className = "bubble-time";
+  timeElem.dateTime = timeInfo.iso;
+  timeElem.textContent = timeInfo.formatted;
+  timeElem.setAttribute("aria-label", `Sent at ${timeInfo.formatted}`);
+  bubbleDiv.appendChild(timeElem);
+
   messageDiv.appendChild(bubbleDiv);
 
   if (!isUser && !isPartial) {
@@ -625,6 +642,16 @@ function createImageBubble(imageDataUrl, isUser, altText = "Captured image") {
   });
 
   bubbleDiv.appendChild(img);
+
+  // Add semantic timestamp element
+  const timeInfo = formatMessageTime();
+  const timeElem = document.createElement("time");
+  timeElem.className = "bubble-time";
+  timeElem.dateTime = timeInfo.iso;
+  timeElem.textContent = timeInfo.formatted;
+  timeElem.setAttribute("aria-label", `Sent at ${timeInfo.formatted}`);
+  bubbleDiv.appendChild(timeElem);
+
   messageDiv.appendChild(bubbleDiv);
 
   return messageDiv;
