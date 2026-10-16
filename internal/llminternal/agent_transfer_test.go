@@ -815,3 +815,37 @@ func stringify(v any) string {
 	s, _ := json.Marshal(v)
 	return string(s)
 }
+
+func BenchmarkFormatTargets_Empty(b *testing.B) {
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = llminternal.ExportFormatTargets(nil)
+	}
+}
+
+func BenchmarkFormatTargets_Single(b *testing.B) {
+	llm := &struct{ model.LLM }{}
+	a := utils.Must(llmagent.New(llmagent.Config{
+		Name:  "AgentA",
+		Model: llm,
+	}))
+	targets := []agent.Agent{a}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_ = llminternal.ExportFormatTargets(targets)
+	}
+}
+
+func BenchmarkFormatTargets_Multiple(b *testing.B) {
+	llm := &struct{ model.LLM }{}
+	a1 := utils.Must(llmagent.New(llmagent.Config{Name: "AgentC", Model: llm}))
+	a2 := utils.Must(llmagent.New(llmagent.Config{Name: "AgentA", Model: llm}))
+	a3 := utils.Must(llmagent.New(llmagent.Config{Name: "AgentB", Model: llm}))
+	targets := []agent.Agent{a1, a2, a3}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_ = llminternal.ExportFormatTargets(targets)
+	}
+}

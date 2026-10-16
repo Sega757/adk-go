@@ -36,3 +36,8 @@ func (m *mockLLMAgent) internal() *State {
 func ExportAppendTools(r *model.LLMRequest, tools ...tool.Tool) error {
 	return appendTools(r, tools...)
 }
+
+// ExportFormatTargets exports formatTargets for testing in llminternal_test package.
+func ExportFormatTargets(targets []agent.Agent) string {
+	return formatTargets(targets)
+}
