@@ -1482,6 +1482,16 @@ func startInvocation(ctx context.Context, llmAgent agent.Agent) (agent.Invocatio
 }
 
 func TestStartInvocation(t *testing.T) {
+	dummyTool, err := functiontool.New(functiontool.Config{
+		Name:        "dummy_tool",
+		Description: "dummy tool description",
+	}, func(_ agent.Context, _ struct{}) (struct{}, error) {
+		return struct{}{}, nil
+	})
+	if err != nil {
+		t.Fatalf("failed to create dummy_tool: %v", err)
+	}
+
 	testLLM := &testutil.MockModel{
 		Responses: []*genai.Content{
 			genai.NewContentFromText("hello response", genai.RoleModel),
@@ -1490,6 +1500,7 @@ func TestStartInvocation(t *testing.T) {
 	a, err := llmagent.New(llmagent.Config{
 		Name:  "test_start_invocation",
 		Model: testLLM,
+		Tools: []tool.Tool{dummyTool},
 	})
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
@@ -1504,5 +1515,10 @@ func TestStartInvocation(t *testing.T) {
 	}
 	if invCtx.Agent() != a {
 		t.Errorf("got agent %v, want %v", invCtx.Agent(), a)
+	}
+	if len(testLLM.Requests) > 0 {
+		if got, want := len(testLLM.Requests[0].Tools), 1; got != want {
+			t.Errorf("got %d tools in LLMRequest, want %d", got, want)
+		}
 	}
 }
