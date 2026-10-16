@@ -392,17 +392,38 @@ func instructionsForTransferToAgent(curAgent, parent agent.Agent, targets []agen
 	return buf.String(), nil
 }
 
+// formatTargets formats target agent names into a sorted, backtick-quoted, comma-separated string.
+// Optimization: fast-paths single/empty target lists and uses a pre-sized strings.Builder
+// to eliminate intermediate slice allocations (formattedAgentNames) and fmt.Sprintf reflection.
 func formatTargets(targets []agent.Agent) string {
+	if len(targets) == 0 {
+		return ""
+	}
+	if len(targets) == 1 {
+		return "`" + targets[0].Name() + "`"
+	}
 	availableAgentNames := make([]string, len(targets))
 	for i, t := range targets {
 		availableAgentNames[i] = t.Name()
 	}
 	slices.Sort(availableAgentNames)
-	formattedAgentNames := make([]string, len(availableAgentNames))
-	for i, name := range availableAgentNames {
-		formattedAgentNames[i] = fmt.Sprintf("`%s`", name)
+
+	totalLen := (len(availableAgentNames) - 1) * 2 // ", " delimiters
+	for _, name := range availableAgentNames {
+		totalLen += len(name) + 2 // backticks
 	}
-	return strings.Join(formattedAgentNames, ", ")
+
+	var sb strings.Builder
+	sb.Grow(totalLen)
+	for i, name := range availableAgentNames {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteByte('`')
+		sb.WriteString(name)
+		sb.WriteByte('`')
+	}
+	return sb.String()
 }
 
 // Prompt source:
