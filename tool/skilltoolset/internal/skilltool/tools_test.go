@@ -204,7 +204,7 @@ func TestLoadSkillResource(t *testing.T) {
 		}
 	}
 
-	invalidResourcePaths := []string{"../assets/data.txt", "/assets/data.txt", "\\assets\\data.txt"}
+	invalidResourcePaths := []string{"../assets/data.txt", "/assets/data.txt", "\\assets\\data.txt", "assets\\data.txt", "references\\sub\\doc.md"}
 	for _, invalidPath := range invalidResourcePaths {
 		_, err := functionTool.Run(createToolContext(t), map[string]any{
 			"skill_name":    "skill1",
