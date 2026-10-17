@@ -88,7 +88,7 @@ func loadSkillResource(ctx agent.Context, args LoadSkillResourceArgs, source ski
 }
 
 func validateResourcePath(resPath string) error {
-	if strings.Contains(resPath, "..") || strings.HasPrefix(resPath, "/") || strings.HasPrefix(resPath, "\\") {
+	if strings.Contains(resPath, "..") || strings.HasPrefix(resPath, "/") || strings.Contains(resPath, "\\") {
 		return fmt.Errorf("invalid resource path %q: path traversal or absolute paths not allowed", resPath)
 	}
 	return nil
