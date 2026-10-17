@@ -21,6 +21,7 @@ import (
 
 	"google.golang.org/genai"
 
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/session"
 )
 
@@ -246,6 +247,37 @@ func TestReconstructRunState_InvocationScope(t *testing.T) {
 	}
 	if ns := nodeState(t, state, "ask"); ns.Status != NodeCompleted || len(ns.Interrupts) != 0 {
 		t.Errorf("inv1 ask = %+v, want NodeCompleted with no pending interrupts", ns)
+	}
+}
+
+func BenchmarkFirstUserInput(b *testing.B) {
+	events := sliceEvents{
+		&session.Event{
+			Author:       "user",
+			InvocationID: "inv1",
+			LLMResponse: model.LLMResponse{
+				Content: &genai.Content{
+					Role:  "user",
+					Parts: []*genai.Part{{Text: "Hello world prompt"}},
+				},
+			},
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = firstUserInput(events, "inv1")
+	}
+}
+
+func BenchmarkUnwrapResponse(b *testing.B) {
+	data := map[string]any{"result": "some response payload"}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = unwrapResponse(data)
 	}
 }
 
