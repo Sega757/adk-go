@@ -403,6 +403,10 @@ func (w *Workflow) predecessorInput(node Node, nodeOutputs map[string]any, workf
 // FunctionResponses) are skipped. When invocationID is non-empty, only
 // that invocation's user events are considered, so the seed is the
 // current run's prompt rather than an earlier run's.
+//
+// Performance-optimized by Bolt: single-part user text prompts fast-path directly
+// without string concatenation or allocations, while multi-part prompts check for
+// FunctionResponse before allocating a strings.Builder.
 func firstUserInput(events session.Events, invocationID string) any {
 	for i := 0; i < events.Len(); i++ {
 		ev := events.At(i)
@@ -412,22 +416,43 @@ func firstUserInput(events session.Events, invocationID string) any {
 		if invocationID != "" && ev.InvocationID != invocationID {
 			continue
 		}
-		var text string
-		hasFR := false
-		for _, p := range ev.Content.Parts {
-			if p == nil {
+		parts := ev.Content.Parts
+		if len(parts) == 0 {
+			continue
+		}
+
+		// Fast-path single-part user prompt events (the vast majority of user messages).
+		if len(parts) == 1 {
+			p := parts[0]
+			if p == nil || p.FunctionResponse != nil {
 				continue
 			}
-			if p.FunctionResponse != nil {
-				hasFR = true
+			if p.Text != "" {
+				return p.Text
 			}
-			text += p.Text
+			continue
+		}
+
+		// Check if any part contains a FunctionResponse upfront to avoid string work.
+		hasFR := false
+		for _, p := range parts {
+			if p != nil && p.FunctionResponse != nil {
+				hasFR = true
+				break
+			}
 		}
 		if hasFR {
 			continue
 		}
-		if text != "" {
-			return text
+
+		var sb strings.Builder
+		for _, p := range parts {
+			if p != nil && p.Text != "" {
+				sb.WriteString(p.Text)
+			}
+		}
+		if sb.Len() > 0 {
+			return sb.String()
 		}
 	}
 	return nil
@@ -510,22 +535,31 @@ func schemaFromEvent(ev *session.Event, id string) *jsonschema.Schema {
 	return nil
 }
 
+var unwrapKeys = [3]string{"result", "response", "payload"}
+
 // unwrapResponse extracts the original value from a FunctionResponse
 // payload. A sole single-key wrapper — {"result": v} (adk-python),
 // {"response": v} or {"payload": v} (adk-go) — is unwrapped, with
 // string values JSON-parsed when possible; anything else passes
 // through. Mirrors adk-python _unwrap_response, extended with the
 // adk-go keys for cross-runtime sessions.
+//
+// Performance-optimized by Bolt: uses static array iteration to avoid slice
+// allocations and fast-paths non-JSON string values to avoid json.Unmarshal overhead.
 func unwrapResponse(data map[string]any) any {
 	if len(data) != 1 {
 		return data
 	}
-	for _, key := range []string{"result", "response", "payload"} {
+	for _, key := range unwrapKeys {
 		v, ok := data[key]
 		if !ok {
 			continue
 		}
 		if s, isStr := v.(string); isStr {
+			sTrim := strings.TrimSpace(s)
+			if len(sTrim) == 0 || (sTrim[0] != '{' && sTrim[0] != '[' && sTrim[0] != '"' && sTrim[0] != 't' && sTrim[0] != 'f' && sTrim[0] != 'n' && (sTrim[0] < '0' || sTrim[0] > '9') && sTrim[0] != '-') {
+				return s
+			}
 			var parsed any
 			if err := json.Unmarshal([]byte(s), &parsed); err == nil {
 				return parsed
