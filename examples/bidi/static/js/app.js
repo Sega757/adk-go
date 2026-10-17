@@ -244,7 +244,9 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
   // JSON details (hidden by default)
   let jsonDiv = null;
   if (data) {
+    const jsonId = `console-json-${Math.random().toString(36).substring(2, 9)}`;
     jsonDiv = document.createElement("div");
+    jsonDiv.id = jsonId;
     jsonDiv.className = "console-entry-json collapsed";
 
     const jsonHeader = document.createElement("div");
@@ -295,6 +297,7 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
     entry.setAttribute("role", "button");
     entry.setAttribute("tabindex", "0");
     entry.setAttribute("aria-expanded", "false");
+    entry.setAttribute("aria-controls", jsonId);
     entry.setAttribute("title", "Click or press Enter/Space to expand details");
 
     const toggleExpand = () => {
