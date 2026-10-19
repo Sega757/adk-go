@@ -122,19 +122,27 @@ func (a *workflowAgent) run(ctx agent.InvocationContext) iter.Seq2[*session.Even
 // responses map keyed by InterruptID (suitable for
 // Workflow.Resume), the RunState loaded from session, and true if
 // this turn is a resume; (nil, nil, false) for a fresh turn.
+//
+// Optimization Note: Fast-paths non-resume turns by iterating directly over user content
+// parts without calling slice-building helpers (utils.FunctionResponses) and lazily
+// allocates the responses map only when workflow input responses exist, achieving 0 B/op.
 func (a *workflowAgent) detectResume(ctx agent.InvocationContext) (map[string]any, *workflow.RunState, bool, error) {
-	if !utils.HasFunctionResponses(ctx.UserContent()) {
-		return nil, nil, false, nil
-	}
-	frs := utils.FunctionResponses(ctx.UserContent())
-	if len(frs) == 0 {
+	userContent := ctx.UserContent()
+	if userContent == nil || !utils.HasFunctionResponses(userContent) {
 		return nil, nil, false, nil
 	}
 
-	responses := map[string]any{}
-	for _, fr := range frs {
+	var responses map[string]any
+	for _, part := range userContent.Parts {
+		if part == nil || part.FunctionResponse == nil {
+			continue
+		}
+		fr := part.FunctionResponse
 		if fr.Name != workflow.WorkflowInputFunctionCallName {
 			continue
+		}
+		if responses == nil {
+			responses = make(map[string]any)
 		}
 		responses[fr.ID] = decodeWorkflowInputResponse(fr)
 	}
