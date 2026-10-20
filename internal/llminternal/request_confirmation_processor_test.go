@@ -373,3 +373,82 @@ func BenchmarkRequestConfirmationRequestProcessor_StandardTurn(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkRequestConfirmationRequestProcessor_ConfirmationTurn(b *testing.B) {
+	agnt, tools, err := newMockLlmAgent()
+	if err != nil {
+		b.Fatalf("error creating mock llmagent: %v", err)
+	}
+
+	originalCallMap := map[string]any{
+		"name": mockToolName,
+		"args": map[string]any{"param1": "test"},
+		"id":   mockFunctionCallID,
+	}
+
+	toolConfirmation := toolconfirmation.ToolConfirmation{Confirmed: false, Hint: "test hint"}
+	toolConfirmationArgs := map[string]any{
+		"originalFunctionCall": originalCallMap,
+		"toolConfirmation":     toolConfirmation,
+	}
+
+	userConfirmation := toolconfirmation.ToolConfirmation{Confirmed: true}
+	userConfirmationJSON, _ := json.Marshal(userConfirmation)
+	userConfirmationResponse := map[string]any{
+		"response": string(userConfirmationJSON),
+	}
+
+	events := []*session.Event{
+		{
+			Author: "agent",
+			LLMResponse: model.LLMResponse{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{
+							FunctionCall: &genai.FunctionCall{
+								Name: toolconfirmation.FunctionCallName,
+								Args: toolConfirmationArgs,
+								ID:   mockConfirmationFunctionCallID,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Author: "user",
+			LLMResponse: model.LLMResponse{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{
+							FunctionResponse: &genai.FunctionResponse{
+								Name:     toolconfirmation.FunctionCallName,
+								ID:       mockConfirmationFunctionCallID,
+								Response: userConfirmationResponse,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctx := icontext.NewInvocationContext(b.Context(), icontext.InvocationContextParams{
+		Agent:   agnt,
+		Session: &fakeSession{events: events},
+	})
+	llmReq := &model.LLMRequest{}
+	flow := &llminternal.Flow{Tools: tools}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		iter := llminternal.RequestConfirmationRequestProcessor(ctx, llmReq, flow)
+		for _, err := range iter {
+			if err != nil {
+				b.Fatalf("unexpected error: %v", err)
+			}
+		}
+	}
+}

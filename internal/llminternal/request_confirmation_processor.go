@@ -60,11 +60,13 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 			if !utils.HasFunctionResponses(event.Content) {
 				return
 			}
-			responses := utils.FunctionResponses(event.Content)
-			if len(responses) == 0 {
-				return
-			}
-			for _, funcResp := range responses {
+			// Performance Optimization by Bolt: Iterate directly over event.Content.Parts
+			// to avoid intermediate slice allocations from utils.FunctionResponses.
+			for _, p := range event.Content.Parts {
+				if p == nil || p.FunctionResponse == nil {
+					continue
+				}
+				funcResp := p.FunctionResponse
 				if funcResp.Name != toolconfirmation.FunctionCallName {
 					continue
 				}
@@ -120,12 +122,14 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 			if !utils.HasFunctionCalls(event.Content) {
 				continue
 			}
-			calls := utils.FunctionCalls(event.Content)
-			if len(calls) == 0 {
-				continue
-			}
+			// Performance Optimization by Bolt: Iterate directly over event.Content.Parts
+			// to avoid intermediate slice allocations from utils.FunctionCalls.
 			toolsToResumeByFunctionCallID := map[string]*confirmedCall{}
-			for _, functionCall := range calls {
+			for _, p := range event.Content.Parts {
+				if p == nil || p.FunctionCall == nil {
+					continue
+				}
+				functionCall := p.FunctionCall
 				confirmation, ok := confirmationResponses[functionCall.ID]
 				if !ok {
 					continue
@@ -152,12 +156,12 @@ func RequestConfirmationRequestProcessor(ctx agent.InvocationContext, req *model
 				if !utils.HasFunctionResponses(event.Content) {
 					continue
 				}
-				responses := utils.FunctionResponses(event.Content)
-				if len(responses) == 0 {
-					continue
-				}
-				for _, resp := range responses {
-					delete(toolsToResumeByFunctionCallID, resp.ID)
+				// Performance Optimization by Bolt: Iterate directly over event.Content.Parts
+				// to avoid intermediate slice allocations from utils.FunctionResponses.
+				for _, p := range event.Content.Parts {
+					if p != nil && p.FunctionResponse != nil {
+						delete(toolsToResumeByFunctionCallID, p.FunctionResponse.ID)
+					}
 				}
 				if len(toolsToResumeByFunctionCallID) == 0 {
 					break

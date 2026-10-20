@@ -487,8 +487,7 @@ func (f *Flow) RunLive(ctx agent.InvocationContext) (agent.LiveSession, iter.Seq
 						}
 					}
 					// Handle function calls if present in the event
-					fnCalls := utils.FunctionCalls(ev.LLMResponse.Content)
-					if len(fnCalls) > 0 {
+					if hasFunctionCalls(ev.LLMResponse.Content) {
 						tools := make(map[string]tool.Tool)
 						for _, t := range f.Tools {
 							tools[t.Name()] = t
