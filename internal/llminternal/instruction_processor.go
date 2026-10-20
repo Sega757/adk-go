@@ -209,6 +209,15 @@ func InjectSessionState(ctx agent.InvocationContext, template string) (string, e
 		return template, nil
 	}
 
+	// Single variable fast-path: template consists solely of "{var_name}" or "{var_name?}"
+	// Avoids strings.Builder allocation and loop scanning overhead.
+	if firstOpen == 0 && len(template) >= 2 && template[len(template)-1] == '}' {
+		inner := template[1 : len(template)-1]
+		if strings.IndexByte(inner, '{') < 0 && strings.IndexByte(inner, '}') < 0 {
+			return replaceMatch(ctx, template)
+		}
+	}
+
 	var result strings.Builder
 	result.Grow(len(template))
 
