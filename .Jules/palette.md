@@ -95,3 +95,7 @@ This journal documents critical UX and accessibility learnings, patterns, and in
 ## 2026-10-11 - Semantic Chat Message Timestamps & Accessible Time Labels
 **Learning:** In real-time streaming chat interfaces, chat bubbles without timestamps leave users uncertain about when specific turns, transcriptions, or media uploads occurred. Appending a semantic `<time>` element with ISO `dateTime`, local formatted time, and explicit `aria-label`s (`"Sent at HH:MM AM/PM"`) provides accessible time context for screen reader users and keyboard navigators without cluttering the chat layout.
 **Action:** Always attach semantic `<time>` elements with `dateTime` ISO values and `aria-label` attributes to chat bubbles in web interfaces.
+
+## 2026-10-12 - ARIA Control Association on Dynamic Collapsible Containers
+**Learning:** In streaming web UIs with dynamic expandable event cards or jump-to-bottom buttons, omitting explicit `aria-controls` attributes leaves screen reader users unaware of which element or container is being controlled or toggled open. Assigning unique generated DOM IDs to collapsible containers upon creation and explicitly referencing them with `aria-controls` on the controlling trigger element ensures screen readers correctly describe the relationship.
+**Action:** Always assign explicit `aria-controls` attributes referencing target container IDs on dynamic toggle controls, scroll buttons, and expandable card triggers.
