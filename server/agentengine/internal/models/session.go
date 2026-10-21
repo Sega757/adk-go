@@ -101,19 +101,37 @@ type DeleteSessionResponse struct {
 }
 
 func FromSession(sess session.Session) SessionData {
+	if sess == nil {
+		return SessionData{
+			State:  make(map[string]any),
+			Events: []session.Event{},
+		}
+	}
+
 	stateMap := make(map[string]any)
-	for k, v := range sess.State().All() {
-		stateMap[k] = v
+	if sess.State() != nil {
+		for k, v := range sess.State().All() {
+			stateMap[k] = v
+		}
 	}
 
 	evs := []session.Event{}
-	for ev := range sess.Events().All() {
-		evs = append(evs, *ev)
+	if sess.Events() != nil {
+		for ev := range sess.Events().All() {
+			if ev != nil {
+				evs = append(evs, *ev)
+			}
+		}
+	}
+
+	var lastUpdateTime float64
+	if !sess.LastUpdateTime().IsZero() {
+		lastUpdateTime = float64(sess.LastUpdateTime().UnixNano()) / 1e9 // converts nanosec to sec
 	}
 
 	return SessionData{
 		UserID:         sess.UserID(),
-		LastUpdateTime: float64(sess.LastUpdateTime().UnixNano()) / 1e9, // converts nanosec to sec
+		LastUpdateTime: lastUpdateTime,
 		AppName:        sess.AppName(),
 		ID:             sess.ID(),
 		State:          stateMap,

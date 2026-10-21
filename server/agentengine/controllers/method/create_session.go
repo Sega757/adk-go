@@ -94,6 +94,9 @@ func (c *createSessionHandler) Handle(ctx context.Context, rw http.ResponseWrite
 	if err != nil {
 		return fmt.Errorf("c.sessionservice.Create() failed: %v", err)
 	}
+	if resp == nil || resp.Session == nil {
+		return fmt.Errorf("session creation failed: returned session is nil")
+	}
 
 	sd := models.FromSession(resp.Session)
 

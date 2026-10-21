@@ -95,6 +95,9 @@ func (g *getSessionHandler) Handle(ctx context.Context, rw http.ResponseWriter, 
 	if err != nil {
 		return fmt.Errorf("c.sessionservice.Get() failed: %v", err)
 	}
+	if resp == nil || resp.Session == nil {
+		return fmt.Errorf("session not found")
+	}
 
 	sd := models.FromSession(resp.Session)
 
