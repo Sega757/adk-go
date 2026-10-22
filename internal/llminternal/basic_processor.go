@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"slices"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"google.golang.org/genai"
 
 	"google.golang.org/adk/v2/agent"
@@ -153,6 +154,31 @@ func clone[M any](src M) M {
 		return any(cloneToolConfig(v)).(M)
 	case genai.ToolConfig:
 		cl := cloneToolConfig(&v)
+		if cl == nil {
+			var zero M
+			return zero
+		}
+		return any(*cl).(M)
+	case map[string]any:
+		if v == nil {
+			var zero M
+			return zero
+		}
+		return any(cloneMapStringAny(v)).(M)
+	case []any:
+		if v == nil {
+			var zero M
+			return zero
+		}
+		return any(cloneSliceAny(v)).(M)
+	case *jsonschema.Schema:
+		if v == nil {
+			var zero M
+			return zero
+		}
+		return any(cloneJSONSchema(v)).(M)
+	case jsonschema.Schema:
+		cl := cloneJSONSchema(&v)
 		if cl == nil {
 			var zero M
 			return zero
@@ -339,6 +365,141 @@ func clonePart(p *genai.Part) *genai.Part {
 	}
 	if len(p.PartMetadata) > 0 {
 		res.PartMetadata = maps.Clone(p.PartMetadata)
+	}
+	return &res
+}
+
+func cloneMapStringAny(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	res := make(map[string]any, len(m))
+	for k, v := range m {
+		res[k] = cloneValue(v)
+	}
+	return res
+}
+
+func cloneSliceAny(s []any) []any {
+	if s == nil {
+		return nil
+	}
+	res := make([]any, len(s))
+	for i, v := range s {
+		res[i] = cloneValue(v)
+	}
+	return res
+}
+
+func cloneValue(v any) any {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case map[string]any:
+		return cloneMapStringAny(val)
+	case []any:
+		return cloneSliceAny(val)
+	case string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
+		return val
+	case *genai.Content:
+		return cloneContent(val)
+	case *genai.Part:
+		return clonePart(val)
+	case *genai.Schema:
+		return cloneSchema(val)
+	case *jsonschema.Schema:
+		return cloneJSONSchema(val)
+	default:
+		return clone(val)
+	}
+}
+
+func cloneJSONSchema(s *jsonschema.Schema) *jsonschema.Schema {
+	if s == nil {
+		return nil
+	}
+	res := *s
+	if len(s.Types) > 0 {
+		res.Types = slices.Clone(s.Types)
+	}
+	if len(s.Required) > 0 {
+		res.Required = slices.Clone(s.Required)
+	}
+	if len(s.Enum) > 0 {
+		res.Enum = make([]any, len(s.Enum))
+		for i, v := range s.Enum {
+			res.Enum[i] = cloneValue(v)
+		}
+	}
+	if len(s.Properties) > 0 {
+		res.Properties = make(map[string]*jsonschema.Schema, len(s.Properties))
+		for k, v := range s.Properties {
+			res.Properties[k] = cloneJSONSchema(v)
+		}
+	}
+	if s.Items != nil {
+		res.Items = cloneJSONSchema(s.Items)
+	}
+	if len(s.PrefixItems) > 0 {
+		res.PrefixItems = make([]*jsonschema.Schema, len(s.PrefixItems))
+		for i, v := range s.PrefixItems {
+			res.PrefixItems[i] = cloneJSONSchema(v)
+		}
+	}
+	if len(s.AllOf) > 0 {
+		res.AllOf = make([]*jsonschema.Schema, len(s.AllOf))
+		for i, v := range s.AllOf {
+			res.AllOf[i] = cloneJSONSchema(v)
+		}
+	}
+	if len(s.AnyOf) > 0 {
+		res.AnyOf = make([]*jsonschema.Schema, len(s.AnyOf))
+		for i, v := range s.AnyOf {
+			res.AnyOf[i] = cloneJSONSchema(v)
+		}
+	}
+	if len(s.OneOf) > 0 {
+		res.OneOf = make([]*jsonschema.Schema, len(s.OneOf))
+		for i, v := range s.OneOf {
+			res.OneOf[i] = cloneJSONSchema(v)
+		}
+	}
+	if s.Not != nil {
+		res.Not = cloneJSONSchema(s.Not)
+	}
+	if len(s.PatternProperties) > 0 {
+		res.PatternProperties = make(map[string]*jsonschema.Schema, len(s.PatternProperties))
+		for k, v := range s.PatternProperties {
+			res.PatternProperties[k] = cloneJSONSchema(v)
+		}
+	}
+	if len(s.DependentSchemas) > 0 {
+		res.DependentSchemas = make(map[string]*jsonschema.Schema, len(s.DependentSchemas))
+		for k, v := range s.DependentSchemas {
+			res.DependentSchemas[k] = cloneJSONSchema(v)
+		}
+	}
+	if len(s.DependentRequired) > 0 {
+		res.DependentRequired = make(map[string][]string, len(s.DependentRequired))
+		for k, v := range s.DependentRequired {
+			res.DependentRequired[k] = slices.Clone(v)
+		}
+	}
+	if s.If != nil {
+		res.If = cloneJSONSchema(s.If)
+	}
+	if s.Then != nil {
+		res.Then = cloneJSONSchema(s.Then)
+	}
+	if s.Else != nil {
+		res.Else = cloneJSONSchema(s.Else)
+	}
+	if s.PropertyNames != nil {
+		res.PropertyNames = cloneJSONSchema(s.PropertyNames)
+	}
+	if len(s.Extra) > 0 {
+		res.Extra = cloneMapStringAny(s.Extra)
 	}
 	return &res
 }

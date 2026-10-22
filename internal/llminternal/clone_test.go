@@ -18,6 +18,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"google.golang.org/genai"
 )
 
@@ -445,6 +446,113 @@ func BenchmarkClone_GenAIPart(b *testing.B) {
 			ID:   "call_123",
 			Name: "search",
 			Args: map[string]any{"query": "golang optimization", "limit": 10},
+		},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = clone(orig)
+	}
+}
+
+func TestCloneMapStringAny(t *testing.T) {
+	orig := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+			"age":  map[string]any{"type": "integer"},
+		},
+		"required": []any{"name", "age"},
+	}
+
+	cloned := clone(orig)
+	if !reflect.DeepEqual(orig, cloned) {
+		t.Errorf("clone(map[string]any) mismatch (-want +got):\n%+v", cloned)
+	}
+
+	// Verify deep copy independence
+	cloned["type"] = "modified"
+	cloned["properties"].(map[string]any)["name"].(map[string]any)["type"] = "modified"
+	cloned["required"].([]any)[0] = "modified"
+
+	if orig["type"] == "modified" {
+		t.Errorf("original map type was modified")
+	}
+	if orig["properties"].(map[string]any)["name"].(map[string]any)["type"] == "modified" {
+		t.Errorf("original nested map was modified")
+	}
+	if orig["required"].([]any)[0] == "modified" {
+		t.Errorf("original slice was modified")
+	}
+}
+
+func TestCloneJSONSchema(t *testing.T) {
+	orig := &jsonschema.Schema{
+		Type:        "object",
+		Description: "user profile",
+		Properties: map[string]*jsonschema.Schema{
+			"name": {Type: "string", Description: "user name"},
+			"age":  {Type: "integer"},
+		},
+		Required: []string{"name"},
+		Items:    &jsonschema.Schema{Type: "string"},
+		Extra: map[string]any{
+			"x-custom": "value",
+		},
+	}
+
+	cloned := clone(orig)
+	if !reflect.DeepEqual(orig, cloned) {
+		t.Errorf("clone(*jsonschema.Schema) mismatch (-want +got):\n%+v", cloned)
+	}
+
+	// Verify deep copy independence
+	cloned.Properties["name"].Description = "modified"
+	cloned.Required[0] = "modified"
+	cloned.Extra["x-custom"] = "modified"
+
+	if orig.Properties["name"].Description == "modified" {
+		t.Errorf("original schema description was modified")
+	}
+	if orig.Required[0] == "modified" {
+		t.Errorf("original required slice was modified")
+	}
+	if orig.Extra["x-custom"] == "modified" {
+		t.Errorf("original extra map was modified")
+	}
+}
+
+func BenchmarkClone_MapStringAny(b *testing.B) {
+	orig := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string", "description": "user name"},
+			"age":  map[string]any{"type": "integer", "description": "user age"},
+			"tags": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		},
+		"required": []any{"name", "age"},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = clone(orig)
+	}
+}
+
+func BenchmarkClone_JSONSchema(b *testing.B) {
+	orig := &jsonschema.Schema{
+		Type:        "object",
+		Description: "JSON response schema",
+		Properties: map[string]*jsonschema.Schema{
+			"name": {Type: "string", Description: "user name"},
+			"age":  {Type: "integer", Description: "user age"},
+			"tags": {Type: "array", Items: &jsonschema.Schema{Type: "string"}},
+		},
+		Required: []string{"name", "age"},
+		Extra: map[string]any{
+			"x-custom": "value",
 		},
 	}
 
