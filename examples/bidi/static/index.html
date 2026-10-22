@@ -43,16 +43,19 @@
           <form id="messageForm">
             <span id="inputHint" class="sr-only">Press Enter to send, Escape to clear, or Control V to paste an image.</span>
             <div class="input-wrapper">
-              <input
-                type="text"
-                id="message"
-                name="message"
-                placeholder="Type your message here..."
-                aria-label="Type a message"
-                aria-describedby="inputHint"
-                autocomplete="off"
-                disabled
-              />
+              <div class="message-input-container">
+                <input
+                  type="text"
+                  id="message"
+                  name="message"
+                  placeholder="Type your message here..."
+                  aria-label="Type a message"
+                  aria-describedby="inputHint"
+                  autocomplete="off"
+                  disabled
+                />
+                <button type="button" id="clearInputBtn" class="clear-input-btn" aria-label="Clear message input" title="Clear input text (Esc)" style="display: none;">✕</button>
+              </div>
               <button type="submit" id="sendButton" aria-label="Send message" disabled>Send</button>
               <button type="button" id="startAudioButton" aria-pressed="false" aria-label="Toggle voice input" disabled>🎤 Start Voice</button>
               <button type="button" id="cameraButton" aria-label="Open camera preview" aria-haspopup="dialog" aria-controls="cameraModal" disabled>📷 Camera</button>
