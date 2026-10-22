@@ -116,6 +116,16 @@ func TestLoadMemoryTool_Run(t *testing.T) {
 			args:    map[string]any{"query": 123},
 			wantErr: true,
 		},
+		{
+			name:    "empty query string",
+			args:    map[string]any{"query": ""},
+			wantErr: true,
+		},
+		{
+			name:    "whitespace query string",
+			args:    map[string]any{"query": "   "},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

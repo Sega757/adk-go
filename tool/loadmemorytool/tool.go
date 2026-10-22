@@ -19,6 +19,7 @@ package loadmemorytool
 
 import (
 	"fmt"
+	"strings"
 
 	"google.golang.org/genai"
 
@@ -94,6 +95,9 @@ func (t *loadMemoryTool) Run(toolCtx agent.Context, args any) (map[string]any, e
 	query, ok := queryRaw.(string)
 	if !ok {
 		return nil, fmt.Errorf("query must be a string, got: %T", queryRaw)
+	}
+	if strings.TrimSpace(query) == "" {
+		return nil, fmt.Errorf("query parameter cannot be empty")
 	}
 
 	searchResponse, err := toolCtx.SearchMemory(toolCtx, query)
