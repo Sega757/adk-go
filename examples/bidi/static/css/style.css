@@ -457,9 +457,17 @@ h1 {
   flex-wrap: wrap;
 }
 
-#message {
+.message-input-container {
+  position: relative;
   flex: 1;
-  padding: 0.875rem 1rem;
+  display: flex;
+  align-items: center;
+  min-width: 200px;
+}
+
+#message {
+  width: 100%;
+  padding: 0.875rem 2.25rem 0.875rem 1rem;
   border: 1px solid var(--border-color);
   border-radius: 1.5rem;
   font-size: 1rem;
@@ -467,6 +475,37 @@ h1 {
   background-color: var(--input-bg);
   transition: all 0.2s ease;
   outline: none;
+}
+
+.clear-input-btn {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+  background-color: #e8eaed;
+  color: #5f6368;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.clear-input-btn:hover {
+  background-color: #dadce0;
+  color: #202124;
+}
+
+.clear-input-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
 }
 
 #message:focus {

@@ -78,13 +78,19 @@ const showAudioEventsCheckbox = document.getElementById("showAudioEvents");
 // Dynamic button state management for Send and Clear Console controls
 function updateSendButtonState() {
   const sendButton = document.getElementById("sendButton");
+  const clearInputBtn = document.getElementById("clearInputBtn");
+  const hasText = messageInput && messageInput.value.trim().length > 0;
+
+  if (clearInputBtn) {
+    clearInputBtn.style.display = hasText ? "inline-flex" : "none";
+  }
+
   if (!sendButton) return;
   if (!websocket || websocket.readyState !== WebSocket.OPEN) {
     sendButton.disabled = true;
     sendButton.setAttribute("title", "Connect to server to enable control");
     return;
   }
-  const hasText = messageInput && messageInput.value.trim().length > 0;
   sendButton.disabled = !hasText;
   if (!hasText) {
     sendButton.setAttribute("title", "Type a message to enable send");
@@ -376,6 +382,15 @@ function updateAudioEventsTooltip() {
 if (showAudioEventsCheckbox) {
   showAudioEventsCheckbox.addEventListener("change", updateAudioEventsTooltip);
   updateAudioEventsTooltip();
+}
+
+const clearInputBtn = document.getElementById("clearInputBtn");
+if (clearInputBtn && messageInput) {
+  clearInputBtn.addEventListener("click", () => {
+    messageInput.value = "";
+    updateSendButtonState();
+    messageInput.focus();
+  });
 }
 
 if (messageInput) {
