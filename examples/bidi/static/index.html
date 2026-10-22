@@ -28,7 +28,7 @@
       </div>
     </header>
 
-    <div class="main-layout">
+    <main class="main-layout">
       <div class="container">
         <div id="messages" role="log" aria-label="Chat messages" aria-live="polite">
           <div id="emptyState" class="empty-state">
@@ -41,6 +41,7 @@
 
         <div class="input-container">
           <form id="messageForm">
+            <span id="inputHint" class="sr-only">Press Enter to send, Escape to clear, or Control V to paste an image.</span>
             <div class="input-wrapper">
               <input
                 type="text"
@@ -48,6 +49,7 @@
                 name="message"
                 placeholder="Type your message here..."
                 aria-label="Type a message"
+                aria-describedby="inputHint"
                 autocomplete="off"
                 disabled
               />
@@ -62,7 +64,7 @@
         </div>
       </div>
 
-      <div class="console-panel">
+      <aside class="console-panel" aria-label="Event console">
         <div class="console-header">
           <h2>Event Console</h2>
           <div class="console-controls">
@@ -80,8 +82,8 @@
             <p>Real-time WebSocket events and debug logs will appear here.</p>
           </div>
         </div>
-      </div>
-    </div>
+      </aside>
+    </main>
 
     <!-- Camera Preview Modal -->
     <div id="cameraModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle">
