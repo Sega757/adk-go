@@ -111,6 +111,22 @@ func convertContents(contents []*genai.Content) (responses.ResponseInputParam, e
 			continue
 		}
 		curRole = genai.Role(content.Role)
+
+		// Fast-path: single text part per content (most common case in chat turns).
+		if len(textParts) == 0 && len(content.Parts) == 1 {
+			p := content.Parts[0]
+			if p != nil && p.Text != "" && p.FunctionCall == nil && p.FunctionResponse == nil {
+				msg, err := newSingleTextMessage(curRole, p.Text)
+				if err != nil {
+					return nil, err
+				}
+				if msg != nil {
+					items = append(items, responses.ResponseInputItemUnionParam{OfMessage: msg})
+				}
+				continue
+			}
+		}
+
 		if len(textParts) == 0 && cap(textParts) < len(content.Parts) {
 			textParts = make([]string, 0, len(content.Parts))
 		}
@@ -153,18 +169,49 @@ func convertContents(contents []*genai.Content) (responses.ResponseInputParam, e
 	return items, nil
 }
 
-func newMessage(role genai.Role, texts []string) (*responses.EasyInputMessageParam, error) {
-	if len(texts) == 0 {
+func newSingleTextMessage(role genai.Role, txt string) (*responses.EasyInputMessageParam, error) {
+	if txt == "" || strings.TrimSpace(txt) == "" {
 		return nil, nil
 	}
 	msgRole, err := normalizeRole(role)
 	if err != nil {
 		return nil, err
 	}
-	contentList := make(responses.ResponseInputMessageContentListParam, 0, len(texts))
+	textParam := responses.ResponseInputTextParam{
+		Text: txt,
+		Type: constant.InputText("input_text"),
+	}
+	return &responses.EasyInputMessageParam{
+		Role: msgRole,
+		Type: responses.EasyInputMessageTypeMessage,
+		Content: responses.EasyInputMessageContentUnionParam{
+			OfInputItemContentList: responses.ResponseInputMessageContentListParam{
+				responses.ResponseInputContentUnionParam{
+					OfInputText: &textParam,
+				},
+			},
+		},
+	}, nil
+}
+
+func newMessage(role genai.Role, texts []string) (*responses.EasyInputMessageParam, error) {
+	if len(texts) == 0 {
+		return nil, nil
+	}
+	if len(texts) == 1 {
+		return newSingleTextMessage(role, texts[0])
+	}
+	msgRole, err := normalizeRole(role)
+	if err != nil {
+		return nil, err
+	}
+	var contentList responses.ResponseInputMessageContentListParam
 	for _, txt := range texts {
-		if strings.TrimSpace(txt) == "" {
+		if txt == "" || strings.TrimSpace(txt) == "" {
 			continue
+		}
+		if contentList == nil {
+			contentList = make(responses.ResponseInputMessageContentListParam, 0, len(texts))
 		}
 		textParam := responses.ResponseInputTextParam{
 			Text: txt,
