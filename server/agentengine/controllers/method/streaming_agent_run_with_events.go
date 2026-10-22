@@ -175,6 +175,9 @@ func (s *streamingAgentRunWithEventsHandler) ensureBackendSession(ctx context.Co
 	if err != nil {
 		return fmt.Errorf("sessionService.Create() failed: %w", err)
 	}
+	if createResp == nil || createResp.Session == nil {
+		return fmt.Errorf("sessionService.Create() returned nil session")
+	}
 
 	req.SessionID = createResp.Session.ID()
 	return nil

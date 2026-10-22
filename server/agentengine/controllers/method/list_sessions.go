@@ -87,11 +87,16 @@ func (l *listSessionHandler) Handle(ctx context.Context, rw http.ResponseWriter,
 	if err != nil {
 		return fmt.Errorf("c.sessionservice.List() failed: %v", err)
 	}
+	if resp == nil {
+		return fmt.Errorf("c.sessionservice.List() returned nil response")
+	}
 
 	sessions := []models.SessionData{}
 	for _, sess := range resp.Sessions {
-		sd := models.FromSession(sess)
-		sessions = append(sessions, sd)
+		if sess != nil {
+			sd := models.FromSession(sess)
+			sessions = append(sessions, sd)
+		}
 	}
 
 	result := models.ListSessionResponse{
