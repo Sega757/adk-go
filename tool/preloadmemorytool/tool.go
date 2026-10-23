@@ -32,11 +32,8 @@ import (
 	"google.golang.org/adk/v2/model"
 )
 
-const preloadInstructions = `The following content is from your previous conversations with the user.
-They may be useful for answering the user's current query.
-<PAST_CONVERSATIONS>
-%s
-</PAST_CONVERSATIONS>`
+const preloadInstructionsPrefix = "The following content is from your previous conversations with the user.\nThey may be useful for answering the user's current query.\n<PAST_CONVERSATIONS>\n"
+const preloadInstructionsSuffix = "\n</PAST_CONVERSATIONS>"
 
 // preloadMemoryTool is a tool that preloads the memory for the current user.
 // It is automatically executed for each LLM request and will not be called
@@ -93,37 +90,58 @@ func (t *preloadMemoryTool) ProcessRequest(ctx agent.Context, req *model.LLMRequ
 		return nil
 	}
 
-	utils.AppendInstructions(req, fmt.Sprintf(preloadInstructions, memoryText))
+	utils.AppendInstructions(req, preloadInstructionsPrefix+memoryText+preloadInstructionsSuffix)
 	return nil
 }
 
+// Performance-optimized by Bolt: Direct strings.Builder formatting eliminates intermediate
+// slice allocations ([]string) and fmt.Sprintf reflection overhead when building memory text.
 func formatMemories(memories []memory.Entry) string {
-	var lines []string
+	if len(memories) == 0 {
+		return ""
+	}
+	var sb strings.Builder
 	for _, mem := range memories {
 		memText := extractText(mem)
 		if memText == "" {
 			continue
 		}
 
+		if sb.Len() > 0 {
+			sb.WriteByte('\n')
+		}
+
 		if !mem.Timestamp.IsZero() {
-			lines = append(lines, fmt.Sprintf("Time: %s", mem.Timestamp.Format(time.RFC3339)))
+			sb.WriteString("Time: ")
+			sb.WriteString(mem.Timestamp.Format(time.RFC3339))
+			sb.WriteByte('\n')
 		}
 		if mem.Author != "" {
-			memText = fmt.Sprintf("%s: %s", mem.Author, memText)
+			sb.WriteString(mem.Author)
+			sb.WriteString(": ")
 		}
-		lines = append(lines, memText)
+		sb.WriteString(memText)
 	}
-	return strings.Join(lines, "\n")
+	return sb.String()
 }
 
+// Performance-optimized by Bolt: Single-part content fast-path bypasses strings.Builder
+// allocations completely, returning the text directly.
 func extractText(mem memory.Entry) string {
 	if mem.Content == nil || len(mem.Content.Parts) == 0 {
+		return ""
+	}
+	if len(mem.Content.Parts) == 1 {
+		p := mem.Content.Parts[0]
+		if p != nil {
+			return p.Text
+		}
 		return ""
 	}
 
 	var b strings.Builder
 	for _, part := range mem.Content.Parts {
-		if part.Text == "" {
+		if part == nil || part.Text == "" {
 			continue
 		}
 		if b.Len() > 0 {
