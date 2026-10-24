@@ -135,6 +135,10 @@ func (c *SessionsAPIController) GetSessionHandler(rw http.ResponseWriter, req *h
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
+	if storedSession == nil || storedSession.Session == nil {
+		http.Error(rw, "not found", http.StatusNotFound)
+		return
+	}
 	session, err := models.FromSession(storedSession.Session)
 	if err != nil {
 		log.Printf("Internal server error in GetSessionHandler: %v", err)
