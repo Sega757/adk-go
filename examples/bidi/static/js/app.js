@@ -196,7 +196,7 @@ function addConsoleEntry(type, content, data = null, emoji = null, author = null
   }
 
   const entry = document.createElement("div");
-  entry.className = `console-entry ${type}`;
+  entry.className = `console-entry ${type}${isAudio ? " audio-entry" : ""}`;
 
   const header = document.createElement("div");
   header.className = "console-entry-header";
@@ -376,6 +376,14 @@ function updateAudioEventsTooltip() {
     label.setAttribute("title", tooltipText);
   } else {
     showAudioEventsCheckbox.setAttribute("title", tooltipText);
+  }
+
+  if (consoleContent) {
+    const audioEntries = consoleContent.querySelectorAll(".audio-entry");
+    const displayStyle = showAudioEventsCheckbox.checked ? "" : "none";
+    audioEntries.forEach(entry => {
+      entry.style.display = displayStyle;
+    });
   }
 }
 
