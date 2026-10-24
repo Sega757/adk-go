@@ -23,49 +23,41 @@ import (
 	"time"
 
 	"google.golang.org/adk/v2/session"
+	"google.golang.org/adk/v2/session/internal/sessioninternal"
 )
 
-// TODO localSession is identical to session.session. Move to sessioninternal
 type localSession struct {
-	appName   string
-	userID    string
-	sessionID string
-
-	// guards all mutable fields
-	mu        sync.RWMutex
-	events    []*session.Event
-	state     map[string]any
-	updatedAt time.Time
+	sessioninternal.Session
 }
 
 func (s *localSession) ID() string {
-	return s.sessionID
+	return s.Session.SessionID
 }
 
 func (s *localSession) AppName() string {
-	return s.appName
+	return s.Session.AppName
 }
 
 func (s *localSession) UserID() string {
-	return s.userID
+	return s.Session.UserID
 }
 
 func (s *localSession) State() session.State {
 	return &state{
-		mu:    &s.mu,
-		state: s.state,
+		mu:    &s.Session.Mu,
+		state: s.Session.State,
 	}
 }
 
 func (s *localSession) Events() session.Events {
-	return events(s.events)
+	return events(s.Session.Events)
 }
 
 func (s *localSession) LastUpdateTime() time.Time {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.Session.Mu.RLock()
+	defer s.Session.Mu.RUnlock()
 
-	return s.updatedAt
+	return s.Session.UpdatedAt
 }
 
 func (s *localSession) appendEvent(event *session.Event) error {
@@ -73,15 +65,15 @@ func (s *localSession) appendEvent(event *session.Event) error {
 		return nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Session.Mu.Lock()
+	defer s.Session.Mu.Unlock()
 
 	if err := updateSessionState(s, event); err != nil {
 		return fmt.Errorf("failed to update localSession state: %w", err)
 	}
 
 	processedEvent := trimTempDeltaState(event)
-	s.events = append(s.events, processedEvent)
+	s.Session.Events = append(s.Session.Events, processedEvent)
 	return nil
 }
 
@@ -189,11 +181,11 @@ func updateSessionState(sess *localSession, event *session.Event) error {
 	}
 
 	// Ensure the session state map is initialized
-	if sess.state == nil {
-		sess.state = make(map[string]any)
+	if sess.Session.State == nil {
+		sess.Session.State = make(map[string]any)
 	}
 
-	maps.Copy(sess.state, event.Actions.StateDelta)
+	maps.Copy(sess.Session.State, event.Actions.StateDelta)
 
 	return nil
 }
