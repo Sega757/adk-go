@@ -166,7 +166,14 @@ func (s *dynamicSubScheduler) rehydrateCache() {
 	prefix := s.parentPath + "/"
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for ev := range sess.Events().All() {
+	evs := sess.Events()
+	if evs == nil {
+		return
+	}
+	// Index-based iteration over evs.At(i) avoids iter.Seq closure allocations during cache rehydration.
+	n := evs.Len()
+	for i := 0; i < n; i++ {
+		ev := evs.At(i)
 		if ev == nil || ev.Output == nil || ev.NodeInfo == nil {
 			continue
 		}
