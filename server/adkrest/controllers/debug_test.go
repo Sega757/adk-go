@@ -36,6 +36,7 @@ import (
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/server/adkrest/controllers"
+	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/server/adkrest/internal/fakes"
 	"google.golang.org/adk/v2/server/adkrest/internal/services"
 )
@@ -341,6 +342,42 @@ func TestDebugHandlers_NilTelemetry(t *testing.T) {
 			t.Errorf("handler returned unexpected body: got %q, want %q", gotBody, "[]")
 		}
 	})
+}
+
+type nilSessionService struct {
+	fakes.FakeSessionService
+}
+
+func (n *nilSessionService) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
+	return nil, nil
+}
+
+func TestEventGraphHandler_NilSession(t *testing.T) {
+	sessionService := &nilSessionService{}
+	apiController := controllers.NewDebugAPIController(sessionService, &errAgentLoader{}, nil)
+
+	req, err := http.NewRequest(http.MethodGet, "/debug/apps/app/users/user/sessions/sess-nonexistent/events/event-1/graph", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req = mux.SetURLVars(req, map[string]string{
+		"app_name":   "app",
+		"user_id":    "user",
+		"session_id": "sess-nonexistent",
+		"event_id":   "event-1",
+	})
+
+	rr := httptest.NewRecorder()
+	apiController.EventGraphHandler(rr, req)
+
+	if gotStatus := rr.Code; gotStatus != http.StatusNotFound {
+		t.Errorf("got status %d, want %d", gotStatus, http.StatusNotFound)
+	}
+
+	body := strings.TrimSpace(rr.Body.String())
+	if body != "event not found" {
+		t.Errorf("got body %q, want %q", body, "event not found")
+	}
 }
 
 func TestEventGraphHandler_SanitizedInternalError(t *testing.T) {
