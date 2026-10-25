@@ -87,6 +87,11 @@ func TestPreloadMemoryTool_ProcessRequest(t *testing.T) {
 			wantInstruction: false,
 		},
 		{
+			name:            "whitespace-only user content",
+			userContent:     genai.NewContentFromText("   \n\t  ", genai.RoleUser),
+			wantInstruction: false,
+		},
+		{
 			name:            "text in later part is ignored",
 			userContent:     &genai.Content{Parts: []*genai.Part{{InlineData: &genai.Blob{}}, genai.NewPartFromText("later text")}},
 			wantInstruction: false,
