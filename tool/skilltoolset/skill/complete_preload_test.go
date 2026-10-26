@@ -193,6 +193,7 @@ func TestWithCompletePreloadSource_ListResources_Filtering(t *testing.T) {
 		name      string
 		subpath   string
 		wantPaths []string
+		wantErr   error
 	}{
 		{
 			name:      "Folder match",
@@ -223,8 +224,13 @@ func TestWithCompletePreloadSource_ListResources_Filtering(t *testing.T) {
 		},
 		{
 			name:      "No match",
-			subpath:   "nonexistent",
+			subpath:   "references/nonexistent",
 			wantPaths: nil,
+		},
+		{
+			name:    "Unauthorized subpath error",
+			subpath: "unauthorized",
+			wantErr: ErrInvalidResourcePath,
 		},
 		{
 			name:      "Root match",
@@ -236,8 +242,11 @@ func TestWithCompletePreloadSource_ListResources_Filtering(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			paths, err := source.ListResources(t.Context(), "skill1", tc.subpath)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("ListResources expected error %v, got %v", tc.wantErr, err)
+			}
 			if err != nil {
-				t.Fatalf("ListResources failed: %v", err)
+				return
 			}
 			if diff := cmp.Diff(tc.wantPaths, paths, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
 				t.Errorf("ListResources mismatch (-want +got):\n%s", diff)
@@ -282,6 +291,16 @@ func TestWithCompletePreloadSource_LoadResource(t *testing.T) {
 			name:    "Not existing resource",
 			path:    "assets/nonexistent.png",
 			wantErr: ErrResourceNotFound,
+		},
+		{
+			name:    "Unauthorized directory",
+			path:    "unauthorized/file.txt",
+			wantErr: ErrInvalidResourcePath,
+		},
+		{
+			name:    "Traversal attempt",
+			path:    "references/../../SKILL.md",
+			wantErr: ErrInvalidResourcePath,
 		},
 	}
 
