@@ -71,10 +71,10 @@ func (t *preloadMemoryTool) IsLongRunning() bool {
 func (t *preloadMemoryTool) ProcessRequest(ctx agent.Context, req *model.LLMRequest) error {
 	userContent := ctx.UserContent()
 	if userContent == nil || len(userContent.Parts) == 0 ||
-		userContent.Parts[0] == nil || userContent.Parts[0].Text == "" {
+		userContent.Parts[0] == nil || strings.TrimSpace(userContent.Parts[0].Text) == "" {
 		return nil
 	}
-	userQuery := userContent.Parts[0].Text
+	userQuery := strings.TrimSpace(userContent.Parts[0].Text)
 
 	searchResponse, err := ctx.SearchMemory(ctx, userQuery)
 	if err != nil {
