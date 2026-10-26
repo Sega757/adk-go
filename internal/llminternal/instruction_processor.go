@@ -108,13 +108,20 @@ func appendGlobalInstructions(ctx agent.InvocationContext, req *model.LLMRequest
 }
 
 // replaceMatch is the Go equivalent of the _replace_match async function in the Python code.
+// Trims curly braces and optional '?' suffix using standard library strings.CutPrefix and strings.CutSuffix.
 func replaceMatch(ctx agent.InvocationContext, match string) (string, error) {
-	// Trim curly braces: "{var_name}" -> "var_name"
-	varName := strings.TrimSpace(strings.Trim(match, "{}"))
+	s := strings.TrimSpace(match)
+	if after, ok := strings.CutPrefix(s, "{"); ok {
+		s = after
+	}
+	if before, ok := strings.CutSuffix(s, "}"); ok {
+		s = before
+	}
+	varName := strings.TrimSpace(s)
 	optional := false
-	if strings.HasSuffix(varName, "?") {
+	if before, ok := strings.CutSuffix(varName, "?"); ok {
 		optional = true
-		varName = strings.TrimSuffix(varName, "?")
+		varName = strings.TrimSpace(before)
 	}
 
 	if after, ok := strings.CutPrefix(varName, "artifact."); ok {
