@@ -633,6 +633,34 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// Global keyboard shortcut ('/' or 'Ctrl+K' / 'Cmd+K') to focus chat input
+document.addEventListener("keydown", (e) => {
+  const isModalOpen = (cameraModal && cameraModal.classList.contains("show")) ||
+                      (imageModal && imageModal.classList.contains("show"));
+  if (isModalOpen) return;
+
+  const active = document.activeElement;
+  const isTyping = active && (
+    active.tagName === "INPUT" ||
+    active.tagName === "TEXTAREA" ||
+    active.isContentEditable
+  );
+
+  const isSlashShortcut = e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey;
+  const isCmdKShortcut = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k";
+
+  if ((isSlashShortcut || isCmdKShortcut) && !isTyping) {
+    if (messageInput) {
+      e.preventDefault();
+      if (!messageInput.disabled) {
+        messageInput.focus();
+      } else if (messagesDiv) {
+        messagesDiv.focus();
+      }
+    }
+  }
+});
+
 // Create an image message bubble element
 function createImageBubble(imageDataUrl, isUser, altText = "Captured image") {
   const messageDiv = document.createElement("div");
