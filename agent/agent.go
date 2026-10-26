@@ -244,6 +244,11 @@ func runBeforeAgentCallbacks(ctx InvocationContext) (*session.Event, error) {
 	agent := ctx.Agent()
 	pluginManager := pluginManagerFromContext(ctx)
 
+	in := agent.internal()
+	if pluginManager == nil && (in == nil || len(in.beforeAgentCallbacks) == 0) {
+		return nil, nil
+	}
+
 	actions := &session.EventActions{}
 	callbackCtx := NewCallbackContext(ctx, actions)
 
@@ -302,6 +307,11 @@ func runBeforeAgentCallbacks(ctx InvocationContext) (*session.Event, error) {
 func runAfterAgentCallbacks(ctx InvocationContext) (*session.Event, error) {
 	agent := ctx.Agent()
 	pluginManager := pluginManagerFromContext(ctx)
+
+	in := agent.internal()
+	if pluginManager == nil && (in == nil || len(in.afterAgentCallbacks) == 0) {
+		return nil, nil
+	}
 
 	actions := &session.EventActions{}
 	callbackCtx := NewCallbackContext(ctx, actions)
