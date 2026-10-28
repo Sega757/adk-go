@@ -169,6 +169,39 @@ func BenchmarkOpenLongRunningCallIDs(b *testing.B) {
 	}
 }
 
+func BenchmarkOpenLongRunningCallIDs_NoLongRunningTools(b *testing.B) {
+	svc := session.InMemoryService()
+	ctx := context.Background()
+	sessResp, _ := svc.Create(ctx, &session.CreateRequest{
+		AppName:   "bench_app",
+		UserID:    "u",
+		SessionID: "s",
+	})
+	sess := sessResp.Session
+
+	// Populate session history with 50 events without long-running tool calls.
+	for i := 0; i < 50; i++ {
+		ev := session.NewEvent(ctx, fmt.Sprintf("inv-%d", i))
+		ev.Author = "model"
+		ev.LLMResponse = model.LLMResponse{
+			Content: &genai.Content{
+				Role: "model",
+				Parts: []*genai.Part{
+					{Text: "some response text"},
+				},
+			},
+		}
+		_ = svc.AppendEvent(ctx, sess, ev)
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_ = openLongRunningCallIDs(sess)
+	}
+}
+
 func BenchmarkAnsweredOpenInterrupts(b *testing.B) {
 	svc := session.InMemoryService()
 	ctx := context.Background()
