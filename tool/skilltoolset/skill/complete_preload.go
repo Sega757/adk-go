@@ -95,7 +95,11 @@ func (s *completePreloadSource) LoadResource(ctx context.Context, name, resource
 	if !ok {
 		return nil, ErrSkillNotFound
 	}
-	resource, ok := skill.resources[path.Clean(resourcePath)]
+	cleanPath := path.Clean(resourcePath)
+	if !strings.HasPrefix(cleanPath, "references/") && !strings.HasPrefix(cleanPath, "assets/") && !strings.HasPrefix(cleanPath, "scripts/") {
+		return nil, fmt.Errorf("%w: %q must be within 'references/', 'assets/', or 'scripts/' (relative to skill directory)", ErrInvalidResourcePath, resourcePath)
+	}
+	resource, ok := skill.resources[cleanPath]
 	if !ok {
 		return nil, ErrResourceNotFound
 	}
@@ -111,7 +115,17 @@ func (s *completePreloadSource) ListResources(ctx context.Context, name, subpath
 	}
 
 	cleanPath := path.Clean(subpath)
-	if cleanPath == "." || cleanPath == "/" {
+	isRoot := cleanPath == "." || cleanPath == "/"
+
+	if !isRoot {
+		switch strings.SplitN(cleanPath, "/", 2)[0] {
+		case "references", "assets", "scripts": // Valid top level directories.
+		default:
+			return nil, fmt.Errorf("%w: %q must be empty, root (.), or within 'references/', 'assets/', or 'scripts/'", ErrInvalidResourcePath, subpath)
+		}
+	}
+
+	if isRoot {
 		return data.sortedResourcePaths, nil
 	}
 
