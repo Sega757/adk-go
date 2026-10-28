@@ -76,6 +76,53 @@ func BenchmarkFindUnresolvedTaskDelegations_NoDelegations(b *testing.B) {
 	}
 }
 
+func BenchmarkMaybeSaveOutputToState_NoOutputKey(b *testing.B) {
+	ag, err := New(Config{Name: "agent_a"})
+	if err != nil {
+		b.Fatalf("New: %v", err)
+	}
+	llmAg := ag.(*llmAgent)
+	ev := &session.Event{
+		Author: "agent_b",
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role:  genai.RoleModel,
+				Parts: []*genai.Part{{Text: "Response from agent b"}},
+			},
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		llmAg.maybeSaveOutputToState(ev)
+	}
+}
+
+func BenchmarkMaybeSaveOutputToState_SinglePartText(b *testing.B) {
+	ag, err := New(Config{Name: "agent_a", OutputKey: "result"})
+	if err != nil {
+		b.Fatalf("New: %v", err)
+	}
+	llmAg := ag.(*llmAgent)
+	ev := &session.Event{
+		Author: "agent_a",
+		LLMResponse: model.LLMResponse{
+			Content: &genai.Content{
+				Role:  genai.RoleModel,
+				Parts: []*genai.Part{{Text: "Response from agent a"}},
+			},
+		},
+		Actions: session.EventActions{
+			StateDelta: make(map[string]any),
+		},
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		llmAg.maybeSaveOutputToState(ev)
+	}
+}
+
 func BenchmarkSafeCanonicalToolsDict_NoTaskTools(b *testing.B) {
 	dummyTool, err := functiontool.New(functiontool.Config{
 		Name:        "example_tool",

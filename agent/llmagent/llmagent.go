@@ -509,21 +509,29 @@ func (a *llmAgent) RunLive(ctx agent.InvocationContext) (agent.LiveSession, iter
 // maybeSaveOutputToState saves the model output to state if needed. skip if the event
 // was authored by some other agent (e.g. current agent transferred to another agent)
 func (a *llmAgent) maybeSaveOutputToState(event *session.Event) {
-	if event == nil {
+	if event == nil || a.OutputKey == "" {
 		return
 	}
 	if event.Author != a.Name() {
 		log.Printf("Skipping output save for agent %s: event authored by %s", a.Name(), event.Author)
 		return
 	}
-	if a.OutputKey != "" && !event.Partial && event.Content != nil && len(event.Content.Parts) > 0 {
-		var sb strings.Builder
-		for _, part := range event.Content.Parts {
-			if part.Text != "" && !part.Thought {
-				sb.WriteString(part.Text)
+	if !event.Partial && event.Content != nil && len(event.Content.Parts) > 0 {
+		var result string
+		if len(event.Content.Parts) == 1 {
+			p := event.Content.Parts[0]
+			if p != nil && !p.Thought {
+				result = p.Text
 			}
+		} else {
+			var sb strings.Builder
+			for _, part := range event.Content.Parts {
+				if part != nil && part.Text != "" && !part.Thought {
+					sb.WriteString(part.Text)
+				}
+			}
+			result = sb.String()
 		}
-		result := sb.String()
 
 		// TODO: add output schema validation and unmarshalling
 		if a.OutputSchema != nil {
