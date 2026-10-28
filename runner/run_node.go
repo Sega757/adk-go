@@ -302,26 +302,53 @@ func buildResumeResponses(msg *genai.Content, state *workflow.RunState, sess ses
 // session history that do not yet have a matching FunctionResponse, i.e.
 // the interrupts still awaiting a human answer.
 func openLongRunningCallIDs(sess session.Session) map[string]struct{} {
-	open := map[string]struct{}{}
 	if sess == nil {
-		return open
+		return nil
 	}
-	answered := map[string]struct{}{}
 	events := sess.Events()
+	if events == nil || events.Len() == 0 {
+		return nil
+	}
+
+	// Lazily allocate open map only when long-running tool IDs are present.
+	var open map[string]struct{}
 	for i := 0; i < events.Len(); i++ {
 		ev := events.At(i)
 		if ev == nil {
 			continue
 		}
 		for _, id := range ev.LongRunningToolIDs {
+			if id == "" {
+				continue
+			}
+			if open == nil {
+				open = make(map[string]struct{})
+			}
 			open[id] = struct{}{}
 		}
+	}
+	if len(open) == 0 {
+		return nil
+	}
+
+	// Lazily allocate answered map only when matching function responses exist in history.
+	var answered map[string]struct{}
+	for i := 0; i < events.Len(); i++ {
+		ev := events.At(i)
 		c := utils.Content(ev)
-		if c != nil {
-			for _, part := range c.Parts {
-				if part != nil && part.FunctionResponse != nil && part.FunctionResponse.ID != "" {
-					answered[part.FunctionResponse.ID] = struct{}{}
+		if c == nil {
+			continue
+		}
+		for _, part := range c.Parts {
+			if part == nil || part.FunctionResponse == nil || part.FunctionResponse.ID == "" {
+				continue
+			}
+			id := part.FunctionResponse.ID
+			if _, ok := open[id]; ok {
+				if answered == nil {
+					answered = make(map[string]struct{})
 				}
+				answered[id] = struct{}{}
 			}
 		}
 	}
