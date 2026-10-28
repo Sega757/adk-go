@@ -36,6 +36,7 @@ import (
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/server/adkrest/controllers"
+	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/server/adkrest/internal/fakes"
 	"google.golang.org/adk/v2/server/adkrest/internal/services"
 )
@@ -387,6 +388,36 @@ func TestEventGraphHandler_SanitizedInternalError(t *testing.T) {
 	body := strings.TrimSpace(rr.Body.String())
 	if body != "internal server error" {
 		t.Errorf("got body %q, want %q", body, "internal server error")
+	}
+}
+
+type nilSessionService struct {
+	session.Service
+}
+
+func (n *nilSessionService) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
+	return &session.GetResponse{Session: nil}, nil
+}
+
+func TestEventGraphHandler_NilSession(t *testing.T) {
+	apiController := controllers.NewDebugAPIController(&nilSessionService{}, nil, nil)
+
+	req, err := http.NewRequest(http.MethodGet, "/debug/apps/app/users/user/sessions/sess-1/events/event-1/graph", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req = mux.SetURLVars(req, map[string]string{
+		"app_name":   "app",
+		"user_id":    "user",
+		"session_id": "sess-1",
+		"event_id":   "event-1",
+	})
+
+	rr := httptest.NewRecorder()
+	apiController.EventGraphHandler(rr, req)
+
+	if gotStatus := rr.Code; gotStatus != http.StatusNotFound {
+		t.Errorf("got status %d, want %d", gotStatus, http.StatusNotFound)
 	}
 }
 
