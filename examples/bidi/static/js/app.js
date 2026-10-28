@@ -151,11 +151,41 @@ function setControlsDisabled(disabled) {
       }
     }
   });
+  const chips = document.querySelectorAll(".chip");
+  chips.forEach(chip => {
+    chip.disabled = disabled;
+    if (disabled) {
+      chip.setAttribute("title", "Connect to server to enable control");
+    } else {
+      const promptText = chip.getAttribute("data-prompt") || chip.textContent.trim();
+      chip.setAttribute("title", `Insert '${promptText}' into message input`);
+    }
+  });
   messageInput.placeholder = disabled ? "Connecting to server..." : "Type your message here...";
   if (!disabled) {
     updateSendButtonState();
   }
   updateClearConsoleButtonState();
+}
+
+function initSuggestionChips() {
+  const chips = document.querySelectorAll(".chip");
+  chips.forEach(chip => {
+    chip.addEventListener("click", () => {
+      const promptText = chip.getAttribute("data-prompt") || chip.textContent.trim();
+      if (messageInput) {
+        messageInput.value = promptText;
+        updateSendButtonState();
+        messageInput.focus();
+      }
+    });
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initSuggestionChips);
+} else {
+  initSuggestionChips();
 }
 let currentMessageId = null;
 let currentBubbleElement = null;

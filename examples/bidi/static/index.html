@@ -36,6 +36,11 @@
             <div class="empty-state-icon" aria-hidden="true">💬</div>
             <h2>Start a Conversation</h2>
             <p>Type a message below, speak, or drag & drop / paste an image to interact with the agent.</p>
+            <div class="suggestion-chips" aria-label="Suggested starter prompts">
+              <button type="button" class="chip" data-prompt="👋 Hello!" aria-label="Use starter prompt: 👋 Hello!" title="Insert '👋 Hello!' into message input" disabled>👋 Hello!</button>
+              <button type="button" class="chip" data-prompt="🚀 Tell me a fun fact" aria-label="Use starter prompt: 🚀 Tell me a fun fact" title="Insert '🚀 Tell me a fun fact' into message input" disabled>🚀 Tell me a fun fact</button>
+              <button type="button" class="chip" data-prompt="💡 How does streaming work?" aria-label="Use starter prompt: 💡 How does streaming work?" title="Insert '💡 How does streaming work?' into message input" disabled>💡 How does streaming work?</button>
+            </div>
           </div>
         </div>
         <button type="button" id="scrollToBottomBtn" class="scroll-bottom-btn" aria-label="Scroll to bottom of chat" title="Scroll to latest message" aria-controls="messages" style="display: none;">↓ New messages</button>
