@@ -754,6 +754,11 @@ button.active {
   border-color: #5e5e5e;
 }
 
+.console-clear-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
+}
+
 .console-clear-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
