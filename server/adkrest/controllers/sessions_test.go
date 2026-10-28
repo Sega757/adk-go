@@ -436,6 +436,34 @@ func TestListSessions(t *testing.T) {
 	}
 }
 
+type nilSessionService struct {
+	session.Service
+}
+
+func (n *nilSessionService) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
+	return &session.GetResponse{Session: nil}, nil
+}
+
+func TestGetSession_NilSession(t *testing.T) {
+	svc := &nilSessionService{}
+	controller := controllers.NewSessionsAPIController(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/apps/app/users/user/sessions/session", nil)
+	req = mux.SetURLVars(req, map[string]string{"app_name": "app", "user_id": "user", "session_id": "session"})
+	rec := httptest.NewRecorder()
+
+	controller.GetSessionHandler(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("got status code %d, want %d", rec.Code, http.StatusNotFound)
+	}
+
+	body := strings.TrimSpace(rec.Body.String())
+	if body != "session not found" {
+		t.Errorf("got body %q, want %q", body, "session not found")
+	}
+}
+
 type failingSessionService struct {
 	session.Service
 	err error

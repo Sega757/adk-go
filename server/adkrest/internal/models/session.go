@@ -67,11 +67,21 @@ func SessionIDFromHTTPParameters(vars map[string]string) (SessionID, error) {
 }
 
 func FromSession(session session.Session) (Session, error) {
+	if session == nil {
+		return Session{}, fmt.Errorf("session is nil")
+	}
 	state := map[string]any{}
-	maps.Insert(state, session.State().All())
+	if session.State() != nil {
+		maps.Insert(state, session.State().All())
+	}
 	events := []Event{}
-	for event := range session.Events().All() {
-		events = append(events, FromSessionEvent(*event))
+	if session.Events() != nil {
+		for event := range session.Events().All() {
+			if event == nil {
+				continue
+			}
+			events = append(events, FromSessionEvent(*event))
+		}
 	}
 	mappedSession := Session{
 		ID:        session.ID(),

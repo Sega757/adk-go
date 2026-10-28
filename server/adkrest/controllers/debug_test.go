@@ -343,6 +343,31 @@ func TestDebugHandlers_NilTelemetry(t *testing.T) {
 	})
 }
 
+func TestEventGraphHandler_NilSession(t *testing.T) {
+	sessionService := &fakes.FakeSessionService{
+		Sessions: map[fakes.SessionKey]fakes.TestSession{},
+	}
+	apiController := controllers.NewDebugAPIController(sessionService, nil, nil)
+
+	req, err := http.NewRequest(http.MethodGet, "/debug/apps/app/users/user/sessions/sess-1/events/event-1/graph", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req = mux.SetURLVars(req, map[string]string{
+		"app_name":   "app",
+		"user_id":    "user",
+		"session_id": "sess-1",
+		"event_id":   "event-1",
+	})
+
+	rr := httptest.NewRecorder()
+	apiController.EventGraphHandler(rr, req)
+
+	if gotStatus := rr.Code; gotStatus != http.StatusInternalServerError {
+		t.Errorf("got status %d, want %d", gotStatus, http.StatusInternalServerError)
+	}
+}
+
 func TestEventGraphHandler_SanitizedInternalError(t *testing.T) {
 	storedSessions := map[fakes.SessionKey]fakes.TestSession{
 		{
