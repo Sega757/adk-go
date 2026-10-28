@@ -50,9 +50,14 @@ func ContentsRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest
 		var events []*session.Event
 		if ctx.Session() != nil {
 			if sessEvents := ctx.Session().Events(); sessEvents != nil {
-				events = make([]*session.Event, 0, sessEvents.Len())
-				for e := range sessEvents.All() {
-					events = append(events, e)
+				n := sessEvents.Len()
+				if n > 0 {
+					// Index-based iteration over sessEvents.At(i) avoids iter.Seq closure allocations
+					// and slice growth re-allocations from append during history collection.
+					events = make([]*session.Event, n)
+					for i := 0; i < n; i++ {
+						events[i] = sessEvents.At(i)
+					}
 				}
 			}
 		}
