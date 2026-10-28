@@ -457,6 +457,28 @@ func (f *failingSessionService) List(ctx context.Context, req *session.ListReque
 	return nil, f.err
 }
 
+type nilSessionGetSessionService struct {
+	session.Service
+}
+
+func (n *nilSessionGetSessionService) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
+	return &session.GetResponse{Session: nil}, nil
+}
+
+func TestGetSession_NilSession(t *testing.T) {
+	svc := &nilSessionGetSessionService{}
+	controller := controllers.NewSessionsAPIController(svc)
+	req := httptest.NewRequest(http.MethodGet, "/apps/app/users/user/sessions/sess", nil)
+	req = mux.SetURLVars(req, map[string]string{"app_name": "app", "user_id": "user", "session_id": "sess"})
+	rec := httptest.NewRecorder()
+
+	controller.GetSessionHandler(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("got status %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
 func TestSessionsAPIController_InternalServerErrorSanitized(t *testing.T) {
 	svc := &failingSessionService{err: fmt.Errorf("secret db connection string failed")}
 	controller := controllers.NewSessionsAPIController(svc)
