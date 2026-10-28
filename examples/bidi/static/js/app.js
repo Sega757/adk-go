@@ -79,10 +79,17 @@ const showAudioEventsCheckbox = document.getElementById("showAudioEvents");
 function updateSendButtonState() {
   const sendButton = document.getElementById("sendButton");
   const clearInputBtn = document.getElementById("clearInputBtn");
+  const shortcutBadge = document.getElementById("shortcutBadge");
   const hasText = messageInput && messageInput.value.trim().length > 0;
+  const isFocused = messageInput && document.activeElement === messageInput;
 
   if (clearInputBtn) {
     clearInputBtn.style.display = hasText ? "inline-flex" : "none";
+  }
+
+  if (shortcutBadge) {
+    const shouldShowBadge = messageInput && !messageInput.disabled && !isFocused && !hasText;
+    shortcutBadge.style.display = shouldShowBadge ? "inline-flex" : "none";
   }
 
   if (!sendButton) return;
@@ -395,10 +402,16 @@ if (clearInputBtn && messageInput) {
 
 if (messageInput) {
   messageInput.addEventListener("input", updateSendButtonState);
+  messageInput.addEventListener("focus", updateSendButtonState);
+  messageInput.addEventListener("blur", updateSendButtonState);
   messageInput.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && messageInput.value) {
-      messageInput.value = "";
-      updateSendButtonState();
+    if (e.key === "Escape") {
+      if (messageInput.value) {
+        messageInput.value = "";
+        updateSendButtonState();
+      } else {
+        messageInput.blur();
+      }
     }
   });
   messageInput.addEventListener("paste", (e) => {
