@@ -126,6 +126,10 @@ func (c *DebugAPIController) EventGraphHandler(rw http.ResponseWriter, req *http
 		http.Error(rw, "internal server error", http.StatusInternalServerError)
 		return
 	}
+	if resp == nil || resp.Session == nil {
+		http.Error(rw, "session not found", http.StatusNotFound)
+		return
+	}
 	eventID := vars["event_id"]
 	if eventID == "" {
 		http.Error(rw, "event_id parameter is required", http.StatusBadRequest)
@@ -133,10 +137,12 @@ func (c *DebugAPIController) EventGraphHandler(rw http.ResponseWriter, req *http
 	}
 
 	var event *session.Event
-	for it := range resp.Session.Events().All() {
-		if it.ID == eventID {
-			event = it
-			break
+	if resp.Session.Events() != nil {
+		for it := range resp.Session.Events().All() {
+			if it != nil && it.ID == eventID {
+				event = it
+				break
+			}
 		}
 	}
 
