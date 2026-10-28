@@ -209,8 +209,51 @@ h1 {
 
 .empty-state p {
   font-size: 0.875rem;
-  max-width: 280px;
+  max-width: 320px;
   line-height: 1.4;
+}
+
+/* Suggestion Chips */
+.suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1.25rem;
+  max-width: 480px;
+}
+
+.chip {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--primary-color);
+  background-color: var(--bg-color);
+  border: 1px solid rgba(66, 133, 244, 0.3);
+  border-radius: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.chip:hover:not(:disabled) {
+  background-color: #e8f0fe;
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--border-color);
+  color: #80868b;
+  box-shadow: none;
 }
 
 /* Scroll styling */
