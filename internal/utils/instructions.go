@@ -28,19 +28,35 @@ func AppendInstructions(r *model.LLMRequest, instructions ...string) {
 		return
 	}
 
-	inst := strings.Join(instructions, "\n\n")
+	var inst string
+	if len(instructions) == 1 {
+		inst = instructions[0]
+	} else {
+		inst = strings.Join(instructions, "\n\n")
+	}
 
 	if r.Config == nil {
 		r.Config = &genai.GenerateContentConfig{}
 	}
 
 	if r.Config.SystemInstruction == nil {
-		r.Config.SystemInstruction = genai.NewContentFromText(inst, genai.RoleUser)
+		r.Config.SystemInstruction = &genai.Content{
+			Role: genai.RoleUser,
+			Parts: []*genai.Part{
+				{Text: inst},
+			},
+		}
 		return
 	}
-	if len(r.Config.SystemInstruction.Parts) > 0 && r.Config.SystemInstruction.Parts[len(r.Config.SystemInstruction.Parts)-1].Text != "" {
-		r.Config.SystemInstruction.Parts[len(r.Config.SystemInstruction.Parts)-1].Text += "\n\n" + inst
-		return
+
+	parts := r.Config.SystemInstruction.Parts
+	if len(parts) > 0 {
+		lastPart := parts[len(parts)-1]
+		if lastPart.Text != "" {
+			lastPart.Text += "\n\n" + inst
+			return
+		}
 	}
-	r.Config.SystemInstruction.Parts = append(r.Config.SystemInstruction.Parts, genai.NewPartFromText(inst))
+
+	r.Config.SystemInstruction.Parts = append(r.Config.SystemInstruction.Parts, &genai.Part{Text: inst})
 }
