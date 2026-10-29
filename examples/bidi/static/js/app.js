@@ -13,6 +13,16 @@ let sessionId = "fixed-demo-session";
 let websocket = null;
 let is_audio = false;
 let audioBuffer = [];
+let audioTimerInterval = null;
+let audioSeconds = 0;
+let videoTimerInterval = null;
+let videoSeconds = 0;
+
+function formatDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
 
 // Get checkbox elements for RunConfig options
 const enableProactivityCheckbox = document.getElementById("enableProactivity");
@@ -126,9 +136,9 @@ function setControlsDisabled(disabled) {
 
   const defaultTooltips = {
     message: "Type a message and press Enter to send (Esc to clear, Ctrl+V to paste image)",
-    startAudioButton: is_audio ? "Stop microphone audio streaming" : "Start microphone audio streaming",
+    startAudioButton: is_audio ? `Voice streaming active (${formatDuration(audioSeconds)}) - Click to stop` : "Start microphone audio streaming",
     cameraButton: "Open live camera preview to capture image",
-    streamVideoButton: isVideoStreaming ? "Stop live video streaming" : "Start live video streaming",
+    streamVideoButton: isVideoStreaming ? `Video streaming active (${formatDuration(videoSeconds)}) - Click to stop` : "Start live video streaming",
     sendFileButton: "Select and send an image file"
   };
   const controls = [
@@ -1554,10 +1564,15 @@ function closeCameraPreview() {
   // Stop streaming if active
   if (isVideoStreaming) {
     clearInterval(videoStreamInterval);
+    if (videoTimerInterval) {
+      clearInterval(videoTimerInterval);
+      videoTimerInterval = null;
+    }
     isVideoStreaming = false;
     streamVideoButton.textContent = "📹 Stream Video";
     streamVideoButton.classList.remove("active");
     streamVideoButton.setAttribute("aria-pressed", "false");
+    streamVideoButton.setAttribute("aria-label", "Toggle video streaming");
     addSystemMessage("Video streaming stopped");
   }
 
@@ -1676,9 +1691,15 @@ function toggleVideoStreaming() {
   if (isVideoStreaming) {
     // Stop streaming
     clearInterval(videoStreamInterval);
+    if (videoTimerInterval) {
+      clearInterval(videoTimerInterval);
+      videoTimerInterval = null;
+    }
     isVideoStreaming = false;
     streamVideoButton.textContent = "📹 Stream Video";
     streamVideoButton.classList.remove("active");
+    streamVideoButton.setAttribute("aria-pressed", "false");
+    streamVideoButton.setAttribute("aria-label", "Toggle video streaming");
     if (!streamVideoButton.disabled) {
       streamVideoButton.setAttribute("title", "Start live video streaming");
     }
@@ -1733,12 +1754,25 @@ function toggleVideoStreaming() {
 
 function startStreamingLoop() {
   isVideoStreaming = true;
-  streamVideoButton.textContent = "⏹️ Stop Video";
+  videoSeconds = 0;
+  const updateVideoTimer = () => {
+    const timeStr = formatDuration(videoSeconds);
+    streamVideoButton.textContent = `⏹️ Stop Video (${timeStr})`;
+    streamVideoButton.setAttribute("aria-label", `Stop video streaming (${timeStr})`);
+    if (!streamVideoButton.disabled) {
+      streamVideoButton.setAttribute("title", `Video streaming active (${timeStr}) - Click to stop`);
+    }
+  };
+  updateVideoTimer();
+  if (videoTimerInterval) {
+    clearInterval(videoTimerInterval);
+  }
+  videoTimerInterval = setInterval(() => {
+    videoSeconds++;
+    updateVideoTimer();
+  }, 1000);
   streamVideoButton.classList.add("active");
   streamVideoButton.setAttribute("aria-pressed", "true");
-  if (!streamVideoButton.disabled) {
-    streamVideoButton.setAttribute("title", "Stop live video streaming");
-  }
   addSystemMessage("Video streaming started");
 
   // 1 FPS = 1000ms interval
@@ -1938,6 +1972,10 @@ async function toggleAudioStreaming() {
   if (is_audio) {
     // Stop audio
     is_audio = false;
+    if (audioTimerInterval) {
+      clearInterval(audioTimerInterval);
+      audioTimerInterval = null;
+    }
     if (micStream) {
       micStream.getTracks().forEach(track => track.stop());
       micStream = null;
@@ -1953,6 +1991,7 @@ async function toggleAudioStreaming() {
     startAudioButton.textContent = "🎤 Start Voice";
     startAudioButton.classList.remove("active");
     startAudioButton.setAttribute("aria-pressed", "false");
+    startAudioButton.setAttribute("aria-label", "Toggle voice input");
     if (!startAudioButton.disabled) {
       startAudioButton.setAttribute("title", "Start microphone audio streaming");
     }
@@ -1966,12 +2005,25 @@ async function toggleAudioStreaming() {
     try {
       await startAudio();
       is_audio = true;
-      startAudioButton.textContent = "⏹️ Stop Voice";
+      audioSeconds = 0;
+      const updateAudioTimer = () => {
+        const timeStr = formatDuration(audioSeconds);
+        startAudioButton.textContent = `⏹️ Stop Voice (${timeStr})`;
+        startAudioButton.setAttribute("aria-label", `Stop voice streaming (${timeStr})`);
+        if (!startAudioButton.disabled) {
+          startAudioButton.setAttribute("title", `Voice streaming active (${timeStr}) - Click to stop`);
+        }
+      };
+      updateAudioTimer();
+      if (audioTimerInterval) {
+        clearInterval(audioTimerInterval);
+      }
+      audioTimerInterval = setInterval(() => {
+        audioSeconds++;
+        updateAudioTimer();
+      }, 1000);
       startAudioButton.classList.add("active");
       startAudioButton.setAttribute("aria-pressed", "true");
-      if (!startAudioButton.disabled) {
-        startAudioButton.setAttribute("title", "Stop microphone audio streaming");
-      }
       addSystemMessage("Audio mode enabled - you can now speak to the agent");
       addConsoleEntry('outgoing', 'Audio Mode Enabled', {
         status: 'Audio worklets started',
@@ -1982,15 +2034,25 @@ async function toggleAudioStreaming() {
       addSystemMessage(`Failed to start audio: ${error.message}`);
       // Reset state
       is_audio = false;
+      if (audioTimerInterval) {
+        clearInterval(audioTimerInterval);
+        audioTimerInterval = null;
+      }
       startAudioButton.textContent = "🎤 Start Voice";
       startAudioButton.classList.remove("active");
       startAudioButton.setAttribute("aria-pressed", "false");
+      startAudioButton.setAttribute("aria-label", "Toggle voice input");
       addConsoleEntry('error', 'Failed to enable audio mode', { error: error.message }, '⚠️', 'system');
     } finally {
       const isDisconnected = !websocket || websocket.readyState !== WebSocket.OPEN;
       startAudioButton.disabled = isDisconnected;
       if (!is_audio) {
+        if (audioTimerInterval) {
+          clearInterval(audioTimerInterval);
+          audioTimerInterval = null;
+        }
         startAudioButton.textContent = "🎤 Start Voice";
+        startAudioButton.setAttribute("aria-label", "Toggle voice input");
       }
       if (isDisconnected) {
         startAudioButton.setAttribute("title", "Connect to server to enable control");
