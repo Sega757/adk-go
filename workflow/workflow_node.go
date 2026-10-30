@@ -82,8 +82,19 @@ func (n *WorkflowNode) Run(ctx agent.Context, input any) iter.Seq2[*session.Even
 			// Capture the output only from terminal nodes. childEventOutput
 			// matches the scheduler: Event.Output, or model text when
 			// MessageAsOutput is set.
+			// Performance-optimized by Bolt: zero-allocation path segment scanning
+			// using strings.IndexByte avoids strings.Split slice allocations.
 			if out, ok := childEventOutput(ev); ok && ev.NodeInfo != nil {
-				for _, seg := range strings.Split(ev.NodeInfo.Path, "/") {
+				path := ev.NodeInfo.Path
+				for path != "" {
+					var seg string
+					if idx := strings.IndexByte(path, '/'); idx >= 0 {
+						seg = path[:idx]
+						path = path[idx+1:]
+					} else {
+						seg = path
+						path = ""
+					}
 					name := seg
 					if idx := strings.IndexByte(name, '@'); idx >= 0 {
 						name = name[:idx]
