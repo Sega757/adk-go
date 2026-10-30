@@ -1469,7 +1469,15 @@ const fileInput = document.getElementById("fileInput");
 let cameraStream = null;
 let isVideoStreaming = false;
 let videoStreamInterval = null;
+let videoStreamStartTime = null;
+let videoTimerInterval = null;
 let previouslyFocusedElement = null;
+
+function formatDuration(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
 
 // Open camera modal and start preview
 async function openCameraPreview() {
@@ -1554,8 +1562,14 @@ function closeCameraPreview() {
   // Stop streaming if active
   if (isVideoStreaming) {
     clearInterval(videoStreamInterval);
+    if (videoTimerInterval) {
+      clearInterval(videoTimerInterval);
+      videoTimerInterval = null;
+    }
+    videoStreamStartTime = null;
     isVideoStreaming = false;
     streamVideoButton.textContent = "📹 Stream Video";
+    streamVideoButton.setAttribute("aria-label", "Toggle video streaming");
     streamVideoButton.classList.remove("active");
     streamVideoButton.setAttribute("aria-pressed", "false");
     addSystemMessage("Video streaming stopped");
@@ -1676,9 +1690,16 @@ function toggleVideoStreaming() {
   if (isVideoStreaming) {
     // Stop streaming
     clearInterval(videoStreamInterval);
+    if (videoTimerInterval) {
+      clearInterval(videoTimerInterval);
+      videoTimerInterval = null;
+    }
+    videoStreamStartTime = null;
     isVideoStreaming = false;
     streamVideoButton.textContent = "📹 Stream Video";
+    streamVideoButton.setAttribute("aria-label", "Toggle video streaming");
     streamVideoButton.classList.remove("active");
+    streamVideoButton.setAttribute("aria-pressed", "false");
     if (!streamVideoButton.disabled) {
       streamVideoButton.setAttribute("title", "Start live video streaming");
     }
@@ -1733,12 +1754,23 @@ function toggleVideoStreaming() {
 
 function startStreamingLoop() {
   isVideoStreaming = true;
-  streamVideoButton.textContent = "⏹️ Stop Video";
+  videoStreamStartTime = Date.now();
   streamVideoButton.classList.add("active");
   streamVideoButton.setAttribute("aria-pressed", "true");
-  if (!streamVideoButton.disabled) {
-    streamVideoButton.setAttribute("title", "Stop live video streaming");
-  }
+
+  const updateVideoTimer = () => {
+    if (!isVideoStreaming || !streamVideoButton) return;
+    const elapsed = Math.floor((Date.now() - videoStreamStartTime) / 1000);
+    const durationStr = formatDuration(elapsed);
+    streamVideoButton.textContent = `⏹️ Stop Video (${durationStr})`;
+    streamVideoButton.setAttribute("aria-label", `Stop video streaming (Active: ${durationStr})`);
+    if (!streamVideoButton.disabled) {
+      streamVideoButton.setAttribute("title", `Stop live video streaming (${durationStr})`);
+    }
+  };
+
+  updateVideoTimer();
+  videoTimerInterval = setInterval(updateVideoTimer, 1000);
   addSystemMessage("Video streaming started");
 
   // 1 FPS = 1000ms interval
@@ -1898,6 +1930,8 @@ let audioPlayerContext;
 let audioRecorderNode;
 let audioRecorderContext;
 let micStream;
+let audioStreamStartTime = null;
+let audioTimerInterval = null;
 
 // Import the audio worklets
 import { startAudioPlayerWorklet } from "./audio-player.js";
@@ -1938,6 +1972,11 @@ async function toggleAudioStreaming() {
   if (is_audio) {
     // Stop audio
     is_audio = false;
+    if (audioTimerInterval) {
+      clearInterval(audioTimerInterval);
+      audioTimerInterval = null;
+    }
+    audioStreamStartTime = null;
     if (micStream) {
       micStream.getTracks().forEach(track => track.stop());
       micStream = null;
@@ -1951,6 +1990,7 @@ async function toggleAudioStreaming() {
     }
     // Keep audioPlayerContext open so we can still hear the agent
     startAudioButton.textContent = "🎤 Start Voice";
+    startAudioButton.setAttribute("aria-label", "Toggle voice input");
     startAudioButton.classList.remove("active");
     startAudioButton.setAttribute("aria-pressed", "false");
     if (!startAudioButton.disabled) {
@@ -1966,12 +2006,24 @@ async function toggleAudioStreaming() {
     try {
       await startAudio();
       is_audio = true;
-      startAudioButton.textContent = "⏹️ Stop Voice";
+      audioStreamStartTime = Date.now();
       startAudioButton.classList.add("active");
       startAudioButton.setAttribute("aria-pressed", "true");
-      if (!startAudioButton.disabled) {
-        startAudioButton.setAttribute("title", "Stop microphone audio streaming");
-      }
+
+      const updateAudioTimer = () => {
+        if (!is_audio || !startAudioButton) return;
+        const elapsed = Math.floor((Date.now() - audioStreamStartTime) / 1000);
+        const durationStr = formatDuration(elapsed);
+        startAudioButton.textContent = `⏹️ Stop Voice (${durationStr})`;
+        startAudioButton.setAttribute("aria-label", `Stop voice input (Active: ${durationStr})`);
+        if (!startAudioButton.disabled) {
+          startAudioButton.setAttribute("title", `Stop microphone audio streaming (${durationStr})`);
+        }
+      };
+
+      updateAudioTimer();
+      audioTimerInterval = setInterval(updateAudioTimer, 1000);
+
       addSystemMessage("Audio mode enabled - you can now speak to the agent");
       addConsoleEntry('outgoing', 'Audio Mode Enabled', {
         status: 'Audio worklets started',
@@ -1982,7 +2034,13 @@ async function toggleAudioStreaming() {
       addSystemMessage(`Failed to start audio: ${error.message}`);
       // Reset state
       is_audio = false;
+      if (audioTimerInterval) {
+        clearInterval(audioTimerInterval);
+        audioTimerInterval = null;
+      }
+      audioStreamStartTime = null;
       startAudioButton.textContent = "🎤 Start Voice";
+      startAudioButton.setAttribute("aria-label", "Toggle voice input");
       startAudioButton.classList.remove("active");
       startAudioButton.setAttribute("aria-pressed", "false");
       addConsoleEntry('error', 'Failed to enable audio mode', { error: error.message }, '⚠️', 'system');
@@ -1991,6 +2049,7 @@ async function toggleAudioStreaming() {
       startAudioButton.disabled = isDisconnected;
       if (!is_audio) {
         startAudioButton.textContent = "🎤 Start Voice";
+        startAudioButton.setAttribute("aria-label", "Toggle voice input");
       }
       if (isDisconnected) {
         startAudioButton.setAttribute("title", "Connect to server to enable control");
