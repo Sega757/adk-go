@@ -437,6 +437,28 @@ func TestRemoteAgent_ADK2ADK(t *testing.T) {
 	}
 }
 
+func TestNewAgentCardProvider_PathTraversal(t *testing.T) {
+	traversalPaths := []string{
+		"../secret.json",
+		"../../etc/passwd",
+		"sub/../../secret.json",
+		"..",
+	}
+
+	for _, path := range traversalPaths {
+		t.Run(path, func(t *testing.T) {
+			provider := NewAgentCardProvider(path)
+			_, err := provider(t.Context())
+			if err == nil {
+				t.Fatalf("NewAgentCardProvider(%q) expected path traversal error, got nil", path)
+			}
+			if !strings.Contains(err.Error(), "path traversal not allowed") {
+				t.Fatalf("NewAgentCardProvider(%q) error = %v, want to contain %q", path, err, "path traversal not allowed")
+			}
+		})
+	}
+}
+
 func TestRemoteAgent_ADK2A2A(t *testing.T) {
 	task := &a2a.Task{ID: a2a.NewTaskID(), ContextID: a2a.NewContextID()}
 	artifactEvent := a2a.NewArtifactEvent(task)

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"iter"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -69,6 +70,10 @@ func NewAgentCardProvider(source string, opts ...agentcard.ResolveOption) AgentC
 				return nil, fmt.Errorf("failed to fetch an agent card: %w", err)
 			}
 			return card, nil
+		}
+
+		if strings.Contains(source, "..") || strings.HasPrefix(filepath.Clean(source), "..") {
+			return nil, fmt.Errorf("invalid agent card file path %q: path traversal not allowed", source)
 		}
 
 		fileBytes, err := os.ReadFile(source)
