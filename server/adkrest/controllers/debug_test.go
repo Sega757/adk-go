@@ -400,7 +400,7 @@ func (n *nilSessionService) Get(ctx context.Context, req *session.GetRequest) (*
 }
 
 func TestEventGraphHandler_NilSession(t *testing.T) {
-	apiController := controllers.NewDebugAPIController(&nilSessionService{}, nil, nil)
+	apiController := controllers.NewDebugAPIController(&nilSessionService{}, &errAgentLoader{}, nil)
 
 	req, err := http.NewRequest(http.MethodGet, "/debug/apps/app/users/user/sessions/sess-1/events/event-1/graph", nil)
 	if err != nil {
@@ -418,6 +418,59 @@ func TestEventGraphHandler_NilSession(t *testing.T) {
 
 	if gotStatus := rr.Code; gotStatus != http.StatusNotFound {
 		t.Errorf("got status %d, want %d", gotStatus, http.StatusNotFound)
+	}
+}
+
+func TestEventGraphHandler_NilDependencies(t *testing.T) {
+	tc := []struct {
+		name           string
+		sessionService session.Service
+		agentLoader    agent.Loader
+	}{
+		{
+			name:           "nil_session_service",
+			sessionService: nil,
+			agentLoader:    &errAgentLoader{},
+		},
+		{
+			name:           "nil_agent_loader",
+			sessionService: &nilSessionService{},
+			agentLoader:    nil,
+		},
+		{
+			name:           "both_nil",
+			sessionService: nil,
+			agentLoader:    nil,
+		},
+	}
+
+	for _, tt := range tc {
+		t.Run(tt.name, func(t *testing.T) {
+			apiController := controllers.NewDebugAPIController(tt.sessionService, tt.agentLoader, nil)
+
+			req, err := http.NewRequest(http.MethodGet, "/debug/apps/app/users/user/sessions/sess-1/events/event-1/graph", nil)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			req = mux.SetURLVars(req, map[string]string{
+				"app_name":   "app",
+				"user_id":    "user",
+				"session_id": "sess-1",
+				"event_id":   "event-1",
+			})
+
+			rr := httptest.NewRecorder()
+			apiController.EventGraphHandler(rr, req)
+
+			if gotStatus := rr.Code; gotStatus != http.StatusInternalServerError {
+				t.Errorf("got status %d, want %d", gotStatus, http.StatusInternalServerError)
+			}
+
+			body := strings.TrimSpace(rr.Body.String())
+			if body != "internal server error" {
+				t.Errorf("got body %q, want %q", body, "internal server error")
+			}
+		})
 	}
 }
 
