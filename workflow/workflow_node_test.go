@@ -430,3 +430,38 @@ func TestNestedWorkflow_BreakMidStream(t *testing.T) {
 		t.Errorf("expected to consume exactly 1 event before break, got %d", count)
 	}
 }
+
+func BenchmarkWorkflowNode_Run(b *testing.B) {
+	innerFn := func(ctx agent.Context, input string) (string, error) {
+		return input + "-inner", nil
+	}
+	innerNode := NewFunctionNode("inner_node", innerFn, defaultNodeConfig)
+	innerEdges := Chain(Start, innerNode)
+
+	wfNode, err := NewWorkflowNode("nested_step", innerEdges)
+	if err != nil {
+		b.Fatalf("failed to create workflow node: %v", err)
+	}
+
+	outerEdges := Chain(Start, wfNode)
+	outerWf, err := New("outer", outerEdges)
+	if err != nil {
+		b.Fatalf("failed to create outer workflow: %v", err)
+	}
+
+	mockCtx := newMockCtx(b)
+	mockCtx.userContent = &genai.Content{
+		Parts: []*genai.Part{{Text: "input"}},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		for _, err := range outerWf.Run(mockCtx) {
+			if err != nil {
+				b.Fatalf("unexpected error: %v", err)
+			}
+		}
+	}
+}
