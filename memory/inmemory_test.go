@@ -139,6 +139,73 @@ func Test_inMemoryService_SearchMemory(t *testing.T) {
 			},
 			wantResp: &memory.SearchResponse{},
 		},
+		{
+			name: "empty or whitespace query",
+			initSessions: []session.Session{
+				makeSession(t, "app1", "user1", "sess1", []*session.Event{
+					{LLMResponse: model.LLMResponse{Content: genai.NewContentFromText("hello world", genai.RoleModel)}},
+				}),
+			},
+			req: &memory.SearchRequest{
+				AppName: "app1",
+				UserID:  "user1",
+				Query:   "   ",
+			},
+			wantResp: &memory.SearchResponse{},
+		},
+		{
+			name: "multiple text parts and extra spaces",
+			initSessions: []session.Session{
+				makeSession(t, "app1", "user1", "sess1", []*session.Event{
+					{
+						ID:     "multipart-event",
+						Author: "agent",
+						LLMResponse: model.LLMResponse{
+							Content: &genai.Content{
+								Parts: []*genai.Part{
+									{Text: "  first   part  "},
+									{Text: ""},
+									{Text: "second   part  "},
+								},
+							},
+						},
+						Timestamp: must(time.Parse(time.RFC3339, "2023-10-03T10:00:00Z")),
+					},
+					{
+						ID:     "no-text-event",
+						Author: "agent",
+						LLMResponse: model.LLMResponse{
+							Content: &genai.Content{
+								Parts: []*genai.Part{
+									{FunctionCall: &genai.FunctionCall{Name: "call"}},
+								},
+							},
+						},
+					},
+				}),
+			},
+			req: &memory.SearchRequest{
+				AppName: "app1",
+				UserID:  "user1",
+				Query:   "  SECOND   FIRST  ",
+			},
+			wantResp: &memory.SearchResponse{
+				Memories: []memory.Entry{
+					{
+						ID:     "multipart-event",
+						Author: "agent",
+						Content: &genai.Content{
+							Parts: []*genai.Part{
+								{Text: "  first   part  "},
+								{Text: ""},
+								{Text: "second   part  "},
+							},
+						},
+						Timestamp: must(time.Parse(time.RFC3339, "2023-10-03T10:00:00Z")),
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
