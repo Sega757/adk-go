@@ -16,7 +16,6 @@ package memory
 
 import (
 	"context"
-	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -59,18 +58,26 @@ type inMemoryService struct {
 func (s *inMemoryService) AddSessionToMemory(ctx context.Context, curSession session.Session) error {
 	var values []value
 
-	for event := range curSession.Events().All() {
+	events := curSession.Events()
+	numEvents := events.Len()
+	for i := 0; i < numEvents; i++ {
+		event := events.At(i)
 		if event.LLMResponse.Content == nil {
 			continue
 		}
 
-		words := make(map[string]struct{})
+		// Lazily allocate the words map only when non-empty text parts are encountered,
+		// and populate directly to avoid intermediate map allocations and maps.Copy churn.
+		var words map[string]struct{}
 		for _, part := range event.LLMResponse.Content.Parts {
 			if part.Text == "" {
 				continue
 			}
 
-			maps.Copy(words, extractWords(part.Text))
+			if words == nil {
+				words = make(map[string]struct{})
+			}
+			addWords(words, part.Text)
 		}
 
 		if len(words) == 0 {
@@ -107,8 +114,6 @@ func (s *inMemoryService) AddSessionToMemory(ctx context.Context, curSession ses
 }
 
 func (s *inMemoryService) SearchMemory(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
-	queryWords := extractWords(req.Query)
-
 	k := key{
 		appName: req.AppName,
 		userID:  req.UserID,
@@ -117,7 +122,12 @@ func (s *inMemoryService) SearchMemory(ctx context.Context, req *SearchRequest) 
 	s.mu.RLock()
 	values, ok := s.store[k]
 	s.mu.RUnlock()
-	if !ok {
+	if !ok || len(values) == 0 {
+		return &SearchResponse{}, nil
+	}
+
+	queryWords := extractWords(req.Query)
+	if len(queryWords) == 0 {
 		return &SearchResponse{}, nil
 	}
 
@@ -159,15 +169,28 @@ func checkMapsIntersect(m1, m2 map[string]struct{}) bool {
 	return false
 }
 
-func extractWords(text string) map[string]struct{} {
-	res := make(map[string]struct{})
-
-	for s := range strings.SplitSeq(text, " ") {
+// addWords parses space-delimited words from text and records them into words in lowercase.
+// Using strings.IndexByte avoids iterator closure and slice allocations.
+func addWords(words map[string]struct{}, text string) {
+	for text != "" {
+		idx := strings.IndexByte(text, ' ')
+		var s string
+		if idx < 0 {
+			s = text
+			text = ""
+		} else {
+			s = text[:idx]
+			text = text[idx+1:]
+		}
 		if s == "" {
 			continue
 		}
-		res[strings.ToLower(s)] = struct{}{}
+		words[strings.ToLower(s)] = struct{}{}
 	}
+}
 
+func extractWords(text string) map[string]struct{} {
+	res := make(map[string]struct{})
+	addWords(res, text)
 	return res
 }
