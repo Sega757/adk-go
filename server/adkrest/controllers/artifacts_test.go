@@ -112,6 +112,71 @@ func TestArtifactsAPIController_InternalServerErrorSanitized(t *testing.T) {
 	}
 }
 
+func TestArtifactsAPIController_NilArtifactService(t *testing.T) {
+	controller := controllers.NewArtifactsAPIController(nil)
+
+	tests := []struct {
+		name       string
+		handler    func(w http.ResponseWriter, r *http.Request)
+		vars       map[string]string
+		path       string
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "ListArtifactsHandler returns empty array",
+			handler:    controller.ListArtifactsHandler,
+			vars:       map[string]string{"app_name": "app", "user_id": "user", "session_id": "session"},
+			path:       "/apps/app/users/user/sessions/session/artifacts",
+			wantStatus: http.StatusOK,
+			wantBody:   "[]",
+		},
+		{
+			name:       "LoadArtifactHandler returns not found",
+			handler:    controller.LoadArtifactHandler,
+			vars:       map[string]string{"app_name": "app", "user_id": "user", "session_id": "session", "artifact_name": "file.txt"},
+			path:       "/apps/app/users/user/sessions/session/artifacts/file.txt",
+			wantStatus: http.StatusNotFound,
+			wantBody:   "not found",
+		},
+		{
+			name:       "LoadArtifactVersionHandler returns not found",
+			handler:    controller.LoadArtifactVersionHandler,
+			vars:       map[string]string{"app_name": "app", "user_id": "user", "session_id": "session", "artifact_name": "file.txt", "version": "1"},
+			path:       "/apps/app/users/user/sessions/session/artifacts/file.txt/versions/1",
+			wantStatus: http.StatusNotFound,
+			wantBody:   "not found",
+		},
+		{
+			name:       "DeleteArtifactHandler returns not found",
+			handler:    controller.DeleteArtifactHandler,
+			vars:       map[string]string{"app_name": "app", "user_id": "user", "session_id": "session", "artifact_name": "file.txt"},
+			path:       "/apps/app/users/user/sessions/session/artifacts/file.txt",
+			wantStatus: http.StatusNotFound,
+			wantBody:   "not found",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req = mux.SetURLVars(req, tc.vars)
+			rec := httptest.NewRecorder()
+
+			tc.handler(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Errorf("got status code %d, want %d", rec.Code, tc.wantStatus)
+			}
+
+			body := strings.TrimSpace(rec.Body.String())
+			if body != tc.wantBody {
+				t.Errorf("got body %q, want %q", body, tc.wantBody)
+			}
+		})
+	}
+}
+
 func TestArtifactsAPIController_NotFound(t *testing.T) {
 	svc := &fakeArtifactService{err: fmt.Errorf("artifact not found: %w", fs.ErrNotExist)}
 	controller := controllers.NewArtifactsAPIController(svc)
