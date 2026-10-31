@@ -38,6 +38,10 @@ func NewArtifactsAPIController(artifactService artifact.Service) *ArtifactsAPICo
 
 // ListArtifactsHandler lists all the artifact filenames within a session.
 func (c *ArtifactsAPIController) ListArtifactsHandler(rw http.ResponseWriter, req *http.Request) {
+	if c.artifactService == nil {
+		EncodeJSONResponse([]string{}, http.StatusOK, rw)
+		return
+	}
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
@@ -68,6 +72,10 @@ func (c *ArtifactsAPIController) ListArtifactsHandler(rw http.ResponseWriter, re
 
 // LoadArtifactHandler gets an artifact from the artifact service storage.
 func (c *ArtifactsAPIController) LoadArtifactHandler(rw http.ResponseWriter, req *http.Request) {
+	if c.artifactService == nil {
+		http.Error(rw, "not found", http.StatusNotFound)
+		return
+	}
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
@@ -118,6 +126,10 @@ func (c *ArtifactsAPIController) LoadArtifactHandler(rw http.ResponseWriter, req
 
 // LoadArtifactVersionHandler gets an artifact from the artifact service storage with specified version.
 func (c *ArtifactsAPIController) LoadArtifactVersionHandler(rw http.ResponseWriter, req *http.Request) {
+	if c.artifactService == nil {
+		http.Error(rw, "not found", http.StatusNotFound)
+		return
+	}
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
@@ -171,6 +183,10 @@ func (c *ArtifactsAPIController) LoadArtifactVersionHandler(rw http.ResponseWrit
 
 // DeleteArtifactHandler handles deleting an artifact.
 func (c *ArtifactsAPIController) DeleteArtifactHandler(rw http.ResponseWriter, req *http.Request) {
+	if c.artifactService == nil {
+		http.Error(rw, "not found", http.StatusNotFound)
+		return
+	}
 	vars := mux.Vars(req)
 	sessionID, err := models.SessionIDFromHTTPParameters(vars)
 	if err != nil {
