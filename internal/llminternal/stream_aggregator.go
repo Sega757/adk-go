@@ -18,12 +18,12 @@ import (
 	"context"
 	"iter"
 	"maps"
-	"reflect"
 	"strings"
 
 	"google.golang.org/genai"
 
 	"google.golang.org/adk/v2/internal/llminternal/converters"
+	"google.golang.org/adk/v2/internal/utils"
 	"google.golang.org/adk/v2/model"
 )
 
@@ -39,7 +39,7 @@ type streamingResponseAggregator struct {
 	currentThoughtSignature []byte
 
 	sequence             []*genai.Part
-	currentTextBuffer    string
+	currentTextBuffer    strings.Builder
 	currentTextIsThought bool
 	finishReason         genai.FinishReason
 
@@ -59,7 +59,7 @@ func NewStreamingResponseAggregator() *streamingResponseAggregator {
 func (s *streamingResponseAggregator) ProcessResponse(ctx context.Context, genResp *genai.GenerateContentResponse) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
 		resp := converters.Genai2LLMResponse(genResp)
-		if len(genResp.Candidates) > 0 && genResp.Candidates[0] != nil {
+		if len(genResp.Candidates) > 0 {
 			candidate := genResp.Candidates[0]
 			resp.TurnComplete = candidate.FinishReason != ""
 		}
@@ -78,9 +78,7 @@ func (s *streamingResponseAggregator) ProcessResponse(ctx context.Context, genRe
 
 func (s *streamingResponseAggregator) aggregateResponse(llmResponse *model.LLMResponse) *model.LLMResponse {
 	s.response = llmResponse
-	if llmResponse.UsageMetadata != nil {
-		s.usageMetadata = llmResponse.UsageMetadata
-	}
+	s.usageMetadata = llmResponse.UsageMetadata
 	if llmResponse.GroundingMetadata != nil {
 		s.groundingMetadata = llmResponse.GroundingMetadata
 	}
@@ -99,20 +97,20 @@ func (s *streamingResponseAggregator) aggregateResponse(llmResponse *model.LLMRe
 
 	for _, part := range llmResponse.Content.Parts {
 		// gemini 3 in streaming returns a last response with an empty part. We will filter it out.
-		if reflect.ValueOf(*part).IsZero() {
+		if utils.IsZeroPart(part) {
 			continue
 		}
 		if len(part.ThoughtSignature) > 0 {
 			s.currentThoughtSignature = part.ThoughtSignature
 		}
 		if part.Text != "" {
-			if s.currentTextBuffer != "" && part.Thought != s.currentTextIsThought {
+			if s.currentTextBuffer.Len() > 0 && part.Thought != s.currentTextIsThought {
 				s.flushTextBufferToSequence()
 			}
-			if s.currentTextBuffer == "" {
+			if s.currentTextBuffer.Len() == 0 {
 				s.currentTextIsThought = part.Thought
 			}
-			s.currentTextBuffer += part.Text
+			s.currentTextBuffer.WriteString(part.Text)
 		} else if part.FunctionCall != nil {
 			// Process function call (handles both streaming Args and non-streaming Args
 			s.processFunctionCallPart(part)
@@ -156,15 +154,15 @@ func (s *streamingResponseAggregator) processStreamingFunctionCallPart(part *gen
 		s.currentFunctionID = part.FunctionCall.ID
 	}
 	for _, arg := range part.FunctionCall.PartialArgs {
-		segments, ok := parseJSONPath(arg.JsonPath)
+		jsonPath := arg.JsonPath
+		if jsonPath == "" {
+			continue
+		}
+		value, ok := s.getValueFromPartialArg(arg, jsonPath)
 		if !ok {
 			continue
 		}
-		value, ok := s.getValueFromPartialArg(arg, segments)
-		if !ok {
-			continue
-		}
-		s.setValueByPath(segments, value)
+		s.setValueByJSONPath(jsonPath, value)
 	}
 	if part.FunctionCall.WillContinue != nil && *part.FunctionCall.WillContinue {
 		return
@@ -173,7 +171,7 @@ func (s *streamingResponseAggregator) processStreamingFunctionCallPart(part *gen
 	s.flushFunctionCallToSequence()
 }
 
-func (s *streamingResponseAggregator) getValueFromPartialArg(partialArg *genai.PartialArg, segments []pathSegment) (any, bool) {
+func (s *streamingResponseAggregator) getValueFromPartialArg(partialArg *genai.PartialArg, jsonPath string) (any, bool) {
 	var value any
 	var hasValue bool
 
@@ -181,9 +179,28 @@ func (s *streamingResponseAggregator) getValueFromPartialArg(partialArg *genai.P
 		stringChunk := partialArg.StringValue
 		hasValue = true
 
-		// A string is streamed in chunks that all carry the same path, so
-		// append this one to whatever of it has already been assembled.
-		existingValue, _ := valueByPath(s.currentFunctionArgs, segments)
+		// Clean up the JSONPath prefix
+		pathWithoutPrefix := jsonPath
+		if strings.HasPrefix(jsonPath, "$.") {
+			pathWithoutPrefix = jsonPath[2:]
+		}
+
+		// Try to get existing value by traversing the map using strings.Cut to avoid slice allocations.
+		var existingValue any = s.currentFunctionArgs
+		path := pathWithoutPrefix
+		for path != "" {
+			var part string
+			part, path, _ = strings.Cut(path, ".")
+			if m, ok := existingValue.(map[string]any); ok {
+				if val, exists := m[part]; exists {
+					existingValue = val
+					continue
+				}
+			}
+			// If we can't find the path or it's not a map, reset existingValue
+			existingValue = nil
+			break
+		}
 
 		// Append to existing string or set new value
 		if str, ok := existingValue.(string); ok {
@@ -206,214 +223,54 @@ func (s *streamingResponseAggregator) getValueFromPartialArg(partialArg *genai.P
 	return value, hasValue
 }
 
-// pathSegment is one step of a JSON Path: an object member name, or an array
-// index when isIndex is set.
-type pathSegment struct {
-	name    string
-	index   int
-	isIndex bool
-}
-
-// maxPathIndex is the largest array index a path may address.
-// parseBracketSegment checks it after every digit, and that check is what keeps
-// the index from overflowing int: without it "$.a[9999999999999999999]" wraps
-// to a negative index and setInto, which trusts the index it is given, panics.
-// It also bounds the slice a single index can grow; no function call argument
-// list comes close to it.
-const maxPathIndex = 1 << 16
-
-// parseJSONPath splits the RFC 9535 JSON Path that addresses a streamed
-// argument (https://datatracker.ietf.org/doc/html/rfc9535) into its segments.
-// Only the selectors a normalized path is built from are accepted — "$.name",
-// "$['name']" and "$[0]" — because that is all the model produces; anything
-// else, including wildcards, slices and \u escapes in a quoted name, reports
-// false so that the chunk is dropped rather than written to an invented key.
-func parseJSONPath(jsonPath string) ([]pathSegment, bool) {
-	rest := strings.TrimPrefix(jsonPath, "$")
-	var segments []pathSegment
-	for rest != "" {
-		if rest[0] == '[' {
-			segment, remainder, ok := parseBracketSegment(rest)
-			if !ok {
-				return nil, false
-			}
-			segments, rest = append(segments, segment), remainder
-			continue
-		}
-		if rest[0] == '.' {
-			rest = rest[1:]
-		} else if len(segments) > 0 {
-			return nil, false
-		}
-		name, remainder := splitMemberName(rest)
-		if name == "" {
-			return nil, false
-		}
-		segments, rest = append(segments, pathSegment{name: name}), remainder
-	}
-	if len(segments) == 0 {
-		return nil, false
-	}
-	return segments, true
-}
-
-// splitMemberName takes the shorthand member name at the front of a path.
-func splitMemberName(path string) (name, rest string) {
-	if i := strings.IndexAny(path, ".["); i >= 0 {
-		return path[:i], path[i:]
-	}
-	return path, ""
-}
-
-// parseBracketSegment takes the bracketed selector at the front of a path,
-// which is either an array index or a quoted member name.
-func parseBracketSegment(path string) (pathSegment, string, bool) {
-	body := path[1:]
-	if body != "" && (body[0] == '\'' || body[0] == '"') {
-		name, rest, ok := parseQuotedName(body)
-		if !ok || rest == "" || rest[0] != ']' {
-			return pathSegment{}, "", false
-		}
-		return pathSegment{name: name}, rest[1:], true
-	}
-	end := strings.IndexByte(body, ']')
-	if end <= 0 {
-		return pathSegment{}, "", false
-	}
-	index := 0
-	for i := range end {
-		digit := body[i]
-		if digit < '0' || digit > '9' {
-			return pathSegment{}, "", false
-		}
-		index = index*10 + int(digit-'0')
-		if index > maxPathIndex {
-			return pathSegment{}, "", false
-		}
-	}
-	return pathSegment{index: index, isIndex: true}, body[end+1:], true
-}
-
-// parseQuotedName reads a quoted member name, undoing the single-character
-// escapes RFC 9535 defines for one.
-func parseQuotedName(path string) (name, rest string, ok bool) {
-	quote := path[0]
-	var parsed strings.Builder
-	for i := 1; i < len(path); i++ {
-		switch char := path[i]; char {
-		case quote:
-			return parsed.String(), path[i+1:], true
-		case '\\':
-			i++
-			if i == len(path) {
-				return "", "", false
-			}
-			escaped, ok := unescape(path[i])
-			if !ok {
-				return "", "", false
-			}
-			parsed.WriteByte(escaped)
-		default:
-			parsed.WriteByte(char)
-		}
-	}
-	return "", "", false
-}
-
-func unescape(char byte) (byte, bool) {
-	switch char {
-	case '\'', '"', '\\', '/':
-		return char, true
-	case 'b':
-		return '\b', true
-	case 'f':
-		return '\f', true
-	case 'n':
-		return '\n', true
-	case 'r':
-		return '\r', true
-	case 't':
-		return '\t', true
-	}
-	return 0, false
-}
-
-// setValueByPath writes value at the location the segments address, creating
-// the maps and slices on the way to it.
-func (s *streamingResponseAggregator) setValueByPath(segments []pathSegment, value any) {
+func (s *streamingResponseAggregator) setValueByJSONPath(jsonPath string, value any) {
 	// Initialize the map if it hasn't been already
 	if s.currentFunctionArgs == nil {
 		s.currentFunctionArgs = make(map[string]any)
 	}
-	// Function call arguments are a JSON object, so a path that starts at an
-	// array index addresses nothing and setInto would return a slice.
-	if args, ok := setInto(s.currentFunctionArgs, segments, value).(map[string]any); ok {
-		s.currentFunctionArgs = args
-	}
-}
 
-// setInto returns container with value written at the location segments
-// address within it, which is a new container when the one that is there
-// cannot hold that segment. A slice grows to fit an index, so an argument
-// whose elements arrive out of order keeps the positions the model chose.
-func setInto(container any, segments []pathSegment, value any) any {
-	segment := segments[0]
-	if segment.isIndex {
-		elements, _ := container.([]any)
-		for len(elements) <= segment.index {
-			elements = append(elements, nil)
-		}
-		elements[segment.index] = descend(elements[segment.index], segments, value)
-		return elements
+	// Remove leading "$." from jsonPath
+	path := jsonPath
+	if strings.HasPrefix(jsonPath, "$.") {
+		path = jsonPath[2:]
 	}
-	members, ok := container.(map[string]any)
-	if !ok {
-		members = make(map[string]any)
+	if path == "" {
+		return // Handle empty path case
 	}
-	members[segment.name] = descend(members[segment.name], segments, value)
-	return members
-}
 
-func descend(existing any, segments []pathSegment, value any) any {
-	if len(segments) == 1 {
-		return value
-	}
-	return setInto(existing, segments[1:], value)
-}
-
-// valueByPath reads the value the segments address, reporting whether the
-// whole path exists.
-func valueByPath(args map[string]any, segments []pathSegment) (any, bool) {
-	var current any = args
-	for _, segment := range segments {
-		if segment.isIndex {
-			elements, ok := current.([]any)
-			if !ok || segment.index >= len(elements) {
-				return nil, false
-			}
-			current = elements[segment.index]
-			continue
-		}
-		members, ok := current.(map[string]any)
+	// Navigate to the correct location using strings.Cut to avoid slice allocations.
+	current := s.currentFunctionArgs
+	for {
+		part, rest, ok := strings.Cut(path, ".")
 		if !ok {
-			return nil, false
+			// Set the final value at the last key
+			current[part] = value
+			return
 		}
-		if current, ok = members[segment.name]; !ok {
-			return nil, false
+
+		// If the path doesn't exist, or the existing value isn't a map,
+		// create a new map at this node.
+		next, exists := current[part]
+		nextMap, isMap := next.(map[string]any)
+		if !exists || !isMap {
+			nextMap = make(map[string]any)
+			current[part] = nextMap
 		}
+
+		current = nextMap
+		path = rest
 	}
-	return current, true
 }
 
 func (s *streamingResponseAggregator) flushTextBufferToSequence() {
 	// Check if buffer has content (strings.Builder.Len() is efficient)
-	if s.currentTextBuffer != "" {
+	if s.currentTextBuffer.Len() > 0 {
 		s.sequence = append(s.sequence, &genai.Part{
-			Text:    s.currentTextBuffer,
+			Text:    s.currentTextBuffer.String(),
 			Thought: s.currentTextIsThought,
 		})
 		// Reset the buffer and the state
-		s.currentTextBuffer = ""
+		s.currentTextBuffer.Reset()
 		s.currentTextIsThought = false
 	}
 }
