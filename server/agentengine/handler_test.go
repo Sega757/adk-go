@@ -77,6 +77,29 @@ func TestNewHandlerRejectsUnusableCompaction(t *testing.T) {
 	}
 }
 
+// TestQueryMaxBytesReaderEnforced verifies that payloads exceeding maxPayloadSize
+// are aborted with HTTP 413 StatusRequestEntityTooLarge.
+func TestQueryMaxBytesReaderEnforced(t *testing.T) {
+	const maxPayload = 100
+	h, err := agentengine.NewHandler(&launcher.Config{SessionService: session.InMemoryService()}, 0, maxPayload, "engine")
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	largeBody := `{"class_method":"async_create_session","input":{"user_id":"` + strings.Repeat("a", maxPayload+50) + `"}}`
+	resp, err := http.Post(srv.URL+"/reasoning_engine", "application/json", strings.NewReader(largeBody))
+	if err != nil {
+		t.Fatalf("POST /reasoning_engine error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Errorf("status code = %d, want %d", resp.StatusCode, http.StatusRequestEntityTooLarge)
+	}
+}
+
 // deadlineRecorder records the write deadlines a handler sets and passes them
 // on to the underlying connection.
 type deadlineRecorder struct {
