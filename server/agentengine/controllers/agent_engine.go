@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -41,6 +42,10 @@ type AgentEngineAPIController struct {
 // defaultSSETimeout is the write deadline for a response when none is
 // configured. It matches the launcher's --sse-write-timeout default.
 const defaultSSETimeout = 120 * time.Second
+
+// defaultMaxPayloadSize is the default maximum request body size (10 MiB)
+// when none is specified (i.e. <= 0).
+const defaultMaxPayloadSize int64 = 10 << 20
 
 // NewAgentEngineAPIController creates a new AgentEngineAPIController. Verifies if registered methods are unique by name.
 // A zero sseTimeout means 120 seconds. A negative one means no write deadline,
@@ -76,11 +81,19 @@ func (c *AgentEngineAPIController) Query(rw http.ResponseWriter, req *http.Reque
 
 	if req.Body != nil && req.Body != http.NoBody {
 		var err error
+		maxPayload := c.maxPayloadSize
+		if maxPayload <= 0 {
+			maxPayload = defaultMaxPayloadSize
+		}
 
-		payload, err = io.ReadAll(io.LimitReader(req.Body, c.maxPayloadSize))
+		payload, err = io.ReadAll(http.MaxBytesReader(rw, req.Body, maxPayload))
 		if err != nil {
-			err = fmt.Errorf("io.ReadAll with LimitReader failed: %w", err)
-			http.Error(rw, err.Error(), http.StatusBadRequest)
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				http.Error(rw, "request entity too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			http.Error(rw, fmt.Sprintf("failed to read body: %v", err), http.StatusBadRequest)
 			return
 		}
 
