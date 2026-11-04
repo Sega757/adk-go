@@ -395,3 +395,12 @@ func TestReplacePronouns(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkReplacePronouns(b *testing.B) {
+	text := "You are a helpful assistant. You should do your work and make sure it is yours. If you were wondering, you're awesome."
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = replacePronouns(text)
+	}
+}
