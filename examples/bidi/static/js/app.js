@@ -906,10 +906,12 @@ const fileInput = document.getElementById("fileInput");
 let cameraStream = null;
 let isVideoStreaming = false;
 let videoStreamInterval = null;
+let lastActiveElement = null;
 
 // Open camera modal and start preview
 async function openCameraPreview() {
   try {
+    lastActiveElement = document.activeElement;
     // Request access to the user's webcam
     cameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -924,6 +926,7 @@ async function openCameraPreview() {
 
     // Show the modal
     cameraModal.classList.add('show');
+    cancelCamera.focus();
 
   } catch (error) {
     console.error('Error accessing camera:', error);
@@ -982,6 +985,9 @@ function closeCameraPreview() {
 
   // Hide the modal
   cameraModal.classList.remove('show');
+  if (lastActiveElement && typeof lastActiveElement.focus === 'function') {
+    lastActiveElement.focus();
+  }
 }
 
 // Capture image from the live preview
@@ -1195,6 +1201,13 @@ fileInput.addEventListener("change", (event) => {
 // Close modal when clicking outside of it
 cameraModal.addEventListener("click", (event) => {
   if (event.target === cameraModal) {
+    closeCameraPreview();
+  }
+});
+
+// Close modal on Escape key press
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && cameraModal.classList.contains("show")) {
     closeCameraPreview();
   }
 });
