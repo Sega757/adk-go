@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -77,9 +78,19 @@ func (c *AgentEngineAPIController) Query(rw http.ResponseWriter, req *http.Reque
 	if req.Body != nil && req.Body != http.NoBody {
 		var err error
 
-		payload, err = io.ReadAll(io.LimitReader(req.Body, c.maxPayloadSize))
+		// Use http.MaxBytesReader to enforce payload limits and close the connection
+		// if the limit is exceeded, preventing denial-of-service from unbounded reading.
+		body := req.Body
+		if c.maxPayloadSize > 0 {
+			body = http.MaxBytesReader(rw, req.Body, c.maxPayloadSize)
+		}
+		payload, err = io.ReadAll(body)
 		if err != nil {
-			err = fmt.Errorf("io.ReadAll with LimitReader failed: %w", err)
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				http.Error(rw, "http: request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
 			http.Error(rw, err.Error(), http.StatusBadRequest)
 			return
 		}
