@@ -21,7 +21,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -236,4 +238,123 @@ func TestEventarcBinaryModeRejectsOversizedBody(t *testing.T) {
 	if got, want := rr.Code, http.StatusBadRequest; got != want {
 		t.Fatalf("oversized binary-mode body: status %d, want %d (body: %s)", got, want, rr.Body.String())
 	}
+}
+
+// TestEventarcTriggerHandler_ZeroMaxConcurrentRunsIsUnlimited guards the edge case:
+// MaxConcurrentRuns<=0 must mean "no limit" (nil semaphore), not a
+// zero-capacity channel that would block every request forever.
+func TestEventarcTriggerHandler_ZeroMaxConcurrentRunsIsUnlimited(t *testing.T) {
+	testAgent, err := agent.New(agent.Config{
+		Name: "test-agent",
+		Run: func(agent.InvocationContext) iter.Seq2[*session.Event, error] {
+			return func(yield func(*session.Event, error) bool) {
+				yield(&session.Event{ID: "success-event"}, nil)
+			}
+		},
+	})
+	if err != nil {
+		t.Fatalf("agent.New: %v", err)
+	}
+
+	cfg := defaultTriggerConfig
+	cfg.MaxConcurrentRuns = 0
+	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}
+	controller, err := triggers.NewEventarcControllerWithConfig(triggers.ControllerConfig{
+		SessionService: sessionService,
+		AgentLoader:    agent.NewSingleLoader(testAgent),
+		TriggerConfig:  cfg,
+	})
+	if err != nil {
+		t.Fatalf("NewEventarcControllerWithConfig failed: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", bytes.NewBufferString(`{"id":"1"}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/cloudevents+json")
+	req = mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+	rr := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		controller.EventarcTriggerHandler(rr, req)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Fatal("DEADLOCK PROVEN: handler blocked indefinitely with MaxConcurrentRuns=0; must be treated as no limit")
+	}
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+}
+
+// TestEventarcTriggerHandler_EnforcesMaxConcurrentRuns verifies that with
+// MaxConcurrentRuns=N, firing N+1 concurrent requests leaves exactly N runs in flight.
+func TestEventarcTriggerHandler_EnforcesMaxConcurrentRuns(t *testing.T) {
+	const limit = 2
+	started := make(chan struct{}, limit+1)
+	release := make(chan struct{})
+	blockingAgent, err := agent.New(agent.Config{
+		Name: "test-agent",
+		Run: func(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
+			return func(yield func(*session.Event, error) bool) {
+				started <- struct{}{}
+				<-release
+				yield(&session.Event{ID: "success-event"}, nil)
+			}
+		},
+	})
+	if err != nil {
+		t.Fatalf("agent.New: %v", err)
+	}
+
+	cfg := defaultTriggerConfig
+	cfg.MaxConcurrentRuns = limit
+	sessionService := &fakes.FakeSessionService{Sessions: make(map[fakes.SessionKey]fakes.TestSession)}
+	ctrl, err := triggers.NewEventarcControllerWithConfig(triggers.ControllerConfig{
+		SessionService: sessionService,
+		AgentLoader:    agent.NewSingleLoader(blockingAgent),
+		TriggerConfig:  cfg,
+	})
+	if err != nil {
+		t.Fatalf("NewEventarcControllerWithConfig: %v", err)
+	}
+
+	buildReq := func() *http.Request {
+		req, err := http.NewRequest(http.MethodPost, "/apps/test-agent/triggers/eventarc", bytes.NewBufferString(`{"id":"1"}`))
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/cloudevents+json")
+		return mux.SetURLVars(req, map[string]string{"app_name": "test-agent"})
+	}
+
+	var wg sync.WaitGroup
+	for range limit + 1 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctrl.EventarcTriggerHandler(httptest.NewRecorder(), buildReq())
+		}()
+	}
+
+	for i := range limit {
+		select {
+		case <-started:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("only %d of %d runs started", i, limit)
+		}
+	}
+	select {
+	case <-started:
+		t.Fatalf("a run beyond MaxConcurrentRuns=%d started; limit not enforced", limit)
+	case <-time.After(250 * time.Millisecond):
+	}
+	close(release)
+	wg.Wait()
 }
