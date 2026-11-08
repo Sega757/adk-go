@@ -906,6 +906,7 @@ const fileInput = document.getElementById("fileInput");
 let cameraStream = null;
 let isVideoStreaming = false;
 let videoStreamInterval = null;
+let previousActiveElement = null;
 
 // Open camera modal and start preview
 async function openCameraPreview() {
@@ -923,7 +924,9 @@ async function openCameraPreview() {
     cameraPreview.srcObject = cameraStream;
 
     // Show the modal
+    previousActiveElement = document.activeElement;
     cameraModal.classList.add('show');
+    closeCameraModal.focus();
 
   } catch (error) {
     console.error('Error accessing camera:', error);
@@ -982,6 +985,12 @@ function closeCameraPreview() {
 
   // Hide the modal
   cameraModal.classList.remove('show');
+
+  // Restore previous focus
+  if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
+    previousActiveElement.focus();
+    previousActiveElement = null;
+  }
 }
 
 // Capture image from the live preview
@@ -1196,6 +1205,34 @@ fileInput.addEventListener("change", (event) => {
 cameraModal.addEventListener("click", (event) => {
   if (event.target === cameraModal) {
     closeCameraPreview();
+  }
+});
+
+// Modal keyboard trap and Escape dismissal
+cameraModal.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeCameraPreview();
+    return;
+  }
+
+  if (event.key === "Tab") {
+    const focusableElements = cameraModal.querySelectorAll('button:not([disabled])');
+    if (focusableElements.length === 0) return;
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    if (event.shiftKey) {
+      if (document.activeElement === firstElement) {
+        lastElement.focus();
+        event.preventDefault();
+      }
+    } else {
+      if (document.activeElement === lastElement) {
+        firstElement.focus();
+        event.preventDefault();
+      }
+    }
   }
 });
 
