@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package metacore.rek.v1;
+
+option go_package = "metacore/rek/v1;rekv1";
+option java_multiple_files = true;
+option java_package = "com.metacore.rek.v1";
+
+// Сервис валидации транзакций и планов автономных агентов
+service MetaCoreValidator {
+  // Синхронный метод для сквозного контроля единичного действия
+  rpc ValidateAction (ActionEvaluationRequest) returns (ActionEvaluationResponse);
+
+  // Потоковый метод для непрерывного аудита цепочки рассуждений (CoT)
+  rpc AuditReasoningStream (stream ReasoningStateHeartbeat) returns (stream SecurityDirective);
+}
+
+message ActionEvaluationRequest {
+  string agent_id = 1;
+  string session_id = 2;
+
+  // Пакет решения от Reasoning Engine
+  string goal = 3;
+  repeated string plan_steps = 4;
+  string expected_outcome = 5;
+
+  message RiskProfile {
+    string ethical = 1;
+    string legal = 2;
+    string operational = 3;
+    string human_impact = 4;
+  }
+  RiskProfile risk_profile = 6;
+
+  message ResourceCost {
+    uint64 compute_millicores = 1;
+    double budget_usd = 2;
+    uint32 timeout_ms = 3;
+  }
+  ResourceCost resource_cost = 7;
+
+  float confidence = 8;
+}
+
+message ActionEvaluationResponse {
+  enum AllocationDecision {
+    ALLOCATION_DECISION_UNSPECIFIED = 0;
+    ALLOCATION_DECISION_APPROVED = 1;      // Полное соответствие инвариантам
+    ALLOCATION_DECISION_MODIFIED = 2;      // Требуется применение изменений от E
+    ALLOCATION_DECISION_REJECTED = 3;      // Блокировка на уровне K или E
+    ALLOCATION_DECISION_EMERGENCY_STOP = 4;// Немедленный останов и откат транзакций
+  }
+  AllocationDecision decision = 1;
+
+  // Данные валидации Empathy Layer
+  message EmpathyDetails {
+    string status = 1; // "pass", "modify", "block"
+    float vulnerability_score = 2;
+    string tone_modification = 3;
+    string intensity_modification = 4;
+    uint32 delay_ms = 5;
+    string reason = 6;
+  }
+  EmpathyDetails empathy_layer_output = 2;
+
+  // Данные валидации Kill-Switch Layer
+  message KillSwitchDetails {
+    string status = 1; // "approved", "rejected", "emergency_stop"
+    repeated string activated_triggers = 2; // "resource_limit", "ethical_violation", etc.
+    bool rollback_required = 3;
+    string reason = 4;
+  }
+  KillSwitchDetails kill_switch_output = 3;
+}
+
+message ReasoningStateHeartbeat {
+  string agent_id = 1;
+  string session_id = 2;
+  uint32 execution_step_index = 3;
+  string logic_trace = 4; // Передается фрагмент CoT для анализа на дрейф целей
+  uint64 current_memory_bytes = 5;
+}
+
+message SecurityDirective {
+  bool abort_execution = 1;
+  bool force_rollback = 2;
+  string modification_instruction = 3;
+}
