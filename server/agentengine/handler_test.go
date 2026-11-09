@@ -77,6 +77,34 @@ func TestNewHandlerRejectsUnusableCompaction(t *testing.T) {
 	}
 }
 
+// TestQueryMaxPayloadSizeRejectsOversizedBody verifies that request bodies exceeding
+// maxPayloadSize are rejected with StatusRequestEntityTooLarge.
+func TestQueryMaxPayloadSizeRejectsOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	const maxPayload = 64
+	h, err := agentengine.NewHandler(&launcher.Config{SessionService: session.InMemoryService()}, time.Second, maxPayload, "engine")
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	// Create an oversized body exceeding maxPayload
+	oversizedBody := `{"class_method":"async_create_session","input":{"user_id":"` + strings.Repeat("a", maxPayload) + `"}}`
+	resp, err := http.Post(srv.URL+"/reasoning_engine", "application/json", strings.NewReader(oversizedBody))
+	if err != nil {
+		t.Fatalf("POST /reasoning_engine error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST /reasoning_engine status = %d, want %d; body: %s", resp.StatusCode, http.StatusRequestEntityTooLarge, body)
+	}
+}
+
 // deadlineRecorder records the write deadlines a handler sets and passes them
 // on to the underlying connection.
 type deadlineRecorder struct {
