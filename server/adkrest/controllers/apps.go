@@ -32,6 +32,13 @@ func NewAppsAPIController(agentLoader agent.Loader) *AppsAPIController {
 
 // ListAppsHandler handles listing all loaded agents.
 func (c *AppsAPIController) ListAppsHandler(rw http.ResponseWriter, req *http.Request) {
+	if c.agentLoader == nil {
+		EncodeJSONResponse([]string{}, http.StatusOK, rw)
+		return
+	}
 	apps := c.agentLoader.ListAgents()
+	if apps == nil {
+		apps = []string{}
+	}
 	EncodeJSONResponse(apps, http.StatusOK, rw)
 }
