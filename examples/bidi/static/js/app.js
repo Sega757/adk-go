@@ -907,9 +907,13 @@ let cameraStream = null;
 let isVideoStreaming = false;
 let videoStreamInterval = null;
 
+// Track triggering element to restore focus when modal closes
+let previousActiveElement = null;
+
 // Open camera modal and start preview
 async function openCameraPreview() {
   try {
+    previousActiveElement = document.activeElement;
     // Request access to the user's webcam
     cameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -924,6 +928,7 @@ async function openCameraPreview() {
 
     // Show the modal
     cameraModal.classList.add('show');
+    closeCameraModal.focus();
 
   } catch (error) {
     console.error('Error accessing camera:', error);
@@ -982,6 +987,10 @@ function closeCameraPreview() {
 
   // Hide the modal
   cameraModal.classList.remove('show');
+  if (previousActiveElement && typeof previousActiveElement.focus === "function") {
+    previousActiveElement.focus();
+    previousActiveElement = null;
+  }
 }
 
 // Capture image from the live preview
@@ -1196,6 +1205,36 @@ fileInput.addEventListener("change", (event) => {
 cameraModal.addEventListener("click", (event) => {
   if (event.target === cameraModal) {
     closeCameraPreview();
+  }
+});
+
+// Keyboard accessibility: Escape to close and focus trapping
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && cameraModal.classList.contains("show")) {
+    closeCameraPreview();
+    return;
+  }
+
+  if (event.key === "Tab" && cameraModal.classList.contains("show")) {
+    const focusableElements = cameraModal.querySelectorAll(
+      'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusableElements.length) return;
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    if (event.shiftKey) {
+      if (document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      }
+    } else {
+      if (document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    }
   }
 });
 
