@@ -103,3 +103,39 @@ func TestBuildContents_SkipsToolSubBranchEvents(t *testing.T) {
 		}
 	})
 }
+
+func BenchmarkIsToolSubBranchEvent(b *testing.B) {
+	ids := map[string]struct{}{"fc1": {}}
+	evNoAt := &session.Event{Branch: "wf.coord.step1"}
+	evMatch := &session.Event{Branch: "wf.coord@1.translator@fc1"}
+	evRootMatch := &session.Event{Branch: "translator@fc1.inner@1"}
+
+	b.Run("no_at", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			isToolSubBranchEvent("wf.coord", evNoAt, "coord", ids)
+		}
+	})
+
+	b.Run("match", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			isToolSubBranchEvent("wf.coord@1", evMatch, "coord", ids)
+		}
+	})
+
+	b.Run("root_match", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			isToolSubBranchEvent("", evRootMatch, "coord", ids)
+		}
+	})
+
+	b.Run("empty_call_ids", func(b *testing.B) {
+		emptyIDs := map[string]struct{}{}
+		b.ReportAllocs()
+		for b.Loop() {
+			isToolSubBranchEvent("wf.coord", evNoAt, "coord", emptyIDs)
+		}
+	})
+}
