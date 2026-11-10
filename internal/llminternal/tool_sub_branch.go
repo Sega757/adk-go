@@ -15,7 +15,6 @@
 package llminternal
 
 import (
-	"slices"
 	"strings"
 
 	"google.golang.org/adk/v2/internal/utils"
@@ -55,18 +54,37 @@ func functionCallIDs(events []*session.Event) map[string]struct{} {
 // Mirrors _is_tool_sub_branch_event in adk-python's
 // flows/llm_flows/context/_contents.py, which has the same counter caveat.
 func isToolSubBranchEvent(agentBranch string, ev *session.Event, agentName string, callIDs map[string]struct{}) bool {
-	if ev.Branch == "" {
+	// Performance-optimized by Bolt: fast-path early returns when there are
+	// no tool call IDs to match or when the branch contains no '@' run ID delimiter.
+	if ev.Branch == "" || len(callIDs) == 0 || !strings.ContainsRune(ev.Branch, '@') {
 		return false
 	}
-	var base []string
-	if agentBranch != "" {
-		base = strings.Split(agentBranch, ".")
+
+	// Performance-optimized by Bolt: zero-allocation branch prefix checking and
+	// iterative segment scanning using strings.IndexByte avoids strings.Split slice allocations.
+	var remaining string
+	if agentBranch == "" {
+		remaining = ev.Branch
+	} else {
+		if !strings.HasPrefix(ev.Branch, agentBranch) {
+			return false
+		}
+		if len(ev.Branch) <= len(agentBranch) || ev.Branch[len(agentBranch)] != '.' {
+			return false
+		}
+		remaining = ev.Branch[len(agentBranch)+1:]
 	}
-	segments := strings.Split(ev.Branch, ".")
-	if len(segments) <= len(base) || !slices.Equal(segments[:len(base)], base) {
-		return false
-	}
-	for _, segment := range segments[len(base):] {
+
+	for remaining != "" {
+		var segment string
+		if idx := strings.IndexByte(remaining, '.'); idx >= 0 {
+			segment = remaining[:idx]
+			remaining = remaining[idx+1:]
+		} else {
+			segment = remaining
+			remaining = ""
+		}
+
 		i := strings.LastIndex(segment, "@")
 		if i < 0 {
 			continue
