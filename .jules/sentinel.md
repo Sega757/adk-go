@@ -1,0 +1,4 @@
+## 2026-05-18 - Nil Loader and Nil Slice Denial of Service in REST Controllers
+**Vulnerability:** In `server/adkrest/controllers/apps.go`, `ListAppsHandler` directly invoked `c.agentLoader.ListAgents()` without checking whether `c.agentLoader` was nil, causing a runtime panic and immediate TCP connection termination (DoS) on unconfigured or dynamically initialized servers. Furthermore, if `ListAgents()` returned nil, the controller serialized `null` instead of an empty JSON array `[]`.
+**Learning:** Controller endpoints mounted automatically or exposed prior to service initialization can be triggered without loaded agents, making unchecked dereferences of optional or uninitialized services an availability vector.
+**Prevention:** Guard all controller dependencies with nil checks and normalize empty or nil slice results to empty slice literals (`[]string{}`) before JSON encoding to preserve the API schema contract and prevent crashes.
