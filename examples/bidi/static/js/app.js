@@ -906,10 +906,32 @@ const fileInput = document.getElementById("fileInput");
 let cameraStream = null;
 let isVideoStreaming = false;
 let videoStreamInterval = null;
+let previousActiveElement = null;
+
+function handleCameraModalKeydown(event) {
+  if (event.key === "Escape") {
+    closeCameraPreview();
+    return;
+  }
+  if (event.key === "Tab") {
+    const focusable = cameraModal.querySelectorAll("button:not([disabled])");
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+}
 
 // Open camera modal and start preview
 async function openCameraPreview() {
   try {
+    previousActiveElement = document.activeElement;
     // Request access to the user's webcam
     cameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -924,6 +946,8 @@ async function openCameraPreview() {
 
     // Show the modal
     cameraModal.classList.add('show');
+    window.addEventListener("keydown", handleCameraModalKeydown);
+    closeCameraModal.focus();
 
   } catch (error) {
     console.error('Error accessing camera:', error);
@@ -982,6 +1006,11 @@ function closeCameraPreview() {
 
   // Hide the modal
   cameraModal.classList.remove('show');
+  window.removeEventListener("keydown", handleCameraModalKeydown);
+  if (previousActiveElement && typeof previousActiveElement.focus === "function") {
+    previousActiveElement.focus();
+    previousActiveElement = null;
+  }
 }
 
 // Capture image from the live preview
