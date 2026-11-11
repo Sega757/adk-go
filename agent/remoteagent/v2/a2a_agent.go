@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -236,6 +237,10 @@ func NewAgentCardProvider(source string, opts ...agentcard.ResolveOption) AgentC
 				return nil, err
 			}
 			return card, nil
+		}
+
+		if strings.Contains(source, "..") || strings.HasPrefix(filepath.Clean(source), "..") {
+			return nil, fmt.Errorf("invalid agent card source path: path traversal is not allowed")
 		}
 
 		fileBytes, err := os.ReadFile(source)

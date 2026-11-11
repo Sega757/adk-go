@@ -2090,6 +2090,18 @@ func TestNewAgentCardProvider_RejectsNonHTTPScheme(t *testing.T) {
 	}
 }
 
+func TestNewAgentCardProvider_RejectsPathTraversal(t *testing.T) {
+	sources := []string{"../foo.json", "foo/../../bar.json", "C:\\..\\windows\\system32"}
+	for _, source := range sources {
+		t.Run(source, func(t *testing.T) {
+			_, err := NewAgentCardProvider(source)(t.Context())
+			if err == nil || !strings.Contains(err.Error(), "path traversal is not allowed") {
+				t.Errorf("NewAgentCardProvider(%q) error = %v, want error containing 'path traversal is not allowed'", source, err)
+			}
+		})
+	}
+}
+
 func TestClassifyCardSource(t *testing.T) {
 	tests := []struct {
 		name    string
